@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="tr" class="overflow-surface">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent Browser menu</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="overflow-surface">
+    <div id="agent-main-menu" class="dropdown-menu" role="menu" aria-label="Ayarlar menüsü">
+      <button type="button" class="menu-default" id="menu-default-browser" data-action="default-browser">
+        <img src="assets/agent-browser-logo.png" width="20" height="20" alt="" />
+        <span>Set Agent Browser as your default browser</span>
+      </button>
+      <button type="button" class="menu-item" data-action="new-tab" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.2" y="3.2" width="13.6" height="13.6" rx="2"/><path d="M10 6.6v6.8M6.6 10h6.8"/></svg>
+        <span>New tab</span>
+        <kbd>Ctrl+T</kbd>
+      </button>
+      <button type="button" class="menu-item" data-action="new-window" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5.4" y="5.4" width="11" height="11" rx="1.6"/><path d="M3.6 14.2V4.8A1.6 1.6 0 0 1 5.2 3.2h9.4"/></svg>
+        <span>New window</span>
+        <kbd>Ctrl+N</kbd>
+      </button>
+      <button type="button" class="menu-item" data-action="new-incognito" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 12.4c.7-2.8 2.6-4.6 6-4.6s5.3 1.8 6 4.6"/><circle cx="7.2" cy="13.4" r="1.7"/><circle cx="12.8" cy="13.4" r="1.7"/><path d="M8.8 13.2h2.4"/></svg>
+        <span>New Incognito window</span>
+        <kbd>Ctrl+Shift+N</kbd>
+      </button>
+      <hr />
+      <button type="button" class="menu-profile" data-action="profile" role="menuitem">
+        <span class="menu-avatar" aria-hidden="true">S</span>
+        <span class="menu-profile-copy">
+          <strong>Sanatçı (Agent)</strong>
+        </span>
+        <em class="menu-signed">Signed in</em>
+        <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
+      </button>
+      <hr />
+      <button type="button" class="menu-item" data-action="passwords" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7.2" cy="10" r="3"/><path d="M10.2 10h6.2v2.4M14.2 10v2.6"/></svg>
+        <span>Passwords and autofill</span>
+        <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
+      </button>
+      <button type="button" class="menu-item" data-action="history" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10.2" r="6.2"/><path d="M10 6.8v3.7l2.6 1.5M6.2 3.6 4.4 5.6"/></svg>
+        <span>History</span>
+        <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
+      </button>
+      <button type="button" class="menu-item" data-action="downloads" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.4v9.2M6.6 9.4 10 12.8l3.4-3.4M4 16.4h12"/></svg>
+        <span>Downloads</span>
+        <kbd>Ctrl+J</kbd>
+      </button>
+      <button type="button" class="menu-item" data-action="bookmarks" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.6 12 8.2l5 .4-3.8 3.2 1.2 4.8L10 14.2 5.6 16.6l1.2-4.8L3 8.6l5-.4z"/></svg>
+        <span>Bookmarks and lists</span>
+        <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
+      </button>
+      <button type="button" class="menu-item" data-action="tab-groups" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.2" y="3.2" width="6" height="6" rx="1"/><rect x="10.8" y="3.2" width="6" height="6" rx="1"/><rect x="3.2" y="10.8" width="6" height="6" rx="1"/><rect x="10.8" y="10.8" width="6" height="6" rx="1"/></svg>
+        <span>Tab groups</span>
+        <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
+      </button>
+      <button type="button" class="menu-item" data-action="extensions" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.4 3.4h2.2v2.4h2.6a2 2 0 0 1 2 2v2.4h2.4v2.2h-2.4V15a2 2 0 0 1-2 2H9.6v2.2H7.4V17H5a2 2 0 0 1-2-2v-2.6H.8V10.2H3V7.8a2 2 0 0 1 2-2h2.4z"/></svg>
+        <span>Extensions</span>
+        <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
+      </button>
+      <button type="button" class="menu-item" data-action="clear-data" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.4 6.2h11.2M8 6.2V4.6h4v1.6M6.2 6.2l.8 9.2h6l.8-9.2"/></svg>
+        <span>Delete browsing data...</span>
+        <kbd>Ctrl+Shift+Del</kbd>
+      </button>
+      <hr />
+      <div class="menu-zoom" role="group" aria-label="Zoom">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.6" cy="8.6" r="5"/><path d="m12.4 12.4 4 4"/></svg>
+        <span>Zoom</span>
+        <div class="menu-zoom-controls">
+          <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+          <span id="zoom-label">100%</span>
+          <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+        </div>
+        <button type="button" class="menu-fullscreen" id="menu-fullscreen" data-action="fullscreen" aria-label="Fullscreen">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 8V4h4M16 8V4h-4M4 12v4h4M16 12v4h-4"/></svg>
+        </button>
+      </div>
+      <hr />
+      <button type="button" class="menu-item" data-action="print" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6.2 5.2V3.4h7.6v1.8M5 8.4h10v6.4H5z"/><path d="M4.2 8.4h11.6v4.4H14v-1.6H6v1.6H4.2z"/></svg>
+        <span>Print...</span>
+        <kbd>Ctrl+P</kbd>
+      </button>
+      <button type="button" class="menu-item" data-action="gemini" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8 11.4 8l5.2.2-4.2 3.2 1.4 5.2L10 13.6 6.2 16.6l1.4-5.2-4.2-3.2L8.6 8z"/></svg>
+        <span>Open Gemini in Chrome</span>
+      </button>
+      <button type="button" class="menu-item" data-action="lens" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.4" y="3.4" width="13.2" height="13.2" rx="3"/><circle cx="10" cy="10" r="3.1"/><circle cx="14.4" cy="5.6" r="0.8" fill="currentColor" stroke="none"/></svg>
+        <span>Search this tab with Google Lens</span>
+      </button>
+      <button type="button" class="menu-item" data-action="translate" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.4 5.2h7.2M8 5.2v1.6A6 6 0 0 1 4.6 12M8 6.8A6 6 0 0 0 11.4 12M5.4 15.2h10.4l-2-5.6H7.4z"/></svg>
+        <span>Translate...</span>
+        <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
+      </button>
+      <button type="button" class="menu-item" data-action="find" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.4" cy="8.4" r="4.4"/><path d="m11.8 11.8 4 4M4 16.4h5.2"/></svg>
+        <span>Find and edit</span>
+        <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
+      </button>
+      <button type="button" class="menu-item" data-action="cast" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.4" y="4.2" width="13.2" height="9.2" rx="1.4"/><path d="M3.6 16.6a4.4 4.4 0 0 1 4.4-4.4M3.6 16.6a2.2 2.2 0 0 1 2.2-2.2M3.6 16.6h.02"/></svg>
+        <span>Cast, save, and share</span>
+        <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
+      </button>
+      <button type="button" class="menu-item" data-action="more-tools" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.2" y="6.2" width="13.6" height="9.2" rx="1.4"/><path d="M7 6.2V4.8h6v1.4M7.6 10.2h4.8M7.6 12.8h3.2"/></svg>
+        <span>More tools</span>
+        <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
+      </button>
+      <hr />
+      <button type="button" class="menu-item" data-action="help" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M7.8 7.8a2.2 2.2 0 1 1 2.6 2.2v1.2M10 14.4h.02"/></svg>
+        <span>Help</span>
+        <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
+      </button>
+      <button type="button" class="menu-item" data-action="settings" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.4"/><path d="M10 3.2v2M10 14.8v2M3.2 10h2M14.8 10h2M5.2 5.2l1.4 1.4M13.4 13.4l1.4 1.4M14.8 5.2l-1.4 1.4M6.6 13.4 5.2 14.8"/></svg>
+        <span>Settings</span>
+      </button>
+      <button type="button" class="menu-item" data-action="exit" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.2 4.2H4.6v11.6h3.6M8.6 10h7.2M13.2 7.2 16.4 10l-3.2 2.8"/></svg>
+        <span>Exit</span>
+      </button>
+    </div>
+    <script src="overflow-menu.js"></script>
+  </body>
+</html>

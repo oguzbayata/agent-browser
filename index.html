@@ -165,51 +165,6 @@
                     <circle cx="8" cy="12.8" r="1.15" fill="currentColor" stroke="none" />
                   </svg>
                 </button>
-                <div id="agent-main-menu" class="dropdown-menu hidden" role="menu" aria-labelledby="settings-toggle">
-                  <button type="button" class="menu-item" data-action="new-tab" role="menuitem">
-                    <span>Yeni Sekme</span>
-                    <kbd>Ctrl+T</kbd>
-                  </button>
-                  <button type="button" class="menu-item" data-action="new-isolated" role="menuitem">
-                    <span>Yeni İzole Görev</span>
-                  </button>
-                  <hr />
-                  <button type="button" class="menu-item" data-action="history" role="menuitem">
-                    <span>Oturum Geçmişi</span>
-                    <em class="menu-badge">RAM Only</em>
-                  </button>
-                  <button type="button" class="menu-item" data-action="downloads" role="menuitem">
-                    <span>Güvenli İndirmeler</span>
-                    <kbd>Ctrl+J</kbd>
-                  </button>
-                  <button type="button" class="menu-item" data-action="bookmarks" role="menuitem">
-                    <span>Geçici Yer İmleri</span>
-                  </button>
-                  <hr />
-                  <div class="menu-zoom" role="group" aria-label="Yakınlaştır">
-                    <span>Yakınlaştır</span>
-                    <div class="menu-zoom-controls">
-                      <button type="button" id="zoom-out" aria-label="Uzaklaştır">−</button>
-                      <span id="zoom-label">100%</span>
-                      <button type="button" id="zoom-in" aria-label="Yakınlaştır">+</button>
-                    </div>
-                  </div>
-                  <button type="button" class="menu-item" data-action="fullscreen" role="menuitem">
-                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6.2V3h3.2M13 6.2V3h-3.2M3 9.8V13h3.2M13 9.8V13h-3.2"/></svg>
-                    <span>Tam Ekran</span>
-                  </button>
-                  <hr />
-                  <button type="button" class="menu-item" data-action="ai" role="menuitem">
-                    <span>AI İstihbarat Paneli</span>
-                  </button>
-                  <hr />
-                  <button type="button" class="menu-item" data-action="settings" role="menuitem">
-                    <span>Agent Ayarları</span>
-                  </button>
-                  <button type="button" class="menu-item menu-item-panic" data-action="panic" role="menuitem">
-                    <span>Excommunicado / Sistemi Yok Et</span>
-                  </button>
-                </div>
               </div>
               <button class="chrome-icon chrome-icon-panic" id="panic-btn" type="button" title="Excommunicado" aria-label="Excommunicado">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.2" /><path d="M8 3.2v4" /></svg>
@@ -265,6 +220,14 @@
               </button>
             </div>
           </div>
+        </div>
+        <div class="find-bar" id="find-bar" hidden>
+          <label class="sr-only" for="find-query">Find in page</label>
+          <input id="find-query" type="text" maxlength="500" placeholder="Find in page" autocomplete="off" spellcheck="false" />
+          <span id="find-count">0/0</span>
+          <button type="button" id="find-prev" aria-label="Previous">↑</button>
+          <button type="button" id="find-next" aria-label="Next">↓</button>
+          <button type="button" id="find-close" aria-label="Close find">×</button>
         </div>
         <div class="downloads-pop" id="downloads-pop" hidden>
           <header class="downloads-head">
@@ -382,6 +345,16 @@
       <main class="viewport" id="viewport" aria-label="Sayfa görünümü">
         <p class="viewport-idle">hedef bekleniyor</p>
       </main>
+
+      <aside class="ram-sheet" id="ram-sheet" aria-label="RAM-Only Data" hidden>
+        <header class="ram-sheet-head">
+          <p>RAM-Only Data</p>
+          <button type="button" id="ram-sheet-close" aria-label="Close">×</button>
+        </header>
+        <h2 id="ram-sheet-title">Session</h2>
+        <p class="ram-sheet-note">Nothing here is written to disk. Close the window or run Excommunicado and it is gone.</p>
+        <div id="ram-sheet-body"></div>
+      </aside>
 
       <aside class="bookmarks-panel" id="bookmarks-panel" aria-label="Bookmarks" hidden>
         <header class="bp-head">

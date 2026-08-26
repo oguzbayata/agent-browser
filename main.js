@@ -19,7 +19,8 @@ const TAB_STRIP_HEIGHT = 36;
 const TOOLBAR_HEIGHT = 48;
 const BOOKMARKS_BAR_HEIGHT = 32;
 const DOWNLOADS_PANEL_HEIGHT = 168;
-const MENU_DROPDOWN_WIDTH = 328;
+const FIND_BAR_HEIGHT = 36;
+const MENU_DROPDOWN_WIDTH = 344;
 const SHIELD_POPUP_HEIGHT = 240;
 const SOCKS5_PROXY = 'socks5://127.0.0.1:1080';
 const CHROME_BASE_HEIGHT = TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT + BOOKMARKS_BAR_HEIGHT;
@@ -187,7 +188,14 @@ let downloadsOpen = false;
 let menuOpen = false;
 let shieldOpen = false;
 let utilityOpen = false;
+let findOpen = false;
+let ramSheetOpen = false;
 let panicInProgress = false;
+const chromeWindows = new Set();
+let overflowMenuView = null;
+let overflowMenuReady = Promise.resolve();
+let overflowHostWindow = null;
+let overflowHostDismiss = null;
 const sessionLocalFiles = [];
 const sessionLocalDirs = [];
 let selectedLocalModel = null;
@@ -517,10 +525,24 @@ function purgeSessionChromeState() {
   sessionFolders.push({ id: DEFAULT_BOOKMARK_FOLDER_ID, title: 'Bookmarks bar', createdAt: 0 });
   bookmarksPanelOpen = false;
   downloadsOpen = false;
+  hideOverflowMenu({ notify: false });
   menuOpen = false;
+  if (overflowMenuView) {
+    try {
+      if (!overflowMenuView.webContents.isDestroyed()) {
+        overflowMenuView.webContents.close();
+      }
+    } catch {
+      // Wipe still proceeds if the popup view is already gone.
+    }
+    overflowMenuView = null;
+    overflowMenuReady = Promise.resolve();
+  }
   shieldOpen = false;
   utilityOpen = false;
   sidebarOpen = false;
+  findOpen = false;
+  ramSheetOpen = false;
   stopLocalIntelWatch();
   sessionLocalFiles.length = 0;
   sessionLocalDirs.length = 0;
@@ -735,19 +757,20 @@ function chromeHeight() {
     shieldOpen ? SHIELD_POPUP_HEIGHT : 0,
     utilityOpen ? SHIELD_POPUP_HEIGHT : 0,
   );
-  return CHROME_BASE_HEIGHT + extra;
+  return CHROME_BASE_HEIGHT + extra + (findOpen ? FIND_BAR_HEIGHT : 0);
 }
 
 function viewBounds() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { x: 0, y: 0, width: 0, height: 0 };
+  }
   const { width, height } = mainWindow.getContentBounds();
   const reservedLeft = settingsOpen ? SETTINGS_WIDTH : 0;
   let reservedRight = 0;
   if (sidebarOpen) {
     reservedRight = SIDEBAR_WIDTH;
-  } else if (bookmarksPanelOpen) {
+  } else if (bookmarksPanelOpen || ramSheetOpen) {
     reservedRight = BOOKMARKS_PANEL_WIDTH;
-  } else if (menuOpen) {
-    reservedRight = MENU_DROPDOWN_WIDTH;
   }
   const top = chromeHeight();
   return {
@@ -766,6 +789,7 @@ function bringViewToFront(view) {
   if (typeof mainWindow.setTopBrowserView === 'function') {
     try {
       mainWindow.setTopBrowserView(view);
+      raiseOverflowMenu();
       return;
     } catch {
       // WebContentsView is not a BrowserView; fall through.
@@ -773,6 +797,7 @@ function bringViewToFront(view) {
   }
 
   mainWindow.contentView.addChildView(view);
+  raiseOverflowMenu();
 }
 
 function fileUrlToPath(rawUrl) {
@@ -843,6 +868,14 @@ function attachTabListeners(tabId, webContents) {
       createGuestTab(safeUrl);
     }
     return { action: 'deny' };
+  });
+
+  webContents.on('before-input-event', handleAppShortcut);
+  webContents.on('found-in-page', (_event, result) => {
+    sendToChrome('agent:find-result', {
+      activeMatchOrdinal: Number(result?.activeMatchOrdinal) || 0,
+      matches: Number(result?.matches) || 0,
+    });
   });
 
   webContents.on('will-navigate', (event, url) => {
@@ -917,7 +950,8 @@ function switchToTab(tabId) {
 }
 
 function createGuestTab(initialUrl, options = {}) {
-  if (panicInProgress || !mainWindow || mainWindow.isDestroyed()) {
+  const host = options.window && !options.window.isDestroyed() ? options.window : mainWindow;
+  if (panicInProgress || !host || host.isDestroyed()) {
     return null;
   }
 
@@ -930,9 +964,9 @@ function createGuestTab(initialUrl, options = {}) {
     webPreferences: guestWebPreferences,
   });
   view.setBackgroundColor('#070809');
-  views.set(tabId, { id: tabId, view, owner, pinned: false });
+  views.set(tabId, { id: tabId, view, owner, pinned: false, window: host });
   attachTabListeners(tabId, view.webContents);
-  mainWindow.contentView.addChildView(view);
+  host.contentView.addChildView(view);
   view.setBounds(viewBounds());
   if (activate) {
     switchToTab(tabId);
@@ -973,7 +1007,9 @@ function destroyTab(tabId, replaceIfLast = true) {
   const index = order.indexOf(tabId);
   const wasActive = activeTabId === tabId;
 
-  if (mainWindow && !mainWindow.isDestroyed()) {
+  if (entry.window && !entry.window.isDestroyed()) {
+    entry.window.contentView.removeChildView(entry.view);
+  } else if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.contentView.removeChildView(entry.view);
   }
 
@@ -1091,6 +1127,7 @@ function triggerExcommunicado() {
 
   panicInProgress = true;
   isWipingSession = true;
+  hideOverflowMenu({ notify: false });
   setTimeout(forcePanicQuit, PANIC_QUIT_MS);
 
   try {
@@ -1132,12 +1169,167 @@ function triggerExcommunicado() {
   wipeIsolatedSession().catch(() => {});
 }
 
+function chromeWindowFromEvent(event) {
+  if (!event?.sender) {
+    return null;
+  }
+  for (const win of chromeWindows) {
+    if (!win.isDestroyed() && event.sender === win.webContents) {
+      return win;
+    }
+  }
+  if (mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents) {
+    return mainWindow;
+  }
+  return null;
+}
+
 function isChromeSender(event) {
-  return Boolean(
-    mainWindow &&
-      !mainWindow.isDestroyed() &&
-      event.sender === mainWindow.webContents,
-  );
+  if (!event?.sender) {
+    return false;
+  }
+  if (
+    overflowMenuView &&
+    !overflowMenuView.webContents.isDestroyed() &&
+    event.sender === overflowMenuView.webContents
+  ) {
+    return true;
+  }
+  return Boolean(chromeWindowFromEvent(event));
+}
+
+function notifyChromeMenuClosed() {
+  for (const win of chromeWindows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('agent:menu-closed');
+    }
+  }
+}
+
+function detachOverflowHost() {
+  if (overflowHostWindow && !overflowHostWindow.isDestroyed() && overflowHostDismiss) {
+    overflowHostWindow.removeListener('move', overflowHostDismiss);
+    overflowHostWindow.removeListener('resize', overflowHostDismiss);
+  }
+  overflowHostWindow = null;
+  overflowHostDismiss = null;
+}
+
+function overflowViewAlive() {
+  return Boolean(overflowMenuView && !overflowMenuView.webContents.isDestroyed());
+}
+
+function raiseOverflowMenu() {
+  if (!menuOpen || !overflowViewAlive() || !overflowHostWindow || overflowHostWindow.isDestroyed()) {
+    return;
+  }
+  overflowHostWindow.contentView.addChildView(overflowMenuView);
+}
+
+function hideOverflowMenu(options = {}) {
+  const notify = options.notify !== false;
+  menuOpen = false;
+  const host = overflowHostWindow;
+  detachOverflowHost();
+  if (overflowViewAlive() && host && !host.isDestroyed()) {
+    try {
+      host.contentView.removeChildView(overflowMenuView);
+    } catch {
+      // View may already have been detached.
+    }
+  }
+  if (notify) {
+    notifyChromeMenuClosed();
+  }
+}
+
+function ensureOverflowMenuView() {
+  if (overflowViewAlive()) {
+    return overflowMenuReady;
+  }
+
+  overflowMenuView = new WebContentsView({
+    webPreferences: chromeWebPreferences,
+  });
+  overflowMenuView.setBackgroundColor('#292a2d');
+  overflowMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  overflowMenuView.webContents.on('blur', () => {
+    setTimeout(() => {
+      if (
+        menuOpen &&
+        overflowViewAlive() &&
+        !overflowMenuView.webContents.isFocused()
+      ) {
+        hideOverflowMenu();
+      }
+    }, 0);
+  });
+  overflowMenuReady = overflowMenuView.webContents.loadFile(path.join(__dirname, 'overflow-menu.html'));
+  return overflowMenuReady;
+}
+
+function showOverflowMenu(anchor, host) {
+  hideOverflowMenu({ notify: false });
+  if (!host || host.isDestroyed()) {
+    return;
+  }
+
+  const { width: contentWidth, height: contentHeight } = host.getContentBounds();
+  const width = MENU_DROPDOWN_WIDTH;
+  const kebabBottom = Number(anchor && anchor.bottom);
+  const kebabRight = Number(anchor && anchor.right);
+  const bottom = Number.isFinite(kebabBottom) ? kebabBottom : TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT;
+  const right = Number.isFinite(kebabRight) ? kebabRight : contentWidth - 8;
+  let x = Math.round(right - width);
+  let y = Math.round(bottom + 4);
+  x = Math.max(8, Math.min(x, Math.max(8, contentWidth - width - 8)));
+  if (y < 8) {
+    y = 8;
+  }
+  const maxH = Math.max(160, contentHeight - y - 8);
+  const initialH = Math.min(620, maxH);
+
+  overflowHostWindow = host;
+  menuOpen = true;
+  overflowHostDismiss = () => {
+    if (overflowHostWindow === host) {
+      hideOverflowMenu();
+    }
+  };
+  host.on('move', overflowHostDismiss);
+  host.on('resize', overflowHostDismiss);
+
+  ensureOverflowMenuView()
+    .then(async () => {
+      if (!menuOpen || overflowHostWindow !== host || host.isDestroyed() || !overflowViewAlive()) {
+        return;
+      }
+      overflowMenuView.setBounds({ x, y, width, height: Math.min(800, maxH) });
+      let measured = initialH;
+      try {
+        measured = await overflowMenuView.webContents.executeJavaScript(`(() => {
+          const menu = document.getElementById('agent-main-menu');
+          if (!menu) {
+            return 0;
+          }
+          return Math.ceil(Math.max(menu.scrollHeight, menu.getBoundingClientRect().height));
+        })()`);
+      } catch {
+        // Keep the initial height if measurement fails.
+      }
+      if (!menuOpen || overflowHostWindow !== host || !overflowViewAlive()) {
+        return;
+      }
+      const raw = Number(measured);
+      const height = Math.min(Math.max(raw >= 80 ? raw : initialH, 120), maxH);
+      overflowMenuView.setBounds({ x, y, width, height });
+      host.contentView.addChildView(overflowMenuView);
+      overflowMenuView.webContents.focus();
+    })
+    .catch((error) => {
+      console.error('Failed to open overflow menu:', error);
+      hideOverflowMenu();
+    });
 }
 
 function sanitizeUrl(raw) {
@@ -1207,25 +1399,68 @@ function goHistoryOn(webContents, direction) {
   return true;
 }
 
-function handleHistoryShortcut(event, input) {
+function handleAppShortcut(event, input) {
   if (!input || input.type !== 'keyDown' || input.isAutoRepeat) {
     return;
   }
 
-  const modified = Boolean(input.alt || input.meta);
-  const goBack =
-    input.key === 'BrowserBack' || (modified && !input.control && input.key === 'ArrowLeft');
-  const goForward =
-    input.key === 'BrowserForward' || (modified && !input.control && input.key === 'ArrowRight');
+  const ctrl = Boolean(input.control || input.meta);
+  const shift = Boolean(input.shift);
+  const alt = Boolean(input.alt);
+  const key = String(input.key || '');
+  const lower = key.toLowerCase();
 
-  if (!goBack && !goForward) {
+  const goBack = key === 'BrowserBack' || (alt && !ctrl && key === 'ArrowLeft');
+  const goForward = key === 'BrowserForward' || (alt && !ctrl && key === 'ArrowRight');
+  if (goBack || goForward) {
+    event.preventDefault();
+    if (goHistoryOn(getGuestWebContents(), goBack ? 'back' : 'forward')) {
+      broadcastBrowserState();
+    }
     return;
   }
 
-  event.preventDefault();
-  if (goHistoryOn(getGuestWebContents(), goBack ? 'back' : 'forward')) {
-    broadcastBrowserState();
+  if (!ctrl) {
+    return;
   }
+
+  if (lower === 't' && !shift) {
+    event.preventDefault();
+    createGuestTab('about:blank');
+    return;
+  }
+  if (lower === 'n') {
+    event.preventDefault();
+    createAgentWindow();
+    return;
+  }
+  if (lower === 'j' && !shift) {
+    event.preventDefault();
+    sendToChrome('agent:menu-command', { action: 'downloads' });
+    return;
+  }
+  if (lower === 'p' && !shift) {
+    event.preventDefault();
+    printActiveGuest();
+    return;
+  }
+  if (lower === 'f' && !shift) {
+    event.preventDefault();
+    findOpen = true;
+    fitBrowserView();
+    sendToChrome('agent:menu-command', { action: 'find' });
+    return;
+  }
+  if (shift && (lower === 'delete' || key === 'Delete')) {
+    event.preventDefault();
+    clearIsolatedBrowsingData().then(() => {
+      sendToChrome('agent:menu-command', { action: 'cleared' });
+    });
+  }
+}
+
+function handleHistoryShortcut(event, input) {
+  handleAppShortcut(event, input);
 }
 
 function broadcastBrowserState() {
@@ -1258,13 +1493,21 @@ function broadcastBrowserState() {
 }
 
 function fitBrowserView() {
-  if (!mainWindow || mainWindow.isDestroyed() || views.size === 0) {
+  if (views.size === 0) {
     return;
   }
 
-  const bounds = viewBounds();
-  for (const { view } of views.values()) {
-    view.setBounds(bounds);
+  const saved = mainWindow;
+  for (const { view, window: host } of views.values()) {
+    const win = host && !host.isDestroyed() ? host : saved;
+    if (!win || win.isDestroyed()) {
+      continue;
+    }
+    mainWindow = win;
+    view.setBounds(viewBounds());
+  }
+  if (saved && !saved.isDestroyed()) {
+    mainWindow = saved;
   }
 }
 
@@ -1510,17 +1753,21 @@ ipcMain.handle('agent:downloads-panel', async (event, open) => {
   return { ok: true, open: downloadsOpen };
 });
 
-ipcMain.handle('agent:menu-panel', async (event, open) => {
+ipcMain.handle('agent:menu-panel', async (event, payload) => {
   if (!isChromeSender(event)) {
     return { ok: false };
   }
 
-  menuOpen = Boolean(open);
-  if (menuOpen) {
+  const open = typeof payload === 'object' && payload !== null ? Boolean(payload.open) : Boolean(payload);
+  const anchor = payload && typeof payload === 'object' ? payload.anchor : null;
+  const host = chromeWindowFromEvent(event) || mainWindow;
+  if (open) {
     shieldOpen = false;
     utilityOpen = false;
+    showOverflowMenu(anchor, host);
+  } else {
+    hideOverflowMenu();
   }
-  fitBrowserView();
   return { ok: true, open: menuOpen };
 });
 
@@ -1531,7 +1778,7 @@ ipcMain.handle('agent:shield-panel', async (event, open) => {
 
   shieldOpen = Boolean(open);
   if (shieldOpen) {
-    menuOpen = false;
+    hideOverflowMenu();
     utilityOpen = false;
   }
   fitBrowserView();
@@ -1545,7 +1792,7 @@ ipcMain.handle('agent:utility-panel', async (event, open) => {
 
   utilityOpen = Boolean(open);
   if (utilityOpen) {
-    menuOpen = false;
+    hideOverflowMenu();
     shieldOpen = false;
   }
   fitBrowserView();
@@ -1582,6 +1829,108 @@ ipcMain.handle('agent:fullscreen', async (event) => {
   const next = !mainWindow.isFullScreen();
   mainWindow.setFullScreen(next);
   return { ok: true, fullscreen: next };
+});
+
+ipcMain.handle('agent:menu-action', async (event, action) => {
+  if (!isChromeSender(event) || typeof action !== 'string') {
+    return { ok: false };
+  }
+
+  let result = { ok: true };
+  switch (action) {
+    case 'new-tab':
+      createGuestTab('about:blank');
+      break;
+    case 'new-window':
+    case 'new-incognito':
+      createAgentWindow();
+      break;
+    case 'print':
+      result = printActiveGuest();
+      break;
+    case 'fullscreen': {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        result = { ok: false };
+        break;
+      }
+      const next = !mainWindow.isFullScreen();
+      mainWindow.setFullScreen(next);
+      result = { ok: true, fullscreen: next };
+      break;
+    }
+    case 'clear-data':
+      await clearIsolatedBrowsingData();
+      break;
+    case 'exit':
+      triggerExcommunicado();
+      return { ok: true };
+    case 'gemini':
+    case 'lens':
+      result = { ok: true, openAi: true, summarize: action === 'lens' };
+      break;
+    default:
+      break;
+  }
+
+  sendToChrome('agent:menu-command', { action });
+  hideOverflowMenu();
+  return result;
+});
+
+ipcMain.handle('agent:find-panel', async (event, open) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+  findOpen = Boolean(open);
+  if (!findOpen) {
+    const guest = getGuestWebContents();
+    if (guest && !guest.isDestroyed()) {
+      guest.stopFindInPage('clearSelection');
+    }
+  }
+  fitBrowserView();
+  return { ok: true, open: findOpen };
+});
+
+ipcMain.handle('agent:ram-sheet', async (event, open) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+  ramSheetOpen = Boolean(open);
+  if (ramSheetOpen) {
+    sidebarOpen = false;
+    bookmarksPanelOpen = false;
+    hideOverflowMenu();
+  }
+  fitBrowserView();
+  return { ok: true, open: ramSheetOpen };
+});
+
+ipcMain.handle('agent:find-in-page', async (event, payload) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+  const guest = getGuestWebContents();
+  const query = typeof payload?.query === 'string' ? payload.query : '';
+  if (!guest || guest.isDestroyed() || !query) {
+    return { ok: false };
+  }
+  guest.findInPage(query, {
+    forward: payload?.forward !== false,
+    findNext: Boolean(payload?.findNext),
+  });
+  return { ok: true };
+});
+
+ipcMain.handle('agent:find-stop', async (event) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+  const guest = getGuestWebContents();
+  if (guest && !guest.isDestroyed()) {
+    guest.stopFindInPage('clearSelection');
+  }
+  return { ok: true };
 });
 
 ipcMain.on('agent:tab-context', (event, payload) => {
@@ -2347,8 +2696,30 @@ ipcMain.handle('agent:ai-summarize', async (event, payload) => {
   }
 });
 
-function createMainWindow() {
-  mainWindow = new BrowserWindow({
+function printActiveGuest() {
+  const guest = getGuestWebContents();
+  if (!guest || guest.isDestroyed()) {
+    return { ok: false };
+  }
+  guest.print({ silent: false });
+  return { ok: true };
+}
+
+async function clearIsolatedBrowsingData() {
+  const isolatedSession = getIsolatedSession();
+  await Promise.all([
+    isolatedSession.clearStorageData(),
+    isolatedSession.clearCache(),
+    isolatedSession.clearAuthCache(),
+  ]);
+  const guest = getGuestWebContents();
+  if (guest && !guest.isDestroyed()) {
+    guest.reload();
+  }
+}
+
+function createAgentWindow() {
+  const win = new BrowserWindow({
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
     minWidth: 800,
@@ -2367,31 +2738,49 @@ function createMainWindow() {
     webPreferences: chromeWebPreferences,
   });
 
-  mainWindow.on('resize', fitBrowserView);
-  mainWindow.webContents.on('before-input-event', handleHistoryShortcut);
-  mainWindow.on('closed', () => {
-    for (const tabId of [...views.keys()]) {
-      destroyTab(tabId, false);
+  chromeWindows.add(win);
+  const previous = mainWindow;
+  mainWindow = win;
+
+  win.on('resize', fitBrowserView);
+  win.on('focus', () => {
+    if (!win.isDestroyed()) {
+      mainWindow = win;
     }
-    views.clear();
-    activeTabId = null;
-    mainWindow = null;
+  });
+  win.webContents.on('before-input-event', handleAppShortcut);
+  win.on('closed', () => {
+    if (overflowHostWindow === win) {
+      hideOverflowMenu({ notify: false });
+    }
+    chromeWindows.delete(win);
+    for (const [tabId, entry] of [...views.entries()]) {
+      if (entry.window === win) {
+        destroyTab(tabId, false);
+      }
+    }
+    if (mainWindow === win) {
+      mainWindow = previous && !previous.isDestroyed() ? previous : [...chromeWindows][0] || null;
+    }
   });
 
-  mainWindow
+  win
     .loadFile(path.join(__dirname, 'index.html'))
     .then(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        createGuestTab(DEFAULT_TAB_URL);
-        mainWindow.show();
-        broadcastBrowserState();
+      if (!win.isDestroyed()) {
+        createGuestTab(DEFAULT_TAB_URL, { window: win });
+        win.show();
       }
     })
     .catch((error) => {
-      console.error('Failed to load chrome UI:', error);
+      console.error('Failed to open Agent window:', error);
     });
 
-  return mainWindow;
+  return win;
+}
+
+function createMainWindow() {
+  return createAgentWindow();
 }
 
 app.on('web-contents-created', (_event, contents) => {

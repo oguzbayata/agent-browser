@@ -80,11 +80,44 @@ contextBridge.exposeInMainWorld(
       return ipcRenderer.invoke('agent:download-cancel', downloadId);
     },
     setDownloadsOpen: (open) => ipcRenderer.invoke('agent:downloads-panel', Boolean(open)),
-    setMenuOpen: (open) => ipcRenderer.invoke('agent:menu-panel', Boolean(open)),
+    setMenuOpen: (open, anchor) =>
+      ipcRenderer.invoke('agent:menu-panel', {
+        open: Boolean(open),
+        anchor: anchor && typeof anchor === 'object' ? {
+          left: Number(anchor.left),
+          top: Number(anchor.top),
+          right: Number(anchor.right),
+          bottom: Number(anchor.bottom),
+          width: Number(anchor.width),
+          height: Number(anchor.height),
+        } : null,
+      }),
+    onMenuClosed: (callback) => subscribePayload('agent:menu-closed', callback),
+    setFindOpen: (open) => ipcRenderer.invoke('agent:find-panel', Boolean(open)),
+    setRamSheetOpen: (open) => ipcRenderer.invoke('agent:ram-sheet', Boolean(open)),
     setShieldOpen: (open) => ipcRenderer.invoke('agent:shield-panel', Boolean(open)),
     setUtilityOpen: (open) => ipcRenderer.invoke('agent:utility-panel', Boolean(open)),
     setZoom: (action) => ipcRenderer.invoke('agent:zoom', action),
     toggleFullscreen: () => ipcRenderer.invoke('agent:fullscreen'),
+    menuAction: (action) => {
+      if (typeof action !== 'string') {
+        return Promise.resolve({ ok: false });
+      }
+      return ipcRenderer.invoke('agent:menu-action', action);
+    },
+    findInPage: (query, options) => {
+      if (typeof query !== 'string') {
+        return Promise.resolve({ ok: false });
+      }
+      return ipcRenderer.invoke('agent:find-in-page', {
+        query,
+        forward: options?.forward !== false,
+        findNext: Boolean(options?.findNext),
+      });
+    },
+    stopFindInPage: () => ipcRenderer.invoke('agent:find-stop'),
+    onFindResult: (callback) => subscribePayload('agent:find-result', callback),
+    onMenuCommand: (callback) => subscribePayload('agent:menu-command', callback),
     showTabMenu: (tabId, position) => {
       if (typeof tabId !== 'string') {
         return;

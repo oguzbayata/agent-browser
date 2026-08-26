@@ -397,6 +397,11 @@ function setBookmarksPanelOpen(open) {
       document.getElementById('ai-toggle')?.setAttribute('aria-expanded', 'false');
       window.electronAPI?.setSidebarOpen?.(false);
     }
+    const ramSheet = document.getElementById('ram-sheet');
+    if (ramSheet && !ramSheet.hidden) {
+      ramSheet.hidden = true;
+      window.electronAPI?.setRamSheetOpen?.(false);
+    }
   }
   window.electronAPI?.setBookmarksPanelOpen?.(open);
 }
@@ -1200,17 +1205,47 @@ function bindToolbarControls() {
 function bindAppMenu() {
   const api = window.electronAPI;
   const toggle = document.getElementById('settings-toggle');
-  const menu = document.getElementById('agent-main-menu');
-  const zoomLabel = document.getElementById('zoom-label');
-  const historyPop = document.getElementById('session-history-pop');
-  const historyList = document.getElementById('session-history-list');
-  const historyEmpty = document.getElementById('session-history-empty');
-  if (!toggle || !menu) {
+  const findBar = document.getElementById('find-bar');
+  const findQuery = document.getElementById('find-query');
+  const findCount = document.getElementById('find-count');
+  const ramSheet = document.getElementById('ram-sheet');
+  const ramTitle = document.getElementById('ram-sheet-title');
+  const ramBody = document.getElementById('ram-sheet-body');
+  if (!toggle) {
     return;
   }
 
+  let menuVisible = false;
+  let ignoreToggleUntil = 0;
+
+  const ramCopy = {
+    passwords: ['Passwords and autofill', 'No saved passwords. Autofill stays in RAM for this session only.'],
+    history: ['History', ''],
+    bookmarks: ['Bookmarks and lists', ''],
+    'tab-groups': ['Tab groups', 'Tab groups are not persisted. This session has no named groups.'],
+    extensions: ['Extensions', 'Permanent extensions are blocked. Session tools live in the puzzle menu.'],
+    translate: ['Translate', 'No translation memory is stored. Use a local model in the AI panel if you need a translation.'],
+    find: ['Find and edit', 'Use the find bar to search the current page. Matches are not logged.'],
+    cast: ['Cast, save, and share', 'Casting is disabled. Nothing is sent to a remote display from this browser.'],
+    'more-tools': ['More tools', 'Task manager, developer extras, and install hooks stay out of this RAM session.'],
+    help: ['Help', 'Ctrl+T new tab · Ctrl+N new window · Ctrl+Shift+N incognito window · Ctrl+J downloads · Ctrl+P print · Ctrl+F find · Ctrl+Shift+Del wipe RAM · Ctrl+Shift+E Excommunicado.'],
+    profile: ['Sanatçı (Agent)', 'Signed in for this RAM session only. There is no account graph and nothing syncs.'],
+  };
+
+  function kebabAnchor() {
+    const box = toggle.getBoundingClientRect();
+    return {
+      left: box.left,
+      top: box.top,
+      right: box.right,
+      bottom: box.bottom,
+      width: box.width,
+      height: box.height,
+    };
+  }
+
   function setMenuVisible(open) {
-    menu.classList.toggle('hidden', !open);
+    menuVisible = open;
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     document.body.classList.toggle('menu-open', open);
     if (open) {
@@ -1219,101 +1254,245 @@ function bindAppMenu() {
       document.getElementById('shield-toggle')?.setAttribute('aria-expanded', 'false');
       document.body.classList.remove('shield-open');
       api?.setShieldOpen?.(false);
-    }
-    api?.setMenuOpen?.(open);
-  }
-
-  function renderHistory() {
-    if (!historyList || !historyEmpty) {
+      api?.setMenuOpen?.(true, kebabAnchor());
       return;
     }
-    historyEmpty.hidden = sessionVisits.length > 0;
-    historyList.replaceChildren();
-    for (const url of sessionVisits) {
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'history-row';
-      row.textContent = url;
-      row.addEventListener('click', () => {
-        api?.navigate?.(url);
-        historyPop.hidden = true;
-      });
-      historyList.appendChild(row);
+    api?.setMenuOpen?.(false);
+  }
+
+  function setFindVisible(open) {
+    if (!findBar) {
+      return;
+    }
+    findBar.hidden = !open;
+    document.body.classList.toggle('find-open', open);
+    api?.setFindOpen?.(open);
+    if (open) {
+      findQuery?.focus();
+      findQuery?.select();
+    }
+  }
+
+  function setRamSheet(kind, extraHtml) {
+    if (!ramSheet || !ramTitle || !ramBody) {
+      return;
+    }
+    const meta = ramCopy[kind] || ['RAM-Only Data', 'Temporary session surface.'];
+    ramTitle.textContent = meta[0];
+    ramBody.replaceChildren();
+    if (kind === 'history') {
+      if (sessionVisits.length === 0) {
+        const empty = document.createElement('p');
+        empty.textContent = 'No visits in this RAM session.';
+        ramBody.appendChild(empty);
+      } else {
+        const list = document.createElement('ul');
+        for (const url of sessionVisits) {
+          const item = document.createElement('li');
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = url;
+          btn.addEventListener('click', () => {
+            api?.navigate?.(url);
+            ramSheet.hidden = true;
+            api?.setRamSheetOpen?.(false);
+          });
+          item.appendChild(btn);
+          list.appendChild(item);
+        }
+        ramBody.appendChild(list);
+      }
+    } else if (kind === 'bookmarks') {
+      const empty = document.createElement('p');
+      empty.textContent = 'Open All Bookmarks for the session list. Nothing is written to disk.';
+      ramBody.appendChild(empty);
+    } else {
+      const note = document.createElement('p');
+      note.textContent = extraHtml || meta[1];
+      ramBody.appendChild(note);
+    }
+    ramSheet.hidden = false;
+    document.getElementById('bookmarks-panel') && (document.getElementById('bookmarks-panel').hidden = true);
+    document.getElementById('bookmarks-all-toggle')?.setAttribute('aria-expanded', 'false');
+    api?.setBookmarksPanelOpen?.(false);
+    api?.setRamSheetOpen?.(true);
+  }
+
+  function runFind(findNext, forward = true) {
+    const query = findQuery?.value?.trim() || '';
+    if (!query) {
+      return;
+    }
+    api?.findInPage?.(query, { findNext, forward });
+  }
+
+  async function handleMenuAction(action, fromMain = false) {
+    if (action === 'default-browser' || action === 'cleared') {
+      return;
+    }
+    if (action === 'new-tab') {
+      if (!fromMain) {
+        api?.menuAction?.('new-tab');
+      }
+      return;
+    }
+    if (action === 'new-window' || action === 'new-incognito') {
+      if (!fromMain) {
+        api?.menuAction?.(action);
+      }
+      return;
+    }
+    if (action === 'downloads') {
+      document.getElementById('downloads-toggle')?.click();
+      return;
+    }
+    if (action === 'bookmarks') {
+      document.getElementById('bookmarks-all-toggle')?.click();
+      return;
+    }
+    if (action === 'history' || action === 'passwords' || action === 'tab-groups' || action === 'extensions' || action === 'translate' || action === 'cast' || action === 'more-tools' || action === 'help' || action === 'profile') {
+      setRamSheet(action);
+      return;
+    }
+    if (action === 'find') {
+      setFindVisible(true);
+      return;
+    }
+    if (action === 'print') {
+      if (!fromMain) {
+        api?.menuAction?.('print');
+      }
+      return;
+    }
+    if (action === 'fullscreen') {
+      if (!fromMain) {
+        api?.toggleFullscreen?.();
+      }
+      return;
+    }
+    if (action === 'gemini' || action === 'lens') {
+      const sidebar = document.getElementById('ai-sidebar');
+      if (sidebar?.hidden) {
+        document.getElementById('ai-toggle')?.click();
+      }
+      if (action === 'lens') {
+        const key = sessionApiKey();
+        if (key) {
+          api?.summarizeCurrentPage?.(key);
+        }
+      }
+      return;
+    }
+    if (action === 'settings') {
+      setSettingsPanelOpen(true);
+      return;
+    }
+    if (action === 'clear-data') {
+      if (!fromMain) {
+        await api?.menuAction?.('clear-data');
+      }
+      setRamSheet('history');
+      ramTitle.textContent = 'Delete browsing data';
+      ramBody.replaceChildren();
+      const note = document.createElement('p');
+      note.textContent = 'Isolated RAM session cache and storage were wiped. Disk was not touched.';
+      ramBody.appendChild(note);
+      return;
+    }
+    if (action === 'exit') {
+      if (!fromMain) {
+        api?.menuAction?.('exit');
+      }
     }
   }
 
   toggle.addEventListener('click', (event) => {
     event.stopPropagation();
-    setMenuVisible(menu.classList.contains('hidden'));
-  });
-
-  document.addEventListener('click', (event) => {
-    if (menu.classList.contains('hidden')) {
+    if (Date.now() < ignoreToggleUntil) {
       return;
     }
-    if (menu.contains(event.target) || toggle.contains(event.target)) {
+    setMenuVisible(!menuVisible);
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    if (!menuVisible) {
+      return;
+    }
+    if (toggle.contains(event.target)) {
       return;
     }
     setMenuVisible(false);
   });
 
   document.addEventListener('keydown', (event) => {
+    const ctrl = event.ctrlKey || event.metaKey;
     if (event.key === 'Escape') {
       setMenuVisible(false);
-    }
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 't') {
-      event.preventDefault();
-      api?.createTab?.();
-    }
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'j') {
-      event.preventDefault();
-      document.getElementById('downloads-toggle')?.click();
-    }
-  });
-
-  async function applyZoom(action) {
-    const result = await api?.setZoom?.(action);
-    if (result?.ok && zoomLabel) {
-      zoomLabel.textContent = `${result.zoom}%`;
-    }
-  }
-
-  document.getElementById('zoom-out')?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    applyZoom('out');
-  });
-  document.getElementById('zoom-in')?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    applyZoom('in');
-  });
-
-  menu.addEventListener('click', (event) => {
-    const item = event.target.closest('[data-action]');
-    if (!item) {
-      return;
-    }
-    const action = item.dataset.action;
-    if (action === 'new-tab' || action === 'new-isolated') {
-      api?.createTab?.();
-    } else if (action === 'history') {
-      renderHistory();
-      if (historyPop) {
-        historyPop.hidden = false;
+      if (findBar && !findBar.hidden) {
+        setFindVisible(false);
+        api?.stopFindInPage?.();
       }
-    } else if (action === 'downloads') {
-      document.getElementById('downloads-toggle')?.click();
-    } else if (action === 'bookmarks') {
-      document.getElementById('bookmarks-all-toggle')?.click();
-    } else if (action === 'fullscreen') {
-      api?.toggleFullscreen?.();
-    } else if (action === 'ai') {
-      document.getElementById('ai-toggle')?.click();
-    } else if (action === 'settings') {
-      setSettingsPanelOpen(true);
-    } else if (action === 'panic') {
-      document.getElementById('panic-btn')?.click();
     }
-    setMenuVisible(false);
+    if (ctrl && event.key.toLowerCase() === 't' && !event.shiftKey) {
+      event.preventDefault();
+      handleMenuAction('new-tab');
+    }
+    if (ctrl && event.key.toLowerCase() === 'n') {
+      event.preventDefault();
+      handleMenuAction(event.shiftKey ? 'new-incognito' : 'new-window');
+    }
+    if (ctrl && event.key.toLowerCase() === 'j' && !event.shiftKey) {
+      event.preventDefault();
+      handleMenuAction('downloads');
+    }
+    if (ctrl && event.key.toLowerCase() === 'p' && !event.shiftKey) {
+      event.preventDefault();
+      handleMenuAction('print');
+    }
+    if (ctrl && event.key.toLowerCase() === 'f' && !event.shiftKey) {
+      event.preventDefault();
+      handleMenuAction('find');
+    }
+    if (ctrl && event.shiftKey && event.key === 'Delete') {
+      event.preventDefault();
+      handleMenuAction('clear-data');
+    }
+  });
+
+  findQuery?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      runFind(true, !event.shiftKey);
+    }
+  });
+  document.getElementById('find-next')?.addEventListener('click', () => runFind(true, true));
+  document.getElementById('find-prev')?.addEventListener('click', () => runFind(true, false));
+  document.getElementById('find-close')?.addEventListener('click', () => {
+    setFindVisible(false);
+    api?.stopFindInPage?.();
+  });
+  document.getElementById('ram-sheet-close')?.addEventListener('click', () => {
+    if (ramSheet) {
+      ramSheet.hidden = true;
+    }
+    api?.setRamSheetOpen?.(false);
+  });
+
+  api?.onFindResult?.((payload) => {
+    if (findCount && payload) {
+      findCount.textContent = `${payload.activeMatchOrdinal || 0}/${payload.matches || 0}`;
+    }
+  });
+  api?.onMenuCommand?.((payload) => {
+    if (payload?.action) {
+      handleMenuAction(payload.action, true);
+    }
+  });
+  api?.onMenuClosed?.(() => {
+    menuVisible = false;
+    ignoreToggleUntil = Date.now() + 280;
+    toggle.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('menu-open');
   });
 }
 
