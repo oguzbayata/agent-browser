@@ -1,0 +1,14 @@
+{
+  "name": "agent-browser",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Privacy-focused Agent Browser",
+  "main": "main.js",
+  "scripts": {
+    "start": "node start.js",
+    "electron": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^37.2.6"
+  }
+}

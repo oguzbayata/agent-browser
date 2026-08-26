@@ -1,0 +1,81 @@
+:root {
+  --bg: #070809;
+  --text: #d5dce3;
+  --muted: #7a848f;
+  --accent: #3dffc8;
+  --accent-blue: #3dc8ff;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(ellipse at 50% 32%, #10181d 0%, var(--bg) 58%);
+  color: var(--text);
+  font-family: "Segoe UI", "Cascadia Code", "Consolas", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  padding: 32px 24px;
+}
+
+.start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 560px;
+  text-align: center;
+}
+
+.brand-mark {
+  width: 168px;
+  height: 168px;
+  object-fit: contain;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 22px rgba(61, 255, 200, 0.28));
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.kicker {
+  margin: 18px 0 8px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0 0 14px;
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.lede {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.hint {
+  margin: 22px 0 0;
+  color: #4e5862;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}

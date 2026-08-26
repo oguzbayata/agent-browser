@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent Browser</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="chrome">
+      <div class="brand-rail">
+        <img class="brand-logo" src="assets/agent-browser-logo.png" width="28" height="28" alt="" />
+        <p class="brand-name">Agent Browser</p>
+        <button
+          class="brand-settings"
+          id="settings-toggle"
+          type="button"
+          aria-label="Ayarlar"
+          aria-expanded="false"
+          aria-controls="settings-panel"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="2.1" />
+            <path d="M8 1.6v1.6M8 12.8v1.6M1.6 8h1.6M12.8 8h1.6M3.3 3.3l1.1 1.1M11.6 11.6l1.1 1.1M3.3 12.7l1.1-1.1M11.6 4.4l1.1-1.1" />
+          </svg>
+          Ayarlar
+        </button>
+      </div>
+      <div class="chrome-main">
+        <div class="tab-strip" aria-label="Sekmeler">
+          <div class="tab-list" id="tab-list" role="tablist"></div>
+          <button class="tab-new" id="new-tab" type="button" aria-label="Yeni sekme">+</button>
+        </div>
+        <nav class="toolbar" aria-label="Gezinme">
+        <div class="nav-cluster">
+          <button class="nav-btn" id="back-btn" type="button" aria-label="Geri" title="Geri (Alt+←)" disabled>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M10.2 2.8 4.9 8l5.3 5.2" />
+            </svg>
+          </button>
+          <button class="nav-btn" id="forward-btn" type="button" aria-label="İleri" title="İleri (Alt+→)" disabled>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M5.8 2.8 11.1 8l-5.3 5.2" />
+            </svg>
+          </button>
+          <button class="nav-btn" id="reload-btn" type="button" aria-label="Yenile">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M13 8A5 5 0 1 1 8 3h1.2" />
+              <path d="M7.2 1.2 9.6 3.4 7.3 5.7" />
+            </svg>
+          </button>
+        </div>
+
+        <form class="omni-form" id="omni-form" action="#" autocomplete="off">
+          <label class="sr-only" for="omni-input">Adres veya arama</label>
+          <input
+            id="omni-input"
+            class="omni-input"
+            type="text"
+            spellcheck="false"
+            autocomplete="off"
+            autocapitalize="off"
+            inputmode="url"
+            placeholder="hedef veya arama"
+          />
+        </form>
+
+        <div class="nav-cluster">
+          <button class="nav-btn nav-btn-ai" id="ai-toggle" type="button" aria-label="AI paneli" aria-expanded="false" aria-controls="ai-sidebar">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="9.2" y="2.5" width="4.3" height="11" rx="0.8" />
+              <path d="M2.5 4.2h5.2M2.5 8h5.2M2.5 11.8h3.4" />
+            </svg>
+          </button>
+          <button class="nav-btn nav-btn-panic" id="panic-btn" type="button" title="Excommunicado" aria-label="Excommunicado">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="5.2" />
+              <path d="M8 3.2v4" />
+            </svg>
+          </button>
+        </div>
+      </nav>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="settings-panel" id="settings-panel" aria-label="Ayarlar" hidden>
+        <header class="settings-head">
+          <p class="settings-kicker">session only · ram</p>
+          <h1 class="settings-title">Ayarlar</h1>
+          <button class="settings-close" id="settings-close" type="button" aria-label="Ayarları kapat">×</button>
+        </header>
+
+        <div class="settings-body">
+          <p class="settings-section">Ajanlar</p>
+          <label class="setting">
+            <span>
+              <strong>Çoklu ajan köprüsü</strong>
+              <em>Yerel ajanların tarayıcıyı serbestçe kullanmasına izin ver</em>
+            </span>
+            <input id="setting-agentBridge" type="checkbox" data-setting="agentBridge" />
+          </label>
+          <div class="agent-bridge-card" id="agent-bridge-card" hidden>
+            <p class="settings-note">Yalnızca 127.0.0.1. Her ajan kendi sekmesini açsın. Token oturumdadır, diske yazılmaz.</p>
+            <label class="agent-bridge-field">
+              Uç nokta
+              <input id="agent-bridge-url" type="text" readonly spellcheck="false" />
+            </label>
+            <label class="agent-bridge-field">
+              Oturum jetonu
+              <input id="agent-bridge-token" type="text" readonly spellcheck="false" />
+            </label>
+            <p class="settings-note">
+              Örnek: <kbd>Authorization: Bearer &lt;jeton&gt;</kbd> ve
+              <kbd>POST /v1/tabs</kbd> <kbd>{"url":"https://duckduckgo.com","owner":"ajan-1"}</kbd>
+            </p>
+          </div>
+          <p class="settings-section">Gizlilik</p>
+          <label class="setting">
+            <span>
+              <strong>Takipçi engeli</strong>
+              <em>Bilinen izleyici ve reklam hostlarını kes</em>
+            </span>
+            <input id="setting-blockTrackers" type="checkbox" data-setting="blockTrackers" checked />
+          </label>
+          <label class="setting">
+            <span>
+              <strong>Üçüncü taraf çerezler</strong>
+              <em>Çapraz site çerezlerini düşür</em>
+            </span>
+            <input id="setting-stripThirdPartyCookies" type="checkbox" data-setting="stripThirdPartyCookies" checked />
+          </label>
+          <label class="setting">
+            <span>
+              <strong>Do Not Track</strong>
+              <em>İsteklere DNT: 1 ekle</em>
+            </span>
+            <input id="setting-sendDnt" type="checkbox" data-setting="sendDnt" checked />
+          </label>
+          <label class="setting">
+            <span>
+              <strong>Ortak tarayıcı kimliği</strong>
+              <em>User-Agent’ı sıradan Chrome olarak göster</em>
+            </span>
+            <input id="setting-spoofUserAgent" type="checkbox" data-setting="spoofUserAgent" checked />
+          </label>
+
+          <p class="settings-section">Arama</p>
+          <label class="setting setting-stack">
+            <span>
+              <strong>Arama motoru</strong>
+              <em>Adres çubuğundaki aramalar</em>
+            </span>
+            <select id="setting-searchEngine" data-setting="searchEngine">
+              <option value="duckduckgo">DuckDuckGo</option>
+              <option value="startpage">Startpage</option>
+            </select>
+          </label>
+
+          <p class="settings-section">Oturum</p>
+          <label class="setting is-locked">
+            <span>
+              <strong>Bellek içi oturum</strong>
+              <em>Çerezler ve anahtarlar diske yazılmaz</em>
+            </span>
+            <input type="checkbox" checked disabled />
+          </label>
+          <p class="settings-note">
+            Excommunicado: <kbd id="setting-shortcut">Ctrl+Shift+E</kbd>
+          </p>
+        </div>
+      </aside>
+      <main class="viewport" id="viewport" aria-label="Sayfa görünümü">
+        <p class="viewport-idle">hedef bekleniyor</p>
+      </main>
+
+      <aside class="ai-sidebar" id="ai-sidebar" aria-label="Yapay zeka paneli" hidden>
+        <header class="ai-head">
+          <p class="ai-kicker">session only · ram</p>
+          <h1 class="ai-title">AI Agent</h1>
+          <label class="ai-key-label" for="ai-key">API Key (Session Only)</label>
+          <input
+            id="ai-key"
+            class="ai-key"
+            type="text"
+            spellcheck="false"
+            autocomplete="off"
+            autocapitalize="off"
+            placeholder="sk-················"
+          />
+        </header>
+
+        <section class="ai-chat" id="ai-chat" aria-live="polite"></section>
+
+        <form class="ai-composer" id="ai-form" autocomplete="off">
+          <label class="sr-only" for="ai-prompt">Soru</label>
+          <textarea
+            id="ai-prompt"
+            class="ai-prompt"
+            rows="3"
+            maxlength="8000"
+            placeholder="hedef hakkında sor…"
+          ></textarea>
+          <div class="ai-actions">
+            <button class="ai-btn ai-btn-ghost" id="ai-summarize" type="button">Sayfayı Özetle</button>
+            <button class="ai-btn ai-btn-primary" id="ai-send" type="submit">Gönder</button>
+          </div>
+        </form>
+      </aside>
+    </div>
+
+    <div id="excommunicado" class="excommunicado" hidden>
+      <p class="excommunicado-mark">EXCOMMUNICADO PROTOCOL: PURGED</p>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>
