@@ -7,4 +7,6 @@ out/
 *.lnk
 Thumbs.db
 .DS_Store
-*.local
+__pycache__/
+engine/__pycache__/
+*.pyc

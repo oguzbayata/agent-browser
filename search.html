@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yerel Arama</title>
+    <link rel="stylesheet" href="search.css" />
+  </head>
+  <body>
+    <main class="search-shell">
+      <p class="kicker">yerel istihbarat ajanı · stdout json · ram</p>
+      <h1 id="query-title">Arama</h1>
+      <p id="status" class="status">Ajan çalışıyor…</p>
+      <p id="error" class="error" hidden></p>
+      <ol id="results" class="results" aria-live="polite"></ol>
+    </main>
+    <script src="search.js"></script>
+  </body>
+</html>

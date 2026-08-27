@@ -4,6 +4,7 @@ const { app, BrowserWindow, WebContentsView, session, ipcMain, globalShortcut, M
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
+const { spawn } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 const { startAgentBridgeServer, stopAgentBridgeServer, getListenInfo } = require('./agent-bridge');
 const { collectIntel, knownModelRoots, isLoopbackHttpUrl } = require('./local-intel');
@@ -30,6 +31,12 @@ const DEFAULT_BOOKMARK_FOLDER_ID = 'bar';
 const DEFAULT_TAB_URL = 'https://duckduckgo.com';
 const NEWTAB_PATH = path.join(__dirname, 'newtab.html');
 const NEWTAB_FILE_URL = pathToFileURL(NEWTAB_PATH).href;
+const SEARCH_PATH = path.join(__dirname, 'search.html');
+const SEARCH_FILE_URL = pathToFileURL(SEARCH_PATH).href;
+const SEARCH_PRELOAD_PATH = path.join(__dirname, 'search-preload.js');
+const SCRAPER_PATH = path.join(__dirname, 'engine', 'scraper.py');
+const AGENT_SEARCH_PREFIX = 'agent-search:';
+const PYTHON_MISSING_MESSAGE = 'Yerel İstihbarat Ajanı başlatılamadı: Python bulunamadı';
 const PANIC_QUIT_MS = 1500;
 const PANIC_SHORTCUT = 'CommandOrControl+Shift+E';
 const PAGE_TEXT_LIMIT = 80000;
@@ -172,10 +179,13 @@ const chromeWebPreferences = Object.freeze({
 
 const guestWebPreferences = Object.freeze({
   ...sharedSessionPrefs,
+  preload: SEARCH_PRELOAD_PATH,
 });
 
 let mainWindow = null;
 const views = new Map();
+const scraperChildren = new Set();
+let cachedPython = null;
 let activeTabId = null;
 let nextTabId = 1;
 let isWipingSession = false;
@@ -590,7 +600,7 @@ function serializeTab(tabId) {
   return {
     tabId,
     title: tabTitleOf(webContents),
-    url: isStartPage(url) ? '' : url,
+    url: displayGuestUrl(url),
     active: tabId === activeTabId,
     owner: entry.owner || null,
     loading: webContents.isLoading(),
@@ -623,7 +633,10 @@ function currentGuestUrl() {
     return '';
   }
   const url = guest.getURL();
-  return isStartPage(url) ? '' : url;
+  if (isStartPage(url) || isSearchFile(url)) {
+    return '';
+  }
+  return url;
 }
 
 function isCurrentUrlBookmarked() {
@@ -641,6 +654,7 @@ function broadcastBookmarks() {
 }
 
 function purgeSessionChromeState() {
+  killAllScrapers();
   for (const item of activeDownloadItems.values()) {
     try {
       item.cancel();
@@ -962,6 +976,60 @@ function fileUrlToPath(rawUrl) {
   }
 }
 
+function isSearchFile(rawUrl) {
+  if (!rawUrl) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.pathname.toLowerCase().endsWith('/search.html') || parsed.href.split('?')[0] === SEARCH_FILE_URL) {
+      const filePath = fileUrlToPath(parsed.href);
+      if (filePath && filePath.toLowerCase() === path.normalize(SEARCH_PATH).toLowerCase()) {
+        return true;
+      }
+    }
+  } catch {
+    // Compare by filesystem path below.
+  }
+
+  const filePath = fileUrlToPath(rawUrl);
+  return Boolean(filePath) && filePath.toLowerCase() === path.normalize(SEARCH_PATH).toLowerCase();
+}
+
+function searchQueryFromUrl(rawUrl) {
+  try {
+    return String(new URL(rawUrl).searchParams.get('q') || '').trim().slice(0, 500);
+  } catch {
+    return '';
+  }
+}
+
+function parseAgentSearchTarget(raw) {
+  if (typeof raw !== 'string') {
+    return null;
+  }
+  const value = raw.trim();
+  if (!value.startsWith(AGENT_SEARCH_PREFIX)) {
+    return isSearchFile(value) ? searchQueryFromUrl(value) : null;
+  }
+  try {
+    return decodeURIComponent(value.slice(AGENT_SEARCH_PREFIX.length)).trim().slice(0, 500);
+  } catch {
+    return value.slice(AGENT_SEARCH_PREFIX.length).trim().slice(0, 500);
+  }
+}
+
+function displayGuestUrl(rawUrl) {
+  if (isStartPage(rawUrl)) {
+    return '';
+  }
+  if (isSearchFile(rawUrl)) {
+    return searchQueryFromUrl(rawUrl);
+  }
+  return rawUrl;
+}
+
 function isNewTabFile(rawUrl) {
   if (!rawUrl) {
     return false;
@@ -984,7 +1052,7 @@ function isStartPage(rawUrl) {
 }
 
 function isAllowedGuestUrl(rawUrl) {
-  return rawUrl === 'about:blank' || isNewTabFile(rawUrl) || Boolean(sanitizeUrl(rawUrl));
+  return rawUrl === 'about:blank' || isNewTabFile(rawUrl) || isSearchFile(rawUrl) || Boolean(sanitizeUrl(rawUrl));
 }
 
 function loadStartPage(webContents) {
@@ -994,9 +1062,191 @@ function loadStartPage(webContents) {
   webContents.loadFile(NEWTAB_PATH);
 }
 
+function loadSearchPage(webContents, query) {
+  if (!webContents || webContents.isDestroyed()) {
+    return Promise.resolve();
+  }
+  const q = String(query || '').trim().slice(0, 500);
+  return webContents.loadFile(SEARCH_PATH, { query: { q } });
+}
+
+function pythonCandidates() {
+  if (process.platform === 'win32') {
+    return [
+      { cmd: 'python', prefix: [] },
+      { cmd: 'python3', prefix: [] },
+      { cmd: 'py', prefix: ['-3'] },
+    ];
+  }
+  return [
+    { cmd: 'python3', prefix: [] },
+    { cmd: 'python', prefix: [] },
+  ];
+}
+
+function killScraperProcess(child) {
+  if (!child) {
+    return;
+  }
+  scraperChildren.delete(child);
+  try {
+    child.stdout?.removeAllListeners();
+    child.stderr?.removeAllListeners();
+    child.removeAllListeners();
+  } catch {
+    // Ignore listener cleanup errors.
+  }
+  try {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL');
+    }
+  } catch {
+    // Process may already be gone.
+  }
+}
+
+function killAllScrapers() {
+  for (const child of [...scraperChildren]) {
+    killScraperProcess(child);
+  }
+  cachedPython = null;
+}
+
+function runScraperProcess(command, args, env) {
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      child = spawn(command, args, {
+        cwd: path.dirname(SCRAPER_PATH),
+        env,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    scraperChildren.add(child);
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const finish = (error, payload) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      killScraperProcess(child);
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(payload);
+    };
+
+    const timer = setTimeout(() => {
+      const timeoutError = new Error('scraper-timeout');
+      timeoutError.code = 'scraper-timeout';
+      finish(timeoutError);
+    }, 25000);
+
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+      if (stdout.length > 1_000_000) {
+        stdout = stdout.slice(0, 1_000_000);
+      }
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+      if (stderr.length > 80_000) {
+        stderr = stderr.slice(-80_000);
+      }
+    });
+    child.on('error', (error) => {
+      finish(error);
+    });
+    child.on('close', (code) => {
+      let parsed;
+      try {
+        parsed = JSON.parse(stdout.trim() || '[]');
+      } catch {
+        parsed = [];
+      }
+      const missingModule = /ModuleNotFoundError|No module named/i.test(stderr);
+      finish(null, { code, parsed, stderr, missingModule });
+    });
+  });
+}
+
+async function runLocalScraper(query) {
+  const q = String(query || '').trim().slice(0, 500);
+  if (!q) {
+    return { ok: false, error: 'invalid-query', message: 'Arama sorgusu boş.', results: [] };
+  }
+
+  const env = {
+    ...process.env,
+    PYTHONUTF8: '1',
+    PYTHONIOENCODING: 'utf-8',
+    AGENT_USER_AGENT: COMMON_USER_AGENT,
+    AGENT_PROXY: privacySettings.ghostNetwork ? SOCKS5_PROXY : '',
+  };
+  delete env.ELECTRON_RUN_AS_NODE;
+
+  const candidates = cachedPython
+    ? [cachedPython, ...pythonCandidates().filter((item) => item.cmd !== cachedPython.cmd)]
+    : pythonCandidates();
+
+  for (const candidate of candidates) {
+    try {
+      const result = await runScraperProcess(
+        candidate.cmd,
+        [...candidate.prefix, '-u', SCRAPER_PATH, q],
+        env,
+      );
+      cachedPython = candidate;
+      if (result.missingModule) {
+        return {
+          ok: false,
+          error: 'python-deps',
+          message: 'Yerel İstihbarat Ajanı başlatılamadı: Python paketleri eksik (pip install -r engine/requirements.txt)',
+          results: [],
+        };
+      }
+      const results = Array.isArray(result.parsed) ? result.parsed : [];
+      return { ok: true, results };
+    } catch (error) {
+      if (error && (error.code === 'ENOENT' || error.code === 'python_missing')) {
+        continue;
+      }
+      return {
+        ok: false,
+        error: error?.code || 'scraper-failed',
+        message: 'Yerel İstihbarat Ajanı sonuç döndüremedi.',
+        results: [],
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    error: 'python_missing',
+    message: PYTHON_MISSING_MESSAGE,
+    results: [],
+  };
+}
+
 function tabTitleOf(webContents) {
-  if (isStartPage(webContents.getURL())) {
+  const url = webContents.getURL();
+  if (isStartPage(url)) {
     return 'Yeni Sekme';
+  }
+  if (isSearchFile(url)) {
+    return searchQueryFromUrl(url).slice(0, 80) || 'Arama';
   }
 
   const title = webContents.getTitle();
@@ -1182,7 +1432,7 @@ function injectVideoAdSkipper(webContents) {
   if (!webContents || webContents.isDestroyed()) {
     return;
   }
-  if (isStartPage(webContents.getURL())) {
+  if (isStartPage(webContents.getURL()) || isSearchFile(webContents.getURL())) {
     return;
   }
   webContents.executeJavaScript(VIDEO_AD_SKIPPER_SOURCE, true).catch(() => {});
@@ -1309,7 +1559,10 @@ function createGuestTab(initialUrl, options = {}) {
   }
 
   const target = initialUrl || 'about:blank';
-  if (target !== 'about:blank') {
+  const searchQuery = parseAgentSearchTarget(target);
+  if (searchQuery) {
+    loadSearchPage(view.webContents, searchQuery);
+  } else if (target !== 'about:blank') {
     const safeUrl = sanitizeUrl(target);
     if (safeUrl) {
       view.webContents.loadURL(safeUrl);
@@ -1533,6 +1786,14 @@ function isChromeSender(event) {
     return true;
   }
   return Boolean(chromeWindowFromEvent(event));
+}
+
+function isSearchSender(event) {
+  const contents = event?.sender;
+  if (!contents || contents.isDestroyed()) {
+    return false;
+  }
+  return isSearchFile(contents.getURL());
 }
 
 function notifyChromeMenuClosed() {
@@ -1826,7 +2087,7 @@ function broadcastBrowserState() {
   const url = guest.getURL();
   const flags = navigationFlags(guest);
   sendToChrome('agent:url-changed', {
-    url: isStartPage(url) ? '' : url,
+    url: displayGuestUrl(url),
     canGoBack: flags.canGoBack,
     canGoForward: flags.canGoForward,
     isLoading: guest.isLoading(),
@@ -1871,14 +2132,31 @@ ipcMain.handle('agent:navigate', async (event, rawUrl) => {
     return { ok: false };
   }
 
-  const url = sanitizeUrl(rawUrl);
   const guest = getGuestWebContents();
-  if (!url || !guest || guest.isDestroyed()) {
+  if (!guest || guest.isDestroyed()) {
+    return { ok: false };
+  }
+
+  const searchQuery = parseAgentSearchTarget(rawUrl);
+  if (searchQuery) {
+    await loadSearchPage(guest, searchQuery);
+    return { ok: true, url: searchQuery };
+  }
+
+  const url = sanitizeUrl(rawUrl);
+  if (!url) {
     return { ok: false };
   }
 
   await guest.loadURL(url);
   return { ok: true, url };
+});
+
+ipcMain.handle('agent:local-search', async (event, rawQuery) => {
+  if (!isSearchSender(event) && !isChromeSender(event)) {
+    return { ok: false, error: 'forbidden', results: [] };
+  }
+  return runLocalScraper(rawQuery);
 });
 
 ipcMain.handle('agent:go-back', async (event) => {
@@ -3173,6 +3451,11 @@ app.on('will-quit', () => {
   }
   try {
     stopLocalIntelWatch();
+  } catch {
+    // Ignore.
+  }
+  try {
+    killAllScrapers();
   } catch {
     // Ignore.
   }

@@ -31,6 +31,12 @@ contextBridge.exposeInMainWorld(
       }
       return ipcRenderer.invoke('agent:navigate', url);
     },
+    runLocalSearch: (query) => {
+      if (typeof query !== 'string') {
+        return Promise.resolve({ ok: false, error: 'invalid-query', results: [] });
+      }
+      return ipcRenderer.invoke('agent:local-search', query);
+    },
     goBack: () => ipcRenderer.invoke('agent:go-back'),
     goForward: () => ipcRenderer.invoke('agent:go-forward'),
     reload: () => ipcRenderer.invoke('agent:reload'),

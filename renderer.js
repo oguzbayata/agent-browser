@@ -1,6 +1,7 @@
 'use strict';
 
 let searchEngineBase = 'https://duckduckgo.com/?q=';
+const AGENT_SEARCH_PREFIX = 'agent-search:';
 const sessionVisits = [];
 let currentPageUrl = '';
 let sessionBookmarkItems = [];
@@ -68,7 +69,7 @@ function resolveDestination(raw) {
   }
 
   if (!isUrlLike(value)) {
-    return `${searchEngineBase}${encodeURIComponent(value)}`;
+    return `${AGENT_SEARCH_PREFIX}${encodeURIComponent(value)}`;
   }
 
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) {
@@ -132,7 +133,9 @@ function bindChrome() {
       return;
     }
 
-    input.value = url;
+    if (!url.startsWith(AGENT_SEARCH_PREFIX)) {
+      input.value = url;
+    }
     api?.navigate?.(url);
     input.blur();
   });
