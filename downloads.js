@@ -94,6 +94,14 @@ api?.onDiskWarning?.((payload) => {
     'Uyarı: Bu dosya yerel diskinize kaydedildi. Excommunicado protokolü bu dosyayı silmeyebilir.';
   banner.hidden = false;
 });
+api?.onToast?.((payload) => {
+  const banner = document.getElementById('disk-warning');
+  if (!banner || !payload?.message) {
+    return;
+  }
+  banner.textContent = payload.message;
+  banner.hidden = false;
+});
 api?.getDownloads?.()?.then((result) => {
   if (result?.ok) {
     renderDownloads(result);

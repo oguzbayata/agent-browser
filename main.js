@@ -204,6 +204,21 @@ const views = new Map();
 const scraperChildren = new Set();
 const hunterChildren = new Set();
 const hunterJobs = new Map();
+const imageDownloadWaiters = [];
+let expectImageDownload = false;
+const IMAGE_MIME_EXT = Object.freeze({
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/bmp': 'bmp',
+  'image/svg+xml': 'svg',
+  'image/x-icon': 'ico',
+  'image/vnd.microsoft.icon': 'ico',
+  'image/avif': 'avif',
+  'image/apng': 'png',
+});
 let cachedPython = null;
 let activeTabId = null;
 let nextTabId = 1;
@@ -918,6 +933,10 @@ function killAllHunters() {
     killHunterProcess(child);
   }
   hunterJobs.clear();
+  expectImageDownload = false;
+  while (imageDownloadWaiters.length) {
+    notifyImageDownloadSettled();
+  }
 }
 
 function ytDlpCandidates() {
@@ -957,8 +976,30 @@ function mediaHunterMenuIcon() {
   return undefined;
 }
 
+function emitChromeToast(message) {
+  const payload = { message: String(message || '') };
+  if (!payload.message) {
+    return;
+  }
+  sendToChrome('agent:toast', payload);
+  for (const entry of views.values()) {
+    const webContents = entry.view?.webContents;
+    if (entry.kind === 'downloads' && webContents && !webContents.isDestroyed()) {
+      webContents.send('agent:toast', payload);
+    }
+  }
+}
+
 function startDirectMediaDownload(srcUrl) {
+  startDirectUrlDownload(null, srcUrl);
+}
+
+function startDirectUrlDownload(webContents, srcUrl) {
   try {
+    if (webContents && !webContents.isDestroyed()) {
+      webContents.downloadURL(srcUrl);
+      return;
+    }
     const guest = getGuestWebContents();
     if (guest && !guest.isDestroyed()) {
       guest.downloadURL(srcUrl);
@@ -966,7 +1007,323 @@ function startDirectMediaDownload(srcUrl) {
     }
     getIsolatedSession().downloadURL(srcUrl);
   } catch (error) {
-    console.error('Direct media download failed:', error);
+    console.error('Direct download failed:', error);
+  }
+}
+
+function notifyImageDownloadSettled() {
+  const next = imageDownloadWaiters.shift();
+  if (typeof next === 'function') {
+    next();
+  }
+}
+
+function parseDataImageUrl(rawUrl) {
+  if (typeof rawUrl !== 'string' || !rawUrl.startsWith('data:image/')) {
+    return null;
+  }
+  const match = rawUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+)(;[^,]*)?,(.*)$/s);
+  if (!match) {
+    return null;
+  }
+  const mime = match[1].toLowerCase();
+  const params = match[2] || '';
+  const payload = match[3] || '';
+  if (!payload || payload.length > 12_000_000) {
+    return null;
+  }
+  try {
+    const buffer = /;base64/i.test(params)
+      ? Buffer.from(payload.replace(/\s/g, ''), 'base64')
+      : Buffer.from(decodeURIComponent(payload), 'utf8');
+    if (!buffer.length) {
+      return null;
+    }
+    const ext = IMAGE_MIME_EXT[mime] || 'png';
+    return { buffer, ext };
+  } catch {
+    return null;
+  }
+}
+
+function saveDataImageToDownloads(rawUrl) {
+  const parsed = parseDataImageUrl(rawUrl);
+  if (!parsed || panicInProgress) {
+    return false;
+  }
+  const filename = `agent_img_${Date.now()}.${parsed.ext}`;
+  const savePath = uniqueSavePath(app.getPath('downloads'), filename);
+  fs.writeFileSync(savePath, parsed.buffer);
+  const record = createHunterRecord(path.basename(savePath));
+  record.state = 'completed';
+  record.progress = 1;
+  record.received = parsed.buffer.length;
+  record.total = parsed.buffer.length;
+  record.speed = '';
+  openDownloadsTab();
+  broadcastDownloads();
+  emitDiskWarning();
+  return true;
+}
+
+function downloadHttpImageSerial(webContents, srcUrl) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let waiter = null;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve();
+    };
+    waiter = () => {
+      clearTimeout(timer);
+      finish();
+    };
+    const timer = setTimeout(() => {
+      const index = imageDownloadWaiters.indexOf(waiter);
+      if (index !== -1) {
+        imageDownloadWaiters.splice(index, 1);
+      }
+      expectImageDownload = false;
+      finish();
+    }, 90_000);
+    imageDownloadWaiters.push(waiter);
+    expectImageDownload = true;
+    try {
+      startDirectUrlDownload(webContents, srcUrl);
+    } catch {
+      const index = imageDownloadWaiters.indexOf(waiter);
+      if (index !== -1) {
+        imageDownloadWaiters.splice(index, 1);
+      }
+      expectImageDownload = false;
+      clearTimeout(timer);
+      finish();
+    }
+  });
+}
+
+async function resolveBlobImage(webContents, blobUrl) {
+  if (!webContents || webContents.isDestroyed() || typeof blobUrl !== 'string') {
+    return '';
+  }
+  try {
+    const result = await webContents.executeJavaScript(
+      `(async function () {
+        const src = ${JSON.stringify(blobUrl)};
+        const response = await fetch(src);
+        const blob = await response.blob();
+        return await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('read-failed'));
+          reader.readAsDataURL(blob);
+        });
+      })()`,
+      true,
+    );
+    return typeof result === 'string' ? result : '';
+  } catch {
+    return '';
+  }
+}
+
+async function downloadOneImage(webContents, srcUrl) {
+  if (panicInProgress || typeof srcUrl !== 'string' || !srcUrl) {
+    return;
+  }
+  if (srcUrl.startsWith('data:image/')) {
+    saveDataImageToDownloads(srcUrl);
+    await new Promise((resolve) => setImmediate(resolve));
+    return;
+  }
+  if (srcUrl.startsWith('blob:')) {
+    const dataUrl = await resolveBlobImage(webContents, srcUrl);
+    if (dataUrl.startsWith('data:image/')) {
+      saveDataImageToDownloads(dataUrl);
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+    return;
+  }
+  try {
+    const parsed = new URL(srcUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return;
+    }
+  } catch {
+    return;
+  }
+  await downloadHttpImageSerial(webContents, srcUrl);
+}
+
+function startImageDownload(webContents, srcUrl) {
+  if (panicInProgress || typeof srcUrl !== 'string' || !srcUrl) {
+    return;
+  }
+  if (srcUrl.startsWith('data:image/')) {
+    try {
+      saveDataImageToDownloads(srcUrl);
+    } catch (error) {
+      console.error('Base64 image save failed:', error);
+    }
+    return;
+  }
+  if (srcUrl.startsWith('blob:')) {
+    resolveBlobImage(webContents, srcUrl).then((dataUrl) => {
+      if (dataUrl.startsWith('data:image/')) {
+        saveDataImageToDownloads(dataUrl);
+      }
+    }).catch((error) => {
+      console.error('Blob image save failed:', error);
+    });
+    return;
+  }
+  try {
+    const parsed = new URL(srcUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return;
+    }
+  } catch {
+    return;
+  }
+  startDirectUrlDownload(webContents, srcUrl);
+}
+
+async function agentCollectPageImages() {
+  const MIN = 150;
+  const MAX = 80;
+  const seen = new Set();
+  const raw = [];
+
+  function resolveUrl(value) {
+    if (typeof value !== 'string') {
+      return '';
+    }
+    const trimmed = value.trim().replace(/^['"]|['"]$/g, '');
+    if (!trimmed || trimmed === 'none') {
+      return '';
+    }
+    try {
+      return new URL(trimmed, document.baseURI).href;
+    } catch {
+      return trimmed;
+    }
+  }
+
+  function isAllowed(src) {
+    return (
+      src.startsWith('http://') ||
+      src.startsWith('https://') ||
+      src.startsWith('data:image/') ||
+      src.startsWith('blob:')
+    );
+  }
+
+  function add(src) {
+    const resolved = resolveUrl(src);
+    if (!resolved || seen.has(resolved) || !isAllowed(resolved)) {
+      return;
+    }
+    if (resolved.startsWith('data:image/') && resolved.length > 6_000_000) {
+      return;
+    }
+    seen.add(resolved);
+    raw.push(resolved);
+  }
+
+  function isLarge(width, height) {
+    return Number(width) >= MIN && Number(height) >= MIN;
+  }
+
+  function extractBackgroundUrls(value) {
+    if (typeof value !== 'string' || value === 'none') {
+      return;
+    }
+    const matches = value.match(/url\(([^)]+)\)/gi) || [];
+    for (const match of matches) {
+      add(match.replace(/^url\(/i, '').replace(/\)$/, ''));
+    }
+  }
+
+  for (const img of document.images) {
+    const width = img.naturalWidth || img.width || img.clientWidth;
+    const height = img.naturalHeight || img.height || img.clientHeight;
+    if (!isLarge(width, height)) {
+      continue;
+    }
+    add(img.currentSrc || img.src);
+  }
+
+  const nodes = document.querySelectorAll('body, body *');
+  for (const node of nodes) {
+    const style = window.getComputedStyle(node);
+    const box = node.getBoundingClientRect();
+    const width = Math.max(box.width, node.clientWidth || 0);
+    const height = Math.max(box.height, node.clientHeight || 0);
+    if (!isLarge(width, height)) {
+      continue;
+    }
+    extractBackgroundUrls(style.backgroundImage);
+  }
+
+  const converted = [];
+  for (const src of raw) {
+    if (converted.length >= MAX) {
+      break;
+    }
+    if (!src.startsWith('blob:')) {
+      converted.push(src);
+      continue;
+    }
+    try {
+      const response = await fetch(src);
+      const blob = await response.blob();
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('read-failed'));
+        reader.readAsDataURL(blob);
+      });
+      if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/') && dataUrl.length <= 6_000_000) {
+        converted.push(dataUrl);
+      }
+    } catch {
+      // Skip blobs the page will not yield.
+    }
+  }
+  return converted;
+}
+
+const IMAGE_SCRAPE_SOURCE = `(${agentCollectPageImages.toString()})()`;
+
+async function scrapePageImages(webContents) {
+  if (!webContents || webContents.isDestroyed() || panicInProgress) {
+    return;
+  }
+  let sources = [];
+  try {
+    const result = await webContents.executeJavaScript(IMAGE_SCRAPE_SOURCE, true);
+    sources = Array.isArray(result) ? result.filter((item) => typeof item === 'string') : [];
+  } catch (error) {
+    console.error('Image scrape failed:', error);
+    sources = [];
+  }
+  emitChromeToast(`Görseller kazınıyor: ${sources.length} adet bulundu`);
+  if (!sources.length) {
+    return;
+  }
+  openDownloadsTab();
+  for (const src of sources) {
+    if (panicInProgress || webContents.isDestroyed()) {
+      break;
+    }
+    try {
+      await downloadOneImage(webContents, src);
+    } catch (error) {
+      console.error('Image download failed:', error);
+    }
   }
 }
 
@@ -1250,7 +1607,11 @@ function attachDownloadManager(isolatedSession) {
       received: 0,
       total: item.getTotalBytes() || 0,
       state: 'progressing',
+      imageHunter: expectImageDownload,
     };
+    if (expectImageDownload) {
+      expectImageDownload = false;
+    }
     sessionDownloads.set(id, record);
     activeDownloadItems.set(id, item);
     openDownloadsTab();
@@ -1269,6 +1630,9 @@ function attachDownloadManager(isolatedSession) {
       record.state = state;
       activeDownloadItems.delete(id);
       broadcastDownloads();
+      if (record.imageHunter) {
+        notifyImageDownloadSettled();
+      }
       if (state === 'completed') {
         emitDiskWarning();
       }
@@ -1287,11 +1651,34 @@ function attachGuestContextMenu(webContents) {
     const canPaste = Boolean(params.isEditable) || Boolean(params.editFlags?.canPaste);
     const hasImage = params.mediaType === 'image' || Boolean(params.hasImageContents);
     const pageUrl = webContents.getURL();
+    const showImageHunter = params.mediaType === 'image';
     const showMediaHunter =
       Boolean(global.isDownloaderEnabled) &&
       (params.mediaType === 'video' || isYoutubeWatchUrl(pageUrl));
 
     const template = [];
+    if (showImageHunter) {
+      const hunterIcon = mediaHunterMenuIcon();
+      template.push(
+        {
+          label: '[Agent] Bu Resmi İndir',
+          ...(hunterIcon ? { icon: hunterIcon } : {}),
+          click: () => {
+            startImageDownload(webContents, params.srcURL || params.linkURL || '');
+          },
+        },
+        {
+          label: '[Agent] Sayfadaki Tüm Resimleri Çek',
+          ...(hunterIcon ? { icon: hunterIcon } : {}),
+          click: () => {
+            scrapePageImages(webContents).catch((error) => {
+              console.error('Bulk image scrape failed:', error);
+            });
+          },
+        },
+        { type: 'separator' },
+      );
+    }
     if (showMediaHunter) {
       const hunterIcon = mediaHunterMenuIcon();
       template.push(

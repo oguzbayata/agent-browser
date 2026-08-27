@@ -25,5 +25,6 @@ contextBridge.exposeInMainWorld(
     },
     onDownloads: (callback) => subscribePayload('agent:downloads', callback),
     onDiskWarning: (callback) => subscribePayload('agent:disk-warning', callback),
+    onToast: (callback) => subscribePayload('agent:toast', callback),
   }),
 );

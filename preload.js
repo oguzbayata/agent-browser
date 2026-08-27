@@ -218,6 +218,7 @@ contextBridge.exposeInMainWorld(
     onBookmarks: (callback) => subscribePayload('agent:bookmarks', callback),
     onDownloads: (callback) => subscribePayload('agent:downloads', callback),
     onDiskWarning: (callback) => subscribePayload('agent:disk-warning', callback),
+    onToast: (callback) => subscribePayload('agent:toast', callback),
     triggerPanic: () => {
       ipcRenderer.send('trigger-panic');
     },

@@ -1079,19 +1079,30 @@ function bindDownloads() {
   });
 
   let diskWarningTimer = 0;
-  api?.onDiskWarning?.((payload) => {
+  function showChromeBanner(message, durationMs) {
     const banner = document.getElementById('disk-warning');
-    if (!banner) {
+    if (!banner || !message) {
       return;
     }
-    banner.textContent =
-      payload?.message ||
-      'Uyarı: Bu dosya yerel diskinize kaydedildi. Excommunicado protokolü bu dosyayı silmeyebilir.';
+    banner.textContent = message;
     banner.hidden = false;
     window.clearTimeout(diskWarningTimer);
     diskWarningTimer = window.setTimeout(() => {
       banner.hidden = true;
-    }, 8000);
+    }, durationMs);
+  }
+
+  api?.onDiskWarning?.((payload) => {
+    showChromeBanner(
+      payload?.message ||
+        'Uyarı: Bu dosya yerel diskinize kaydedildi. Excommunicado protokolü bu dosyayı silmeyebilir.',
+      8000,
+    );
+  });
+  api?.onToast?.((payload) => {
+    if (payload?.message) {
+      showChromeBanner(payload.message, 5000);
+    }
   });
 }
 
