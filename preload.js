@@ -31,6 +31,13 @@ contextBridge.exposeInMainWorld(
       }
       return ipcRenderer.invoke('agent:navigate', url);
     },
+    readClipboard: () => ipcRenderer.invoke('agent:clipboard-read'),
+    writeClipboard: (text) => {
+      if (typeof text !== 'string') {
+        return Promise.resolve({ ok: false });
+      }
+      return ipcRenderer.invoke('agent:clipboard-write', text);
+    },
     runLocalSearch: (query) => {
       if (typeof query !== 'string') {
         return Promise.resolve({ ok: false, error: 'invalid-query', results: [] });

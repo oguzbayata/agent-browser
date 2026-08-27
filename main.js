@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, WebContentsView, session, ipcMain, globalShortcut, Menu, dialog } = require('electron');
+const { app, BrowserWindow, WebContentsView, session, ipcMain, globalShortcut, Menu, dialog, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -847,6 +847,52 @@ function attachGuestContextMenu(webContents) {
     ]);
 
     menu.popup({ window: mainWindow || undefined });
+  });
+}
+
+function installHiddenEditMenu() {
+  const template = [
+    {
+      label: 'Düzen',
+      submenu: [
+        { role: 'undo', label: 'Geri Al' },
+        { role: 'redo', label: 'Yinele' },
+        { type: 'separator' },
+        { role: 'cut', label: 'Kes', accelerator: 'CommandOrControl+X' },
+        { role: 'copy', label: 'Kopyala', accelerator: 'CommandOrControl+C' },
+        { role: 'paste', label: 'Yapıştır', accelerator: 'CommandOrControl+V' },
+        { role: 'selectAll', label: 'Tümünü Seç', accelerator: 'CommandOrControl+A' },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+function attachChromeContextMenu(webContents) {
+  webContents.on('context-menu', (_event, params) => {
+    if (!webContents || webContents.isDestroyed() || panicInProgress) {
+      return;
+    }
+
+    const editable = Boolean(params.isEditable);
+    const hasSelection = Boolean(params.selectionText);
+    if (!editable && !hasSelection) {
+      return;
+    }
+
+    const flags = params.editFlags || {};
+    const template = editable
+      ? [
+          { label: 'Kes', role: 'cut', enabled: Boolean(flags.canCut) && hasSelection },
+          { label: 'Kopyala', role: 'copy', enabled: Boolean(flags.canCopy) && hasSelection },
+          { label: 'Yapıştır', role: 'paste', enabled: true },
+          { type: 'separator' },
+          { label: 'Tümünü Seç', role: 'selectAll', enabled: flags.canSelectAll !== false },
+        ]
+      : [{ label: 'Kopyala', role: 'copy', enabled: hasSelection }];
+
+    const win = BrowserWindow.fromWebContents(webContents);
+    Menu.buildFromTemplate(template).popup({ window: win || mainWindow || undefined });
   });
 }
 
@@ -2026,6 +2072,10 @@ function handleAppShortcut(event, input) {
     return;
   }
 
+  if (lower === 'c' || lower === 'v' || lower === 'x' || lower === 'a') {
+    return;
+  }
+
   if (lower === 't' && !shift) {
     event.preventDefault();
     createGuestTab('about:blank');
@@ -2157,6 +2207,21 @@ ipcMain.handle('agent:local-search', async (event, rawQuery) => {
     return { ok: false, error: 'forbidden', results: [] };
   }
   return runLocalScraper(rawQuery);
+});
+
+ipcMain.handle('agent:clipboard-read', async (event) => {
+  if (!isChromeSender(event)) {
+    return { ok: false, text: '' };
+  }
+  return { ok: true, text: clipboard.readText() };
+});
+
+ipcMain.handle('agent:clipboard-write', async (event, text) => {
+  if (!isChromeSender(event) || typeof text !== 'string') {
+    return { ok: false };
+  }
+  clipboard.writeText(text.slice(0, 100000));
+  return { ok: true };
 });
 
 ipcMain.handle('agent:go-back', async (event) => {
@@ -3380,6 +3445,9 @@ function createAgentWindow() {
     }
   });
   win.webContents.on('before-input-event', handleAppShortcut);
+  attachChromeContextMenu(win.webContents);
+  win.setMenuBarVisibility(false);
+  win.setAutoHideMenuBar(true);
   win.on('closed', () => {
     if (overflowHostWindow === win) {
       hideOverflowMenu({ notify: false });
@@ -3422,6 +3490,7 @@ app.on('web-contents-created', (_event, contents) => {
 });
 
 app.whenReady().then(() => {
+  installHiddenEditMenu();
   const isolatedSession = getIsolatedSession();
   attachPrivacyNetworkGuards(isolatedSession);
   attachDownloadManager(isolatedSession);

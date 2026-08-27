@@ -46,9 +46,10 @@ body {
   user-select: none;
 }
 
-body {
-  display: flex;
-  flex-direction: column;
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .sr-only {
@@ -749,7 +750,10 @@ body.ghost-network #adres-cubugu-konteynir:focus-within {
   color: #fff;
   font: 14px/1.2 "Segoe UI", system-ui, sans-serif;
   outline: none;
+  -webkit-user-select: text;
   user-select: text;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .omni-input::placeholder {

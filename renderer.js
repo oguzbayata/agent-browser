@@ -112,6 +112,68 @@ function setStarState(button, bookmarked) {
   button.setAttribute('aria-pressed', bookmarked ? 'true' : 'false');
 }
 
+function insertOmniboxText(input, rawText) {
+  const text = String(rawText || '').replace(/\r\n/g, '\n').replace(/\s+/g, ' ');
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  input.value = `${input.value.slice(0, start)}${text}${input.value.slice(end)}`;
+  const caret = start + text.length;
+  input.setSelectionRange(caret, caret);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function selectedOmniboxText(input) {
+  const start = input.selectionStart ?? 0;
+  const end = input.selectionEnd ?? 0;
+  if (start === end) {
+    return '';
+  }
+  return input.value.slice(start, end);
+}
+
+function bindOmniboxEditing(input) {
+  input.addEventListener('keydown', async (event) => {
+    const ctrl = event.ctrlKey || event.metaKey;
+    if (!ctrl || event.altKey) {
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+    const api = window.electronAPI;
+    if (key === 'a' && !event.shiftKey) {
+      event.preventDefault();
+      input.select();
+      return;
+    }
+    if (key === 'c' && !event.shiftKey) {
+      const text = selectedOmniboxText(input);
+      if (!text) {
+        return;
+      }
+      event.preventDefault();
+      await api?.writeClipboard?.(text);
+      return;
+    }
+    if (key === 'x' && !event.shiftKey) {
+      const text = selectedOmniboxText(input);
+      if (!text) {
+        return;
+      }
+      event.preventDefault();
+      await api?.writeClipboard?.(text);
+      insertOmniboxText(input, '');
+      return;
+    }
+    if (key === 'v' && !event.shiftKey) {
+      event.preventDefault();
+      const result = await api?.readClipboard?.();
+      if (result?.ok && typeof result.text === 'string') {
+        insertOmniboxText(input, result.text);
+      }
+    }
+  });
+}
+
 function bindChrome() {
   const api = window.electronAPI;
   const form = document.getElementById('omni-form');
@@ -141,6 +203,7 @@ function bindChrome() {
   });
 
   input.addEventListener('input', () => maybePrefixUrl(input));
+  bindOmniboxEditing(input);
 
   backBtn.addEventListener('click', () => api?.goBack?.());
   forwardBtn.addEventListener('click', () => api?.goForward?.());
