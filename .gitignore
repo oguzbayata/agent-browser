@@ -9,4 +9,5 @@ Thumbs.db
 .DS_Store
 __pycache__/
 engine/__pycache__/
-*.pyc
+.agent_port
+.agent_api_port

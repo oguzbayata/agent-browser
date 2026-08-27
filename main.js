@@ -4,8 +4,10 @@ const { app, BrowserWindow, WebContentsView, session, ipcMain, globalShortcut, M
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
+const http = require('node:http');
+const net = require('node:net');
 const { startAgentBridgeServer, stopAgentBridgeServer, getListenInfo } = require('./agent-bridge');
 const { collectIntel, knownModelRoots, isLoopbackHttpUrl } = require('./local-intel');
 
@@ -57,6 +59,12 @@ const BOOLEAN_SETTINGS = new Set([
 ]);
 const AGENT_BRIDGE_HOST = '127.0.0.1';
 const AGENT_BRIDGE_PORT = 17331;
+const AGENT_PORT_FILE = path.join(__dirname, '.agent_port');
+const AGENT_API_PORT_FILE = path.join(__dirname, '.agent_api_port');
+const AGENT_API_BODY_LIMIT = 1024 * 1024;
+const AJAN_LOG = '\x1b[36m[AJAN]\x1b[0m';
+const AJAN_WARN = '\x1b[33m[AJAN]\x1b[0m';
+const AJAN_ERR = '\x1b[31m[AJAN]\x1b[0m';
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 const NETWORK_FILTER = Object.freeze({ urls: ['http://*/*', 'https://*/*'] });
 const GHOST_DENIED_PERMISSIONS = new Set(['media', 'geolocation', 'display-capture']);
@@ -225,6 +233,10 @@ let blockedRequestCount = 0;
 const tabSecurityStats = new Map();
 let securityStatsFlush = null;
 let agentBridgeToken = '';
+let agentControlKey = '';
+let agentCdpPort = 0;
+let agentApiPort = 0;
+let agentApiServer = null;
 let nextDownloadId = 1;
 let nextBookmarkId = 1;
 let nextFolderId = 1;
@@ -1742,6 +1754,13 @@ function forcePanicQuit() {
   }
 
   try {
+    stopAgentApiServer();
+    removeAgentPortFiles();
+  } catch {
+    // Port files must not block quit.
+  }
+
+  try {
     app.quit();
   } catch {
     // Fall through to hard exit.
@@ -1768,7 +1787,10 @@ function triggerExcommunicado() {
 
   try {
     stopAgentBridgeServer();
+    stopAgentApiServer();
+    removeAgentPortFiles();
     agentBridgeToken = '';
+    agentControlKey = '';
     privacySettings.agentBridge = false;
     privacySettings.ghostNetwork = false;
     applyGhostNetwork().catch(() => {});
@@ -3489,18 +3511,470 @@ app.on('web-contents-created', (_event, contents) => {
   });
 });
 
-app.whenReady().then(() => {
+app.on('web-contents-created', (_event, contents) => {
+  applyWebRtcPolicyToContents(contents);
+  contents.on('will-attach-webview', (event) => {
+    event.preventDefault();
+  });
+});
+
+function logAgent(message) {
+  console.log(`${AJAN_LOG} ${message}`);
+}
+
+function logAgentWarn(message) {
+  console.warn(`${AJAN_WARN} ${message}`);
+}
+
+function logAgentError(message) {
+  console.error(`${AJAN_ERR} ${message}`);
+}
+
+function isLoopbackSocket(req) {
+  const addr = req.socket?.remoteAddress || '';
+  return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
+}
+
+function tokensEqual(left, right) {
+  if (typeof left !== 'string' || typeof right !== 'string' || !left || left.length !== right.length) {
+    return false;
+  }
+  try {
+    return crypto.timingSafeEqual(Buffer.from(left), Buffer.from(right));
+  } catch {
+    return false;
+  }
+}
+
+function readAgentKey(req) {
+  const header = req.headers['agent-key'] || req.headers['Agent-Key'];
+  return typeof header === 'string' ? header.trim() : '';
+}
+
+function removeAgentPortFiles() {
+  for (const file of [AGENT_PORT_FILE, AGENT_API_PORT_FILE]) {
+    try {
+      fs.unlinkSync(file);
+    } catch (error) {
+      if (error && error.code !== 'ENOENT') {
+        logAgentWarn(`Port dosyası silinemedi: ${path.basename(file)}`);
+      }
+    }
+  }
+}
+
+function writeAgentPortFile(file, port) {
+  fs.writeFileSync(file, `${port}\n`, { encoding: 'utf8' });
+}
+
+function findFreePort(host = '127.0.0.1', port = 0) {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    const onError = (error) => {
+      try {
+        server.close();
+      } catch {
+        // Ignore close after listen failure.
+      }
+      reject(error);
+    };
+    server.once('error', onError);
+    server.listen(port, host, () => {
+      server.off('error', onError);
+      const address = server.address();
+      const found = address && typeof address === 'object' ? address.port : 0;
+      server.close((closeError) => {
+        if (closeError) {
+          reject(closeError);
+          return;
+        }
+        resolve(found);
+      });
+    });
+  });
+}
+
+function findFreePortSync(host = '127.0.0.1', port = 0) {
+  const script = `'use strict';
+const net = require('net');
+const server = net.createServer();
+server.once('error', (err) => { process.stderr.write(String(err.code || err.message)); process.exit(1); });
+server.listen(${Number(port) || 0}, ${JSON.stringify(host)}, () => {
+  const addr = server.address();
+  process.stdout.write(String(addr && addr.port ? addr.port : 0));
+  server.close(() => process.exit(0));
+});`;
+  const result = spawnSync(process.execPath, ['-e', script], {
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 4000,
+    killSignal: 'SIGKILL',
+  });
+  if (result.status !== 0) {
+    const error = new Error(String(result.stderr || 'EADDRINUSE').trim() || 'EADDRINUSE');
+    error.code = String(result.stderr || 'EADDRINUSE').trim() || 'EADDRINUSE';
+    throw error;
+  }
+  const found = Number(String(result.stdout || '').trim());
+  if (!Number.isInteger(found) || found <= 0) {
+    throw new Error('free-port-failed');
+  }
+  return found;
+}
+
+function findCdpAndApiPorts() {
+  for (let attempt = 0; attempt < 32; attempt += 1) {
+    const cdp = findFreePortSync(AGENT_BRIDGE_HOST, 0);
+    try {
+      findFreePortSync(AGENT_BRIDGE_HOST, cdp + 1);
+      return { cdp, api: cdp + 1 };
+    } catch {
+      // Consecutive API port was taken; try another CDP port.
+    }
+  }
+  throw new Error('Ardışık boş localhost portu bulunamadı.');
+}
+
+function jsonResponse(res, status, payload) {
+  const body = JSON.stringify(payload);
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': Buffer.byteLength(body),
+    'Cache-Control': 'no-store',
+  });
+  res.end(body);
+}
+
+function readAgentApiBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > AGENT_API_BODY_LIMIT) {
+        reject(new Error('too-large'));
+        req.destroy();
+      } else {
+        chunks.push(chunk);
+      }
+    });
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8').trim();
+      if (!raw) {
+        resolve({});
+        return;
+      }
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        reject(new Error('invalid-json'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function agentDomToMarkdown() {
+  const skip = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'SVG', 'CANVAS', 'IFRAME', 'LINK', 'META', 'TEMPLATE']);
+  const block = new Set(['P', 'DIV', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'MAIN', 'TR']);
+  function textOf(node) {
+    return (node && node.textContent ? node.textContent : '').replace(/\s+/g, ' ').trim();
+  }
+  function walk(node) {
+    if (!node) {
+      return '';
+    }
+    if (node.nodeType === 3) {
+      return node.nodeValue.replace(/\s+/g, ' ');
+    }
+    if (node.nodeType !== 1) {
+      return '';
+    }
+    const tag = node.tagName;
+    if (skip.has(tag) || node.hidden) {
+      return '';
+    }
+    if (tag === 'BR') {
+      return '\n';
+    }
+    if (tag === 'HR') {
+      return '\n---\n';
+    }
+    if (/^H[1-6]$/.test(tag)) {
+      return `\n${'#'.repeat(Number(tag[1]))} ${textOf(node)}\n`;
+    }
+    if (tag === 'A') {
+      const href = node.getAttribute('href') || '';
+      const label = textOf(node) || href;
+      return href ? `[${label}](${href})` : label;
+    }
+    if (tag === 'IMG') {
+      const alt = node.getAttribute('alt') || '';
+      const src = node.getAttribute('src') || '';
+      return alt || src ? `![${alt}](${src})` : '';
+    }
+    if (tag === 'PRE' || tag === 'CODE') {
+      const body = (node.textContent || '').trim().replace(/\n/g, '\n    ');
+      return body ? `\n    ${body}\n` : '';
+    }
+    if (tag === 'LI') {
+      return `\n- ${Array.from(node.childNodes).map(walk).join('').trim()}`;
+    }
+    if (tag === 'BLOCKQUOTE') {
+      return `\n> ${textOf(node)}\n`;
+    }
+    const inner = Array.from(node.childNodes).map(walk).join('');
+    if (block.has(tag)) {
+      return `\n${inner.trim()}\n`;
+    }
+    return inner;
+  }
+  const root = document.body || document.documentElement;
+  return walk(root).replace(/\n{3,}/g, '\n\n').trim();
+}
+
+const AGENT_MARKDOWN_SOURCE = `(${agentDomToMarkdown.toString()})();`;
+
+async function agentVision() {
+  const guest = getGuestWebContents();
+  if (!guest || guest.isDestroyed()) {
+    return { ok: false, error: 'no-active-tab' };
+  }
+  logAgent('Ekran görüntüsü alınıyor...');
+  const image = await guest.capturePage();
+  const size = image.getSize();
+  return {
+    ok: true,
+    mime: 'image/png',
+    width: size.width,
+    height: size.height,
+    image: image.toPNG().toString('base64'),
+  };
+}
+
+async function agentReadMarkdown() {
+  const guest = getGuestWebContents();
+  if (!guest || guest.isDestroyed()) {
+    return { ok: false, error: 'no-active-tab' };
+  }
+  logAgent('Sayfa Markdown olarak okunuyor...');
+  const markdown = await guest.executeJavaScript(AGENT_MARKDOWN_SOURCE, true);
+  const text = typeof markdown === 'string' ? markdown.slice(0, PAGE_TEXT_LIMIT * 2) : '';
+  return { ok: true, url: guest.getURL(), markdown: text };
+}
+
+async function agentType(body) {
+  const guest = getGuestWebContents();
+  if (!guest || guest.isDestroyed()) {
+    return { ok: false, error: 'no-active-tab' };
+  }
+  const selector = typeof body?.selector === 'string' ? body.selector.trim() : '';
+  const text = typeof body?.text === 'string' ? body.text : '';
+  if (!selector || selector.length > 512) {
+    return { ok: false, error: 'invalid-selector' };
+  }
+  if (text.length > 8000) {
+    return { ok: false, error: 'invalid-text' };
+  }
+  logAgent(`Form dolduruluyor... (${selector})`);
+  const result = await guest.executeJavaScript(
+    `(function () {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) { return { ok: false, error: 'not-found' }; }
+      el.focus();
+      if ('value' in el) {
+        el.value = ${JSON.stringify(text)};
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      } else if (el.isContentEditable) {
+        el.textContent = ${JSON.stringify(text)};
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      } else {
+        return { ok: false, error: 'not-editable' };
+      }
+      return { ok: true };
+    })()`,
+    true,
+  );
+  return { ok: Boolean(result?.ok), ...(result && typeof result === 'object' ? result : {}) };
+}
+
+async function agentEvaluate(body) {
+  const guest = getGuestWebContents();
+  if (!guest || guest.isDestroyed()) {
+    return { ok: false, error: 'no-active-tab' };
+  }
+  const fn = typeof body?.function === 'string' ? body.function : '';
+  const expression =
+    typeof body?.expression === 'string'
+      ? body.expression
+      : typeof body?.code === 'string'
+        ? body.code
+        : typeof body?.script === 'string'
+          ? body.script
+          : '';
+  const source = fn ? `(${fn})()` : expression;
+  if (!source || source.length > 32000) {
+    return { ok: false, error: 'invalid-expression' };
+  }
+  logAgent(`JavaScript çalıştırılıyor... (${source.length} karakter)`);
+  const result = await guest.executeJavaScript(source, true);
+  let safeResult = null;
+  try {
+    safeResult = JSON.parse(JSON.stringify(result ?? null));
+  } catch {
+    safeResult = String(result);
+  }
+  return { ok: true, result: safeResult };
+}
+
+async function handleAgentApiRoute(pathname, body) {
+  if (pathname === '/agent/vision') {
+    return agentVision();
+  }
+  if (pathname === '/agent/read-markdown') {
+    return agentReadMarkdown();
+  }
+  if (pathname === '/agent/type') {
+    return agentType(body);
+  }
+  if (pathname === '/agent/evaluate') {
+    return agentEvaluate(body);
+  }
+  return null;
+}
+
+function stopAgentApiServer() {
+  if (!agentApiServer) {
+    return;
+  }
+  try {
+    agentApiServer.close();
+  } catch {
+    // Already closed.
+  }
+  agentApiServer = null;
+}
+
+function startAgentApiServer(port) {
+  if (agentApiServer) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      handleAgentApiRequest(req, res).catch((error) => {
+        logAgentError(error instanceof Error ? error.message : 'iç hata');
+        if (!res.writableEnded) {
+          jsonResponse(res, 500, { ok: false, error: 'internal' });
+        }
+      });
+    });
+
+    const onError = (error) => {
+      server.off('error', onError);
+      reject(error);
+    };
+    server.once('error', onError);
+    server.listen(port, AGENT_BRIDGE_HOST, () => {
+      server.off('error', onError);
+      agentApiServer = server;
+      resolve();
+    });
+  });
+}
+
+async function handleAgentApiRequest(req, res) {
+  if (!isLoopbackSocket(req)) {
+    logAgentWarn('Loopback dışı istek reddedildi');
+    jsonResponse(res, 403, { ok: false, error: 'forbidden' });
+    return;
+  }
+
+  let url;
+  try {
+    url = new URL(req.url || '/', 'http://127.0.0.1');
+  } catch {
+    jsonResponse(res, 400, { ok: false, error: 'bad-url' });
+    return;
+  }
+
+  const pathname = url.pathname.replace(/\/+$/, '') || '/';
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (!tokensEqual(readAgentKey(req), agentControlKey)) {
+    logAgentWarn('Yetkisiz istek reddedildi');
+    jsonResponse(res, 401, { ok: false, error: 'unauthorized' });
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    jsonResponse(res, 405, { ok: false, error: 'method-not-allowed' });
+    return;
+  }
+
+  let body;
+  try {
+    body = await readAgentApiBody(req);
+  } catch (error) {
+    const tooLarge = error instanceof Error && error.message === 'too-large';
+    jsonResponse(res, tooLarge ? 413 : 400, { ok: false, error: tooLarge ? 'too-large' : 'invalid-json' });
+    return;
+  }
+
+  const payload = await handleAgentApiRoute(pathname, body);
+  if (!payload) {
+    jsonResponse(res, 404, { ok: false, error: 'not-found' });
+    return;
+  }
+  jsonResponse(res, payload.ok === false ? 400 : 200, payload);
+}
+
+process.on('exit', () => {
+  removeAgentPortFiles();
+});
+
+try {
+  const ports = findCdpAndApiPorts();
+  agentCdpPort = ports.cdp;
+  agentApiPort = ports.api;
+  agentControlKey = crypto.randomBytes(24).toString('hex');
+  app.commandLine.appendSwitch('remote-debugging-port', `${agentCdpPort}`);
+  app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1');
+  writeAgentPortFile(AGENT_PORT_FILE, agentCdpPort);
+  writeAgentPortFile(AGENT_API_PORT_FILE, agentApiPort);
+  logAgent(`CDP 127.0.0.1:${agentCdpPort} ayrıldı`);
+} catch (error) {
+  logAgentError(error instanceof Error ? error.message : String(error));
+  removeAgentPortFiles();
+  app.exit(1);
+}
+
+app.whenReady().then(async () => {
   installHiddenEditMenu();
   const isolatedSession = getIsolatedSession();
   attachPrivacyNetworkGuards(isolatedSession);
   attachDownloadManager(isolatedSession);
   createMainWindow();
+  await startAgentApiServer(agentApiPort);
+  logAgent(`API http://127.0.0.1:${agentApiPort}`);
+  logAgent(`Agent-Key ${agentControlKey}`);
   const registered = globalShortcut.register(PANIC_SHORTCUT, () => {
     triggerExcommunicado();
   });
   if (!registered) {
     console.error('Excommunicado shortcut registration failed:', PANIC_SHORTCUT);
   }
+}).catch((error) => {
+  logAgentError(error instanceof Error ? error.message : String(error));
+  removeAgentPortFiles();
+  app.exit(1);
 });
 
 app.on('window-all-closed', () => {
@@ -3515,6 +3989,16 @@ app.on('will-quit', () => {
   }
   try {
     stopAgentBridgeServer();
+  } catch {
+    // Ignore.
+  }
+  try {
+    stopAgentApiServer();
+  } catch {
+    // Ignore.
+  }
+  try {
+    removeAgentPortFiles();
   } catch {
     // Ignore.
   }
@@ -3538,6 +4022,8 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   isWipingSession = true;
   purgeSessionChromeState();
+  stopAgentApiServer();
+  removeAgentPortFiles();
 
   wipeIsolatedSession()
     .catch((error) => {
