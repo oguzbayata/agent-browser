@@ -72,12 +72,27 @@
                   <button class="chrome-icon is-armed" id="shield-toggle" type="button" aria-label="Kalkan" aria-expanded="false" aria-haspopup="true" aria-controls="shield-pop" title="Kalkan">
                     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6 13.2 4v3.7c0 3.4-2.1 5.7-5.2 6.7C4.9 13.4 2.8 11.1 2.8 7.7V4Z" /></svg>
                   </button>
-                  <div id="shield-pop" class="shield-pop hidden" role="dialog" aria-label="Gizlilik kalkanı">
-                    <p class="shield-kicker">oturum · ram</p>
+                  <div id="shield-pop" class="shield-pop hidden" role="dialog" aria-label="Güvenlik Merkezi">
+                    <p class="shield-kicker">Güvenlik Merkezi</p>
+                    <p class="shield-sub">oturum · ram · bu sekme</p>
+                    <ul class="security-stats" aria-label="Engelleme istatistikleri">
+                      <li>
+                        <span>Engellenen İzleyiciler</span>
+                        <strong id="stat-trackers">0</strong>
+                      </li>
+                      <li>
+                        <span>Engellenen Çerezler</span>
+                        <strong id="stat-cookies">0</strong>
+                      </li>
+                      <li>
+                        <span>Şifrelenen Bağlantılar</span>
+                        <strong id="stat-upgrades">0</strong>
+                      </li>
+                    </ul>
                     <label class="neon-toggle">
                       <span>
                         <strong>Kalkan (Reklam Engelleyici)</strong>
-                        <em id="shield-blocked">0 istek engellendi</em>
+                        <em id="shield-blocked">0 izleyici engellendi</em>
                       </span>
                       <input id="toggle-blockTrackers" type="checkbox" data-setting="blockTrackers" checked />
                       <i class="neon-switch" aria-hidden="true"></i>

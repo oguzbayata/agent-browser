@@ -96,6 +96,8 @@ contextBridge.exposeInMainWorld(
     setFindOpen: (open) => ipcRenderer.invoke('agent:find-panel', Boolean(open)),
     setRamSheetOpen: (open) => ipcRenderer.invoke('agent:ram-sheet', Boolean(open)),
     setShieldOpen: (open) => ipcRenderer.invoke('agent:shield-panel', Boolean(open)),
+    getSecurityStats: () => ipcRenderer.invoke('agent:security-stats'),
+    onSecurityStats: (callback) => subscribePayload('agent:security-stats', callback),
     setUtilityOpen: (open) => ipcRenderer.invoke('agent:utility-panel', Boolean(open)),
     setZoom: (action) => ipcRenderer.invoke('agent:zoom', action),
     toggleFullscreen: () => ipcRenderer.invoke('agent:fullscreen'),

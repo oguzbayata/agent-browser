@@ -21,7 +21,7 @@ const BOOKMARKS_BAR_HEIGHT = 32;
 const DOWNLOADS_PANEL_HEIGHT = 168;
 const FIND_BAR_HEIGHT = 36;
 const MENU_DROPDOWN_WIDTH = 344;
-const SHIELD_POPUP_HEIGHT = 240;
+const SHIELD_POPUP_HEIGHT = 328;
 const SOCKS5_PROXY = 'socks5://127.0.0.1:1080';
 const SIDEBAR_WIDTH = 360;
 const SETTINGS_WIDTH = 300;
@@ -212,6 +212,8 @@ const privacySettings = {
   ghostNetwork: false,
 };
 let blockedRequestCount = 0;
+const tabSecurityStats = new Map();
+let securityStatsFlush = null;
 let agentBridgeToken = '';
 let nextDownloadId = 1;
 let nextBookmarkId = 1;
@@ -223,6 +225,103 @@ const sessionFolders = [
 const sessionBookmarks = [];
 const sessionDownloads = new Map();
 const activeDownloadItems = new Map();
+
+function emptySecurityStats() {
+  return { trackers: 0, cookies: 0, upgrades: 0 };
+}
+
+function snapshotSecurityStats(tabId = activeTabId) {
+  const stats = (tabId && tabSecurityStats.get(tabId)) || emptySecurityStats();
+  return {
+    tabId: tabId || null,
+    trackers: stats.trackers,
+    cookies: stats.cookies,
+    upgrades: stats.upgrades,
+  };
+}
+
+function sendSecurityStats(tabId = activeTabId) {
+  sendToChrome('agent:security-stats', snapshotSecurityStats(tabId));
+}
+
+function scheduleSecurityStats(tabId = activeTabId) {
+  if (securityStatsFlush) {
+    return;
+  }
+  securityStatsFlush = setTimeout(() => {
+    securityStatsFlush = null;
+    sendSecurityStats(tabId);
+  }, 80);
+}
+
+function bumpSecurityStat(tabId, key) {
+  const id = tabId || activeTabId;
+  if (!id) {
+    return;
+  }
+  const stats = tabSecurityStats.get(id) || emptySecurityStats();
+  stats[key] = (stats[key] || 0) + 1;
+  tabSecurityStats.set(id, stats);
+  if (key === 'trackers') {
+    blockedRequestCount += 1;
+  }
+  if (id === activeTabId) {
+    scheduleSecurityStats(id);
+  }
+}
+
+function resetTabSecurityStats(tabId) {
+  if (!tabId) {
+    return;
+  }
+  tabSecurityStats.set(tabId, emptySecurityStats());
+  if (tabId === activeTabId) {
+    sendSecurityStats(tabId);
+  }
+}
+
+function tabIdFromDetails(details) {
+  const contents = details?.webContents;
+  if (contents && !contents.isDestroyed()) {
+    for (const [tabId, entry] of views) {
+      if (entry.view.webContents === contents) {
+        return tabId;
+      }
+    }
+  }
+  if (typeof details?.webContentsId === 'number') {
+    for (const [tabId, entry] of views) {
+      if (entry.view.webContents.id === details.webContentsId) {
+        return tabId;
+      }
+    }
+  }
+  return activeTabId;
+}
+
+function isLoopbackHostname(hostname) {
+  const host = String(hostname || '')
+    .replace(/^\[|\]$/g, '')
+    .toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.localhost');
+}
+
+function httpsUpgradeUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:') {
+    return null;
+  }
+  if (isLoopbackHostname(parsed.hostname)) {
+    return null;
+  }
+  parsed.protocol = 'https:';
+  return parsed.href;
+}
 
 function hostnameMatchesSuffix(hostname, suffix) {
   return hostname === suffix || hostname.endsWith(`.${suffix}`);
@@ -302,6 +401,14 @@ function deleteHeader(headers, name) {
   }
 }
 
+function headerPresent(headers, name) {
+  if (!headers) {
+    return false;
+  }
+  const target = name.toLowerCase();
+  return Object.keys(headers).some((key) => key.toLowerCase() === target);
+}
+
 function stripSetCookieHeaders(responseHeaders) {
   if (!responseHeaders) {
     return responseHeaders;
@@ -321,9 +428,14 @@ function applyWebRtcPolicyToContents(contents) {
   if (!contents || contents.isDestroyed() || typeof contents.setWebRTCIPHandlingPolicy !== 'function') {
     return;
   }
-  contents.setWebRTCIPHandlingPolicy(
-    privacySettings.ghostNetwork ? 'disable_non_proxied_udp' : 'default',
-  );
+  contents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp');
+}
+
+function applyIsolatedSessionWebRtc(isolatedSession) {
+  if (!isolatedSession || typeof isolatedSession.setWebRTCIPHandlingPolicy !== 'function') {
+    return;
+  }
+  isolatedSession.setWebRTCIPHandlingPolicy('disable_non_proxied_udp');
 }
 
 function applyWebRtcPolicyToAll() {
@@ -362,6 +474,7 @@ function applySessionPermissions(isolatedSession) {
 async function applyGhostNetwork() {
   const isolatedSession = getIsolatedSession();
   applySessionPermissions(isolatedSession);
+  applyIsolatedSessionWebRtc(isolatedSession);
   applyWebRtcPolicyToAll();
 
   if (privacySettings.ghostNetwork) {
@@ -389,13 +502,24 @@ function attachPrivacyNetworkGuards(isolatedSession) {
 
   isolatedSession.setUserAgent(COMMON_USER_AGENT);
   applySessionPermissions(isolatedSession);
+  applyIsolatedSessionWebRtc(isolatedSession);
 
   isolatedSession.webRequest.onBeforeRequest(NETWORK_FILTER, (details, callback) => {
-    const cancel = privacySettings.blockTrackers && shouldBlockUrl(details.url);
-    if (cancel) {
-      blockedRequestCount += 1;
+    const tabId = tabIdFromDetails(details);
+    if (privacySettings.blockTrackers && shouldBlockUrl(details.url)) {
+      bumpSecurityStat(tabId, 'trackers');
+      callback({ cancel: true });
+      return;
     }
-    callback({ cancel });
+
+    const upgraded = httpsUpgradeUrl(details.url);
+    if (upgraded) {
+      bumpSecurityStat(tabId, 'upgrades');
+      callback({ redirectURL: upgraded });
+      return;
+    }
+
+    callback({});
   });
 
   isolatedSession.webRequest.onBeforeSendHeaders(NETWORK_FILTER, (details, callback) => {
@@ -408,6 +532,9 @@ function attachPrivacyNetworkGuards(isolatedSession) {
     }
 
     if (privacySettings.stripThirdPartyCookies && isThirdPartyRequest(details)) {
+      if (headerPresent(requestHeaders, 'Cookie')) {
+        bumpSecurityStat(tabIdFromDetails(details), 'cookies');
+      }
       deleteHeader(requestHeaders, 'Cookie');
     }
 
@@ -422,6 +549,10 @@ function attachPrivacyNetworkGuards(isolatedSession) {
     ) {
       callback({});
       return;
+    }
+
+    if (headerPresent(details.responseHeaders, 'Set-Cookie')) {
+      bumpSecurityStat(tabIdFromDetails(details), 'cookies');
     }
 
     callback({
@@ -538,6 +669,12 @@ function purgeSessionChromeState() {
     overflowMenuReady = Promise.resolve();
   }
   shieldOpen = false;
+  tabSecurityStats.clear();
+  blockedRequestCount = 0;
+  if (securityStatsFlush) {
+    clearTimeout(securityStatsFlush);
+    securityStatsFlush = null;
+  }
   utilityOpen = false;
   sidebarOpen = false;
   findOpen = false;
@@ -1110,6 +1247,11 @@ function attachTabListeners(tabId, webContents) {
       broadcastBrowserState();
     }
   });
+  webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) {
+      resetTabSecurityStats(tabId);
+    }
+  });
   webContents.on('did-navigate', () => {
     emitTitle();
     emitTabUpdated(tabId);
@@ -1137,6 +1279,7 @@ function switchToTab(tabId) {
   activeTabId = tabId;
   entry.view.setBounds(viewBounds());
   bringViewToFront(entry.view);
+  sendSecurityStats(tabId);
   broadcastBrowserState();
   return true;
 }
@@ -1157,6 +1300,7 @@ function createGuestTab(initialUrl, options = {}) {
   });
   view.setBackgroundColor('#070809');
   views.set(tabId, { id: tabId, view, owner, pinned: false, window: host });
+  tabSecurityStats.set(tabId, emptySecurityStats());
   attachTabListeners(tabId, view.webContents);
   host.contentView.addChildView(view);
   view.setBounds(viewBounds());
@@ -1209,6 +1353,7 @@ function destroyTab(tabId, replaceIfLast = true) {
   destroyWebContentsHard(webContents);
 
   views.delete(tabId);
+  tabSecurityStats.delete(tabId);
 
   let nextId = null;
   if (views.size === 0 && replaceIfLast && mainWindow && !mainWindow.isDestroyed()) {
@@ -1538,6 +1683,10 @@ function sanitizeUrl(raw) {
 
   if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) {
     return null;
+  }
+
+  if (parsed.protocol === 'http:' && !isLoopbackHostname(parsed.hostname)) {
+    parsed.protocol = 'https:';
   }
 
   return parsed.href;
@@ -1978,7 +2127,7 @@ ipcMain.handle('agent:shield-panel', async (event, open) => {
     utilityOpen = false;
   }
   fitBrowserView();
-  return { ok: true, open: shieldOpen, settings: snapshotSettings() };
+  return { ok: true, open: shieldOpen, settings: snapshotSettings(), stats: snapshotSecurityStats() };
 });
 
 ipcMain.handle('agent:utility-panel', async (event, open) => {
@@ -2551,6 +2700,7 @@ function snapshotSettings() {
     ghostNetwork: privacySettings.ghostNetwork,
     proxyUrl: privacySettings.ghostNetwork ? SOCKS5_PROXY : '',
     blockedRequestCount,
+    securityStats: snapshotSecurityStats(),
   };
 }
 
@@ -2761,6 +2911,13 @@ async function ensureAgentBridge(enabled) {
   agentBridgeToken = '';
   throw lastError || new Error('Agent bridge could not bind a localhost port.');
 }
+
+ipcMain.handle('agent:security-stats', async (event) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+  return { ok: true, ...snapshotSecurityStats() };
+});
 
 ipcMain.handle('agent:settings-get', async (event) => {
   if (!isChromeSender(event)) {

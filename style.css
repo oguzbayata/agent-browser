@@ -11,12 +11,13 @@
   --accent-blue: #3dc8ff;
   --chrome-height: calc(var(--tab-strip-height) + var(--toolbar-height) + var(--bookmarks-height));
   --chrome-height-open-downloads: calc(var(--tab-strip-height) + var(--toolbar-height) + var(--bookmarks-height) + var(--downloads-panel-height));
-  --chrome-height-open-shield: calc(var(--tab-strip-height) + var(--toolbar-height) + var(--bookmarks-height) + 240px);
+  --chrome-height-open-shield: calc(var(--tab-strip-height) + var(--toolbar-height) + var(--bookmarks-height) + var(--shield-popup-height));
   --find-bar-height: 0px;
   --tab-strip-height: 36px;
   --toolbar-height: 48px;
   --bookmarks-height: 32px;
   --downloads-panel-height: 168px;
+  --shield-popup-height: 328px;
   --sidebar-width: 360px;
   --bookmarks-panel-width: 328px;
   --brand-width: 158px;
@@ -452,6 +453,10 @@ button.chrome-icon:hover,
   app-region: no-drag;
 }
 
+.shield-pop {
+  width: 308px;
+}
+
 .shield-pop.hidden,
 .toolbar-pop.hidden {
   display: none;
@@ -464,6 +469,45 @@ button.chrome-icon:hover,
   font-weight: 650;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.shield-sub {
+  margin: -6px 0 10px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.security-stats {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.security-stats li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(61, 255, 200, 0.16);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.48);
+}
+
+.security-stats span {
+  color: #9aa8a3;
+  font-size: 11px;
+}
+
+.security-stats strong {
+  color: #3dffc8;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px rgba(61, 255, 200, 0.45);
 }
 
 .shield-note {

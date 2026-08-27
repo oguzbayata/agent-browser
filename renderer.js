@@ -45,8 +45,20 @@ function isLocalHostOrIp(value) {
   );
 }
 
+function isLoopbackTyped(value) {
+  const host = String(value || '').split('/')[0].split('?')[0].split('#')[0].toLowerCase();
+  return (
+    host === 'localhost' ||
+    host.startsWith('localhost:') ||
+    host === '127.0.0.1' ||
+    host.startsWith('127.0.0.1:') ||
+    host === '[::1]' ||
+    host.startsWith('[::1]:')
+  );
+}
+
 function schemeOf(value) {
-  return isLocalHostOrIp(value) ? 'http://' : 'https://';
+  return isLoopbackTyped(value) ? 'http://' : 'https://';
 }
 
 function resolveDestination(raw) {
@@ -163,6 +175,7 @@ function bindChrome() {
     if (input.value) {
       rememberSessionVisit(input.value);
     }
+    refreshSecurityStats();
   });
 }
 
@@ -206,8 +219,47 @@ function applyPrivacyChrome(settings) {
 
   const blocked = document.getElementById('shield-blocked');
   if (blocked && typeof settings.blockedRequestCount === 'number') {
-    blocked.textContent = `${settings.blockedRequestCount} istek engellendi`;
+    blocked.textContent = `${settings.blockedRequestCount} izleyici engellendi`;
   }
+  if (settings.securityStats) {
+    applySecurityStats(settings.securityStats);
+  }
+}
+
+function applySecurityStats(stats) {
+  if (!stats || typeof stats !== 'object') {
+    return;
+  }
+
+  const trackers = Number(stats.trackers) || 0;
+  const cookies = Number(stats.cookies) || 0;
+  const upgrades = Number(stats.upgrades) || 0;
+
+  const trackerEl = document.getElementById('stat-trackers');
+  const cookieEl = document.getElementById('stat-cookies');
+  const upgradeEl = document.getElementById('stat-upgrades');
+  if (trackerEl) {
+    trackerEl.textContent = String(trackers);
+  }
+  if (cookieEl) {
+    cookieEl.textContent = String(cookies);
+  }
+  if (upgradeEl) {
+    upgradeEl.textContent = String(upgrades);
+  }
+
+  const blocked = document.getElementById('shield-blocked');
+  if (blocked) {
+    blocked.textContent = `${trackers} izleyici engellendi`;
+  }
+}
+
+function refreshSecurityStats() {
+  window.electronAPI?.getSecurityStats?.()?.then((result) => {
+    if (result?.ok) {
+      applySecurityStats(result);
+    }
+  });
 }
 
 const UTILITY_POPS = [
@@ -800,6 +852,9 @@ function bindTabs() {
   api?.onTabUpdated?.((payload) => {
     if (payload && typeof payload.tabId === 'string') {
       upsertTab(payload, payload.active === true);
+      if (payload.active === true) {
+        refreshSecurityStats();
+      }
     }
   });
 
@@ -1084,6 +1139,11 @@ function bindShield() {
       if (result?.ok && result.settings) {
         applyPrivacyChrome(result.settings);
       }
+      if (result?.ok && result.stats) {
+        applySecurityStats(result.stats);
+      } else if (open) {
+        refreshSecurityStats();
+      }
     });
   }
 
@@ -1132,6 +1192,11 @@ function bindShield() {
       setShieldVisible(false);
     }
   });
+
+  api?.onSecurityStats?.((payload) => {
+    applySecurityStats(payload);
+  });
+  refreshSecurityStats();
 }
 
 function bindToolbarControls() {
