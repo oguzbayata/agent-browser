@@ -5,6 +5,15 @@ const sessionVisits = [];
 let currentPageUrl = '';
 let sessionBookmarkItems = [];
 let sessionBookmarkFolders = [{ id: 'bar', title: 'Bookmarks bar', createdAt: 0 }];
+const BAR_SHORTCUTS = Object.freeze([
+  { id: 'ddg', title: 'DuckDuckGo', url: 'https://duckduckgo.com', tone: 'gold' },
+  { id: 'startpage', title: 'Startpage', url: 'https://www.startpage.com', tone: 'dark' },
+  { id: 'wikipedia', title: 'Wikipedia', url: 'https://www.wikipedia.org', tone: 'x', letter: 'W' },
+  { id: 'proton', title: 'Proton', url: 'https://proton.me', tone: 'stone' },
+  { id: 'archive', title: 'Archive', url: 'https://archive.org', tone: 'mist' },
+  { id: 'github', title: 'GitHub', url: 'https://github.com', tone: 'flame' },
+]);
+let barShortcuts = BAR_SHORTCUTS.map((item) => ({ ...item }));
 
 function isUrlLike(raw) {
   const value = raw.trim();
@@ -145,6 +154,7 @@ function bindChrome() {
 
     const displayUrl = !url || url === 'about:blank' || url.startsWith('file:') ? '' : url;
     currentPageUrl = displayUrl;
+    setBookmarksBarVisible(typeof state?.bookmarksBar === 'boolean' ? state.bookmarksBar : !displayUrl);
     if (document.activeElement === input) {
       return;
     }
@@ -404,6 +414,23 @@ function setBookmarksPanelOpen(open) {
     }
   }
   window.electronAPI?.setBookmarksPanelOpen?.(open);
+}
+
+function setBookmarksBarVisible(visible) {
+  const bar = document.getElementById('yerimleri-cubugu');
+  const wasVisible = !document.documentElement.classList.contains('bookmarks-hidden');
+  document.documentElement.classList.toggle('bookmarks-hidden', !visible);
+  document.body.classList.toggle('bookmarks-hidden', !visible);
+  if (bar) {
+    bar.hidden = !visible;
+  }
+  if (wasVisible && !visible) {
+    hideUtilityPops();
+    const panel = document.getElementById('bookmarks-panel');
+    if (panel && !panel.hidden) {
+      setBookmarksPanelOpen(false);
+    }
+  }
 }
 
 function setSettingsPanelOpen(open) {
@@ -790,10 +817,53 @@ function bindTabs() {
 function bindBookmarks() {
   const api = window.electronAPI;
   const list = document.getElementById('bookmarks-list');
+  const shortcuts = document.getElementById('yerimleri-kisayollar');
   const panel = document.getElementById('bookmarks-panel');
   if (!list) {
     return;
   }
+
+  function renderBarShortcuts() {
+    if (!shortcuts) {
+      return;
+    }
+    shortcuts.replaceChildren();
+    for (const item of barShortcuts) {
+      const chip = document.createElement('div');
+      chip.className = 'yerim-chip';
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'yerim-open';
+      open.dataset.url = item.url;
+      open.setAttribute('aria-label', item.title);
+      const favicon = document.createElement('span');
+      favicon.className = `yerim-favicon yerim-favicon-${item.tone}`;
+      if (item.letter) {
+        favicon.textContent = item.letter;
+      }
+      const title = document.createElement('span');
+      title.className = 'yerim-title';
+      title.textContent = item.title;
+      open.append(favicon, title);
+      open.addEventListener('click', () => {
+        api?.navigate?.(item.url);
+      });
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'yerim-remove';
+      remove.setAttribute('aria-label', `${item.title} kısayolunu kaldır`);
+      remove.textContent = '×';
+      remove.addEventListener('click', (event) => {
+        event.stopPropagation();
+        barShortcuts = barShortcuts.filter((entry) => entry.id !== item.id);
+        renderBarShortcuts();
+      });
+      chip.append(open, remove);
+      shortcuts.appendChild(chip);
+    }
+  }
+
+  renderBarShortcuts();
 
   api?.onBookmarks?.((payload) => {
     const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -813,6 +883,7 @@ function bindBookmarks() {
       label.textContent = item.title || item.url;
       const remove = document.createElement('button');
       remove.type = 'button';
+      remove.className = 'yerim-remove';
       remove.setAttribute('aria-label', 'Yer imini kaldır');
       remove.textContent = '×';
       chip.append(label, remove);
@@ -954,6 +1025,8 @@ function bindPanic() {
     document.getElementById('ai-chat')?.replaceChildren();
     document.getElementById('tab-list')?.replaceChildren();
     document.getElementById('bookmarks-list')?.replaceChildren();
+    document.getElementById('yerimleri-kisayollar')?.replaceChildren();
+    barShortcuts = [];
     document.getElementById('downloads-list')?.replaceChildren();
     document.querySelector('.chrome')?.remove();
     document.querySelector('.workspace')?.remove();
@@ -1162,15 +1235,6 @@ function bindToolbarControls() {
     if (item.dataset.url) {
       api?.navigate?.(item.dataset.url);
     }
-  });
-
-  document.querySelectorAll('.yerim-chip[data-url]').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      const url = chip.dataset.url;
-      if (url) {
-        api?.navigate?.(url);
-      }
-    });
   });
 
   for (const item of UTILITY_POPS) {

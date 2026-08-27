@@ -9,9 +9,9 @@
   --accent-dim: rgba(61, 255, 200, 0.16);
   --accent-glow: rgba(61, 255, 200, 0.38);
   --accent-blue: #3dc8ff;
-  --chrome-height: 116px;
-  --chrome-height-open-downloads: 284px;
-  --chrome-height-open-shield: 356px;
+  --chrome-height: calc(var(--tab-strip-height) + var(--toolbar-height) + var(--bookmarks-height));
+  --chrome-height-open-downloads: calc(var(--tab-strip-height) + var(--toolbar-height) + var(--bookmarks-height) + var(--downloads-panel-height));
+  --chrome-height-open-shield: calc(var(--tab-strip-height) + var(--toolbar-height) + var(--bookmarks-height) + 240px);
   --find-bar-height: 0px;
   --tab-strip-height: 36px;
   --toolbar-height: 48px;
@@ -24,6 +24,7 @@
   --disguise-chrome: #0d47a1;
   --disguise-omni: #0a3a86;
   --disguise-icon: #e8eef7;
+  --titlebar-overlay-right: max(0px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)));
   font-family: "Segoe UI", "Cascadia Code", "Consolas", system-ui, sans-serif;
 }
 
@@ -70,6 +71,19 @@ body.utility-open,
 body.downloads-open.shield-open,
 body.downloads-open.utility-open {
   --chrome-height: var(--chrome-height-open-shield);
+}
+
+body.bookmarks-hidden {
+  --bookmarks-height: 0px;
+}
+
+html.bookmarks-hidden {
+  --bookmarks-height: 0px;
+}
+
+html.bookmarks-hidden #yerimleri-cubugu,
+body.bookmarks-hidden #yerimleri-cubugu {
+  display: none;
 }
 
 .chrome {
@@ -158,7 +172,6 @@ body.downloads-open.utility-open {
   flex: 1;
   min-width: 0;
   overflow: visible;
-  padding-right: max(0px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)));
 }
 
 .tab-strip {
@@ -167,6 +180,7 @@ body.downloads-open.utility-open {
   gap: 4px;
   height: var(--tab-strip-height);
   padding: 0 8px;
+  padding-right: calc(8px + var(--titlebar-overlay-right));
   width: 100%;
   background: var(--disguise-chrome);
 }
@@ -630,8 +644,12 @@ button.chrome-icon:hover,
 }
 
 .omni-form {
-  flex: 1;
+  display: flex;
+  align-items: center;
+  flex: 1 1 0%;
   min-width: 0;
+  width: auto;
+  max-width: none;
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
@@ -639,7 +657,9 @@ button.chrome-icon:hover,
 #adres-cubugu-konteynir {
   display: flex;
   align-items: center;
+  flex: 1 1 auto;
   width: 100%;
+  min-width: 0;
   height: 36px;
   padding: 0 8px 0 12px;
   border: 0;
@@ -754,23 +774,47 @@ body.ghost-network #adres-cubugu-konteynir:focus-within {
   overflow: hidden;
 }
 
+#yerimleri-kisayollar,
+.bookmarks-list {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 2px;
+}
+
 .yerim-chip,
 .bookmark-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  max-width: 168px;
+  gap: 0;
+  max-width: 184px;
   height: 24px;
-  padding: 0 8px;
+  padding: 0 2px 0 0;
   border: 0;
   border-radius: 4px;
   background: transparent;
   color: #fff;
   font: 12px/1 "Segoe UI", system-ui, sans-serif;
+}
+
+.yerim-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 24px;
+  padding: 0 4px 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
 }
 
 .bookmark-chip {
+  gap: 6px;
+  padding: 0 4px 0 8px;
   cursor: pointer;
 }
 
@@ -786,15 +830,26 @@ body.ghost-network #adres-cubugu-konteynir:focus-within {
   white-space: nowrap;
 }
 
+.yerim-remove,
 .bookmark-chip button {
+  flex: 0 0 16px;
   width: 16px;
   height: 16px;
+  margin-right: 2px;
   padding: 0;
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+  line-height: 16px;
   cursor: pointer;
+}
+
+.yerim-remove:hover,
+.bookmark-chip button:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
 }
 
 #yerimleri-sol .chrome-icon {
@@ -835,13 +890,6 @@ body.ghost-network #adres-cubugu-konteynir:focus-within {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.4;
-}
-
-.bookmarks-list {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
 }
 
 .toolbar {

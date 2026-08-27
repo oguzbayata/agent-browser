@@ -147,7 +147,7 @@ contextBridge.exposeInMainWorld(
 
       const listener = (_event, payload) => {
         if (typeof payload === 'string') {
-          callback({ url: payload, canGoBack: false, canGoForward: false, isLoading: false, bookmarked: false });
+          callback({ url: payload, canGoBack: false, canGoForward: false, isLoading: false, bookmarked: false, bookmarksBar: true });
           return;
         }
         if (payload && typeof payload === 'object') {
@@ -157,6 +157,7 @@ contextBridge.exposeInMainWorld(
             canGoForward: Boolean(payload.canGoForward),
             isLoading: Boolean(payload.isLoading),
             bookmarked: Boolean(payload.bookmarked),
+            bookmarksBar: payload.bookmarksBar !== false,
           });
         }
       };
