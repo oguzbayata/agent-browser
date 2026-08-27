@@ -68,9 +68,7 @@ body.downloads-open {
   --chrome-height: var(--chrome-height-open-downloads);
 }
 
-body.shield-open,
 body.utility-open,
-body.downloads-open.shield-open,
 body.downloads-open.utility-open {
   --chrome-height: var(--chrome-height-open-shield);
 }
@@ -437,7 +435,6 @@ button.chrome-icon:hover,
   position: relative;
 }
 
-.shield-pop,
 .toolbar-pop {
   position: absolute;
   top: calc(100% + 6px);
@@ -454,11 +451,6 @@ button.chrome-icon:hover,
   app-region: no-drag;
 }
 
-.shield-pop {
-  width: 308px;
-}
-
-.shield-pop.hidden,
 .toolbar-pop.hidden {
   display: none;
 }
@@ -470,45 +462,6 @@ button.chrome-icon:hover,
   font-weight: 650;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-}
-
-.shield-sub {
-  margin: -6px 0 10px;
-  color: var(--muted);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.security-stats {
-  display: grid;
-  gap: 6px;
-  margin: 0 0 12px;
-  padding: 0;
-  list-style: none;
-}
-
-.security-stats li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 10px;
-  border: 1px solid rgba(61, 255, 200, 0.16);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.48);
-}
-
-.security-stats span {
-  color: #9aa8a3;
-  font-size: 11px;
-}
-
-.security-stats strong {
-  color: #3dffc8;
-  font-size: 16px;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 10px rgba(61, 255, 200, 0.45);
 }
 
 .shield-note {
@@ -571,82 +524,6 @@ button.chrome-icon:hover,
 .toolbar-pop-item:hover {
   border-color: rgba(61, 255, 200, 0.4);
   background: rgba(61, 255, 200, 0.1);
-}
-
-.neon-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 8px;
-  padding: 10px 12px;
-  border: 1px solid rgba(61, 255, 200, 0.16);
-  border-radius: 10px;
-  background: rgba(10, 18, 20, 0.88);
-  cursor: pointer;
-}
-
-.neon-toggle span {
-  min-width: 0;
-}
-
-.neon-toggle strong {
-  display: block;
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.neon-toggle em {
-  display: block;
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 10px;
-  font-style: normal;
-}
-
-.neon-toggle input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.neon-switch {
-  position: relative;
-  flex: 0 0 40px;
-  width: 40px;
-  height: 22px;
-  border: 1px solid rgba(61, 255, 200, 0.28);
-  border-radius: 11px;
-  background: #1a2228;
-}
-
-.neon-switch::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #8a969e;
-  transition: transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
-}
-
-.neon-toggle input:checked + .neon-switch {
-  background: rgba(61, 255, 200, 0.16);
-  box-shadow: 0 0 10px rgba(61, 255, 200, 0.32);
-}
-
-.neon-toggle input:checked + .neon-switch::after {
-  transform: translateX(18px);
-  background: #3dffc8;
-  box-shadow: 0 0 8px #3dffc8;
 }
 
 .chrome-icon-panic {
@@ -1045,8 +922,31 @@ body.is-purged {
 }
 
 body.is-purged .chrome,
-body.is-purged .workspace {
+body.is-purged .workspace,
+body.is-purged .disk-warning {
   display: none !important;
+}
+
+.disk-warning {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 80;
+  max-width: min(560px, calc(100vw - 32px));
+  margin: 0;
+  padding: 10px 14px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(61, 255, 200, 0.45);
+  border-radius: 10px;
+  background: #1a2430;
+  color: #3dffc8;
+  box-shadow: 0 0 18px rgba(61, 255, 200, 0.18);
+  font: 12px/1.4 "Segoe UI", system-ui, sans-serif;
+  pointer-events: none;
+}
+
+.disk-warning[hidden] {
+  display: none;
 }
 
 .excommunicado {
@@ -1196,6 +1096,11 @@ body.is-purged .workspace {
   font: 12px/1 "Segoe UI", system-ui, sans-serif;
 }
 
+.menu-item:hover,
+.menu-profile:hover {
+  background: #3c4043;
+}
+
 .menu-chevron {
   width: 16px;
   height: 16px;
@@ -1203,9 +1108,146 @@ body.is-purged .workspace {
   stroke: #9aa0a6;
 }
 
-.menu-item:hover,
-.menu-profile:hover {
-  background: #3c4043;
+.menu-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 16px);
+  min-height: 48px;
+  margin: 0 8px;
+  padding: 0 8px 0 10px;
+  color: #e8eaed;
+  pointer-events: none;
+}
+
+.menu-heading svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.menu-stat {
+  cursor: default;
+}
+
+.menu-stat:hover {
+  background: transparent;
+}
+
+.menu-stat kbd {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: #e8eaed;
+}
+
+.menu-toggle,
+.menu-host {
+  position: relative;
+  min-height: 44px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.menu-toggle {
+  cursor: pointer;
+}
+
+.menu-host {
+  cursor: default;
+}
+
+.menu-toggle span,
+.menu-host span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+}
+
+.menu-host strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+
+.menu-toggle small,
+.menu-host small {
+  color: #9aa0a6;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.menu-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.menu-switch {
+  position: relative;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 16px;
+  border-radius: 8px;
+  background: #5f6368;
+}
+
+.menu-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e8eaed;
+  transition: transform 0.15s ease;
+}
+
+.menu-toggle input:checked + .menu-switch {
+  background: #8ab4f8;
+}
+
+.menu-toggle input:checked + .menu-switch::after {
+  transform: translateX(12px);
+  background: #202124;
+}
+
+.menu-toggle-neon span {
+  color: #3dffc8;
+}
+
+.menu-toggle-neon small {
+  color: rgba(61, 255, 200, 0.72);
+}
+
+.menu-toggle-neon .menu-switch {
+  background: #3a4a46;
+  box-shadow: inset 0 0 0 1px rgba(61, 255, 200, 0.28);
+}
+
+.menu-toggle-neon input:checked + .menu-switch {
+  background: #3dffc8;
+  box-shadow: 0 0 10px rgba(61, 255, 200, 0.55);
+}
+
+.menu-toggle-neon input:checked + .menu-switch::after {
+  background: #0b1412;
+}
+
+.menu-caption {
+  margin: 0;
+  padding: 6px 16px 8px;
+  color: #9aa0a6;
+  font: 11px/1.4 "Segoe UI", system-ui, sans-serif;
 }
 
 .menu-profile {

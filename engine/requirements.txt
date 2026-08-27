@@ -1,3 +1,4 @@
 requests>=2.32.0
 beautifulsoup4>=4.12.3
 PySocks>=1.7.1
+yt-dlp>=2025.1.15

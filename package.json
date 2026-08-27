@@ -10,5 +10,8 @@
   },
   "devDependencies": {
     "electron": "^37.2.6"
+  },
+  "dependencies": {
+    "@distube/ytdl-core": "^4.16.12"
   }
 }

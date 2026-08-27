@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld(
     pickLocalModel: (kind) => ipcRenderer.invoke('agent:local-intel-pick', kind === 'dir' ? 'dir' : 'file'),
     setSettingsOpen: (open) => ipcRenderer.invoke('agent:settings-panel', Boolean(open)),
     getSettings: () => ipcRenderer.invoke('agent:settings-get'),
+    onSettings: (callback) => subscribePayload('agent:settings', callback),
     setSetting: (key, value) => {
       if (typeof key !== 'string') {
         return Promise.resolve({ ok: false });
@@ -93,6 +94,7 @@ contextBridge.exposeInMainWorld(
       return ipcRenderer.invoke('agent:download-cancel', downloadId);
     },
     setDownloadsOpen: (open) => ipcRenderer.invoke('agent:downloads-panel', Boolean(open)),
+    openDownloadsTab: () => ipcRenderer.invoke('agent:downloads-open'),
     setMenuOpen: (open, anchor) =>
       ipcRenderer.invoke('agent:menu-panel', {
         open: Boolean(open),
@@ -108,7 +110,34 @@ contextBridge.exposeInMainWorld(
     onMenuClosed: (callback) => subscribePayload('agent:menu-closed', callback),
     setFindOpen: (open) => ipcRenderer.invoke('agent:find-panel', Boolean(open)),
     setRamSheetOpen: (open) => ipcRenderer.invoke('agent:ram-sheet', Boolean(open)),
-    setShieldOpen: (open) => ipcRenderer.invoke('agent:shield-panel', Boolean(open)),
+    setShieldOpen: (open, anchor) =>
+      ipcRenderer.invoke('agent:shield-panel', {
+        open: Boolean(open),
+        anchor: anchor && typeof anchor === 'object' ? {
+          left: Number(anchor.left),
+          top: Number(anchor.top),
+          right: Number(anchor.right),
+          bottom: Number(anchor.bottom),
+          width: Number(anchor.width),
+          height: Number(anchor.height),
+        } : null,
+      }),
+    onShieldClosed: (callback) => subscribePayload('agent:shield-closed', callback),
+    setSiteOpen: (open, anchor) =>
+      ipcRenderer.invoke('agent:site-panel', {
+        open: Boolean(open),
+        anchor: anchor && typeof anchor === 'object' ? {
+          left: Number(anchor.left),
+          top: Number(anchor.top),
+          right: Number(anchor.right),
+          bottom: Number(anchor.bottom),
+          width: Number(anchor.width),
+          height: Number(anchor.height),
+        } : null,
+      }),
+    onSiteClosed: (callback) => subscribePayload('agent:site-closed', callback),
+    getSiteInfo: () => ipcRenderer.invoke('agent:site-info'),
+    onSiteInfo: (callback) => subscribePayload('agent:site-info', callback),
     getSecurityStats: () => ipcRenderer.invoke('agent:security-stats'),
     onSecurityStats: (callback) => subscribePayload('agent:security-stats', callback),
     setUtilityOpen: (open) => ipcRenderer.invoke('agent:utility-panel', Boolean(open)),
@@ -188,6 +217,7 @@ contextBridge.exposeInMainWorld(
     onTabClosed: (callback) => subscribePayload('agent:tab-closed', callback),
     onBookmarks: (callback) => subscribePayload('agent:bookmarks', callback),
     onDownloads: (callback) => subscribePayload('agent:downloads', callback),
+    onDiskWarning: (callback) => subscribePayload('agent:disk-warning', callback),
     triggerPanic: () => {
       ipcRenderer.send('trigger-panic');
     },

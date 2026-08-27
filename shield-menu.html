@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="tr" class="overflow-surface">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'none'; connect-src 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Güvenlik Merkezi</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="overflow-surface">
+    <div id="agent-shield-menu" class="dropdown-menu" role="menu" aria-label="Güvenlik Merkezi">
+      <div class="menu-heading">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.6 16.2 5.2v4.4c0 4.1-2.5 6.9-6.2 8.1C6.3 16.5 3.8 13.7 3.8 9.6V5.2Z" /></svg>
+        <span class="menu-profile-copy">
+          <strong>Güvenlik Merkezi</strong>
+        </span>
+        <em class="menu-signed">oturum · ram</em>
+      </div>
+      <hr />
+      <div class="menu-item menu-stat" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6.2"/><path d="M7.2 10.2 9.1 12l3.8-4.2"/></svg>
+        <span>Engellenen izleyiciler</span>
+        <kbd id="stat-trackers">0</kbd>
+      </div>
+      <div class="menu-item menu-stat" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.2" cy="10" r="3"/><path d="M11.2 10h5.6M14.6 10v3"/></svg>
+        <span>Engellenen çerezler</span>
+        <kbd id="stat-cookies">0</kbd>
+      </div>
+      <div class="menu-item menu-stat" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.2 10.4 8.4 13.6 15 6.8"/><rect x="3.4" y="3.4" width="13.2" height="13.2" rx="2.4"/></svg>
+        <span>Şifrelenen bağlantılar</span>
+        <kbd id="stat-upgrades">0</kbd>
+      </div>
+      <hr />
+      <label class="menu-item menu-toggle">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.6 16.2 5.2v4.4c0 4.1-2.5 6.9-6.2 8.1C6.3 16.5 3.8 13.7 3.8 9.6V5.2Z" /></svg>
+        <span>
+          Kalkan (reklam engeli)
+          <small id="shield-blocked">0 izleyici engellendi</small>
+        </span>
+        <input id="toggle-blockTrackers" type="checkbox" data-setting="blockTrackers" checked />
+        <i class="menu-switch" aria-hidden="true"></i>
+      </label>
+      <label class="menu-item menu-toggle">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.2c-2.8 0-5 2-5 4.8v6.2l1.6-1.1 1.6 1.1 1.8-1.1 1.8 1.1 1.6-1.1 1.6 1.1V8c0-2.8-2.2-4.8-5-4.8z"/><circle cx="8" cy="8.4" r="0.8" fill="currentColor" stroke="none"/><circle cx="12" cy="8.4" r="0.8" fill="currentColor" stroke="none"/></svg>
+        <span>
+          Hayalet Ağ
+          <small>SOCKS5 · 127.0.0.1:1080</small>
+        </span>
+        <input id="toggle-ghostNetwork" type="checkbox" data-setting="ghostNetwork" />
+        <i class="menu-switch" aria-hidden="true"></i>
+      </label>
+      <hr />
+      <p class="menu-caption">Hayalet Ağ yerel bir SOCKS5 dinleyicisi ister (ör. Tor veya ssh -D). Vekil yoksa sayfalar açılmaz.</p>
+    </div>
+    <script src="shield-menu.js"></script>
+  </body>
+</html>

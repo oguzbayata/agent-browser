@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, WebContentsView, session, ipcMain, globalShortcut, Menu, dialog, clipboard } = require('electron');
+const { app, BrowserWindow, WebContentsView, session, ipcMain, globalShortcut, Menu, nativeImage, dialog, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -36,6 +36,9 @@ const NEWTAB_FILE_URL = pathToFileURL(NEWTAB_PATH).href;
 const SEARCH_PATH = path.join(__dirname, 'search.html');
 const SEARCH_FILE_URL = pathToFileURL(SEARCH_PATH).href;
 const SEARCH_PRELOAD_PATH = path.join(__dirname, 'search-preload.js');
+const DOWNLOADS_PATH = path.join(__dirname, 'downloads.html');
+const DOWNLOADS_FILE_URL = pathToFileURL(DOWNLOADS_PATH).href;
+const DOWNLOADS_PRELOAD_PATH = path.join(__dirname, 'downloads-preload.js');
 const SCRAPER_PATH = path.join(__dirname, 'engine', 'scraper.py');
 const AGENT_SEARCH_PREFIX = 'agent-search:';
 const PYTHON_MISSING_MESSAGE = 'Yerel İstihbarat Ajanı başlatılamadı: Python bulunamadı';
@@ -56,6 +59,7 @@ const BOOLEAN_SETTINGS = new Set([
   'spoofUserAgent',
   'agentBridge',
   'ghostNetwork',
+  'mediaHunter',
 ]);
 const AGENT_BRIDGE_HOST = '127.0.0.1';
 const AGENT_BRIDGE_PORT = 17331;
@@ -190,9 +194,16 @@ const guestWebPreferences = Object.freeze({
   preload: SEARCH_PRELOAD_PATH,
 });
 
+const downloadsWebPreferences = Object.freeze({
+  ...sharedSessionPrefs,
+  preload: DOWNLOADS_PRELOAD_PATH,
+});
+
 let mainWindow = null;
 const views = new Map();
 const scraperChildren = new Set();
+const hunterChildren = new Set();
+const hunterJobs = new Map();
 let cachedPython = null;
 let activeTabId = null;
 let nextTabId = 1;
@@ -204,6 +215,7 @@ let bookmarksPanelOpen = false;
 let downloadsOpen = false;
 let menuOpen = false;
 let shieldOpen = false;
+let siteOpen = false;
 let utilityOpen = false;
 let findOpen = false;
 let ramSheetOpen = false;
@@ -213,6 +225,14 @@ let overflowMenuView = null;
 let overflowMenuReady = Promise.resolve();
 let overflowHostWindow = null;
 let overflowHostDismiss = null;
+let shieldMenuView = null;
+let shieldMenuReady = Promise.resolve();
+let shieldHostWindow = null;
+let shieldHostDismiss = null;
+let siteMenuView = null;
+let siteMenuReady = Promise.resolve();
+let siteHostWindow = null;
+let siteHostDismiss = null;
 const sessionLocalFiles = [];
 const sessionLocalDirs = [];
 let selectedLocalModel = null;
@@ -228,7 +248,9 @@ const privacySettings = {
   searchEngine: 'duckduckgo',
   agentBridge: false,
   ghostNetwork: false,
+  mediaHunter: false,
 };
+global.isDownloaderEnabled = false;
 let blockedRequestCount = 0;
 const tabSecurityStats = new Map();
 let securityStatsFlush = null;
@@ -630,6 +652,15 @@ function sendToChrome(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, payload);
   }
+  if (shieldViewAlive() && !shieldMenuView.webContents.isDestroyed()) {
+    shieldMenuView.webContents.send(channel, payload);
+  }
+  if (siteViewAlive() && !siteMenuView.webContents.isDestroyed()) {
+    siteMenuView.webContents.send(channel, payload);
+  }
+  if (overflowViewAlive() && !overflowMenuView.webContents.isDestroyed()) {
+    overflowMenuView.webContents.send(channel, payload);
+  }
 }
 
 function emitTabUpdated(tabId) {
@@ -645,10 +676,40 @@ function currentGuestUrl() {
     return '';
   }
   const url = guest.getURL();
-  if (isStartPage(url) || isSearchFile(url)) {
+  if (isStartPage(url) || isSearchFile(url) || isDownloadsFile(url)) {
     return '';
   }
   return url;
+}
+
+function snapshotSiteInfo() {
+  const url = currentGuestUrl();
+  if (!url) {
+    return {
+      url: '',
+      host: 'sayfa yok',
+      meta: 'Adres çubuğundan bir hedef açın.',
+      scheme: 'ram',
+    };
+  }
+  try {
+    const parsed = new URL(url);
+    const secure = parsed.protocol === 'https:';
+    const protocol = parsed.protocol.replace(':', '');
+    return {
+      url,
+      host: parsed.hostname || parsed.href,
+      meta: secure ? 'Bağlantı şifreli (HTTPS)' : `${protocol} · şifresiz`,
+      scheme: secure ? 'HTTPS' : protocol || 'ram',
+    };
+  } catch {
+    return {
+      url,
+      host: url,
+      meta: 'Adres çözümlenemedi.',
+      scheme: 'ram',
+    };
+  }
 }
 
 function isCurrentUrlBookmarked() {
@@ -694,7 +755,31 @@ function purgeSessionChromeState() {
     overflowMenuView = null;
     overflowMenuReady = Promise.resolve();
   }
-  shieldOpen = false;
+  hideShieldMenu({ notify: false });
+  if (shieldMenuView) {
+    try {
+      if (!shieldMenuView.webContents.isDestroyed()) {
+        shieldMenuView.webContents.close();
+      }
+    } catch {
+      // Wipe still proceeds if the popup view is already gone.
+    }
+    shieldMenuView = null;
+    shieldMenuReady = Promise.resolve();
+  }
+  hideSiteMenu({ notify: false });
+  if (siteMenuView) {
+    try {
+      if (!siteMenuView.webContents.isDestroyed()) {
+        siteMenuView.webContents.close();
+      }
+    } catch {
+      // Wipe still proceeds if the popup view is already gone.
+    }
+    siteMenuView = null;
+    siteMenuReady = Promise.resolve();
+  }
+  siteOpen = false;
   tabSecurityStats.clear();
   blockedRequestCount = 0;
   if (securityStatsFlush) {
@@ -735,22 +820,410 @@ function uniqueSavePath(directory, filename) {
   return candidate;
 }
 
+function setMediaHunterEnabled(enabled) {
+  privacySettings.mediaHunter = Boolean(enabled);
+  global.isDownloaderEnabled = privacySettings.mediaHunter;
+}
+
+function isYoutubeWatchUrl(rawUrl) {
+  if (typeof rawUrl !== 'string' || !rawUrl) {
+    return false;
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    const host = parsed.hostname.replace(/^www\./i, '').toLowerCase();
+    if (host === 'youtu.be') {
+      return parsed.pathname.length > 1;
+    }
+    if (
+      host === 'youtube.com' ||
+      host === 'm.youtube.com' ||
+      host === 'music.youtube.com' ||
+      host.endsWith('.youtube.com')
+    ) {
+      return (
+        parsed.pathname.includes('/watch') ||
+        parsed.pathname.startsWith('/shorts') ||
+        parsed.pathname.startsWith('/embed') ||
+        parsed.pathname.startsWith('/live')
+      );
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+function isDirectVideoSource(rawUrl) {
+  if (typeof rawUrl !== 'string' || !rawUrl) {
+    return false;
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function parseYtDlpProgress(line, record) {
+  const percent = line.match(/\[download\]\s+(\d+(?:\.\d+)?)%/);
+  if (percent) {
+    record.progress = Math.min(1, Number(percent[1]) / 100);
+    if (record.total > 0) {
+      record.received = Math.round(record.progress * record.total);
+    }
+  }
+  const size = line.match(/\[download\]\s+\d+(?:\.\d+)?%\s+of\s+~?\s*([\d.]+[KMG]i?B)/i);
+  if (size && record.total <= 0) {
+    record.total = 1;
+  }
+  const speed = line.match(/\bat\s+(\S+)\s/i);
+  if (speed) {
+    record.speed = speed[1];
+  }
+  const destination = line.match(/Destination:\s+(.+)\s*$/);
+  if (destination) {
+    record.filename = path.basename(destination[1].trim());
+  }
+  const merged = line.match(/Merging formats into "(.+)"/);
+  if (merged) {
+    record.filename = path.basename(merged[1]);
+  }
+}
+
+function killHunterProcess(child) {
+  if (!child) {
+    return;
+  }
+  hunterChildren.delete(child);
+  try {
+    child.stdout?.removeAllListeners();
+    child.stderr?.removeAllListeners();
+    child.removeAllListeners();
+  } catch {
+    // Ignore listener cleanup errors.
+  }
+  try {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL');
+    }
+  } catch {
+    // Process may already be gone.
+  }
+}
+
+function killAllHunters() {
+  for (const child of [...hunterChildren]) {
+    killHunterProcess(child);
+  }
+  hunterJobs.clear();
+}
+
+function ytDlpCandidates() {
+  const list = [{ cmd: 'yt-dlp', prefix: [] }];
+  const pythons = cachedPython
+    ? [cachedPython, ...pythonCandidates().filter((item) => item.cmd !== cachedPython.cmd)]
+    : pythonCandidates();
+  for (const py of pythons) {
+    list.push({ cmd: py.cmd, prefix: [...py.prefix, '-m', 'yt_dlp'] });
+  }
+  return list;
+}
+
+const DISK_PERSIST_WARNING =
+  'Uyarı: Bu dosya yerel diskinize kaydedildi. Excommunicado protokolü bu dosyayı silmeyebilir.';
+
+function emitDiskWarning() {
+  const payload = { message: DISK_PERSIST_WARNING };
+  sendToChrome('agent:disk-warning', payload);
+  for (const entry of views.values()) {
+    const webContents = entry.view?.webContents;
+    if (entry.kind === 'downloads' && webContents && !webContents.isDestroyed()) {
+      webContents.send('agent:disk-warning', payload);
+    }
+  }
+}
+
+function mediaHunterMenuIcon() {
+  try {
+    const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'agent-browser-logo.png'));
+    if (icon && !icon.isEmpty()) {
+      return icon.resize({ width: 16, height: 16 });
+    }
+  } catch {
+    // Menu still works without an icon.
+  }
+  return undefined;
+}
+
+function startDirectMediaDownload(srcUrl) {
+  try {
+    const guest = getGuestWebContents();
+    if (guest && !guest.isDestroyed()) {
+      guest.downloadURL(srcUrl);
+      return;
+    }
+    getIsolatedSession().downloadURL(srcUrl);
+  } catch (error) {
+    console.error('Direct media download failed:', error);
+  }
+}
+
+function createHunterRecord(filename) {
+  const id = String(nextDownloadId);
+  nextDownloadId += 1;
+  const record = {
+    id,
+    filename,
+    received: 0,
+    total: 0,
+    progress: 0,
+    speed: '',
+    state: 'progressing',
+  };
+  sessionDownloads.set(id, record);
+  return record;
+}
+
+function spawnYtDlpDownload(pageUrl, record, savePath) {
+  const env = {
+    ...process.env,
+    PYTHONUTF8: '1',
+    PYTHONIOENCODING: 'utf-8',
+  };
+  delete env.ELECTRON_RUN_AS_NODE;
+  const argsTail = [
+    '--no-playlist',
+    '--newline',
+    '--no-warnings',
+    '-f',
+    'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b',
+    '--merge-output-format',
+    'mp4',
+    '-o',
+    savePath,
+    '--user-agent',
+    COMMON_USER_AGENT,
+    pageUrl,
+  ];
+  if (privacySettings.ghostNetwork) {
+    argsTail.unshift('--proxy', SOCKS5_PROXY);
+  }
+
+  const tryCandidate = (index) => {
+    const candidates = ytDlpCandidates();
+    if (index >= candidates.length) {
+      return downloadWithYtdlCore(pageUrl, record, savePath);
+    }
+    const candidate = candidates[index];
+    return new Promise((resolve) => {
+      let child;
+      try {
+        child = spawn(candidate.cmd, [...candidate.prefix, ...argsTail], {
+          cwd: app.getPath('downloads'),
+          env,
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+      } catch {
+        resolve(tryCandidate(index + 1));
+        return;
+      }
+
+      hunterChildren.add(child);
+      hunterJobs.set(record.id, child);
+      child.stdout?.setEncoding('utf8');
+      child.stderr?.setEncoding('utf8');
+      let stderr = '';
+      const onLine = (chunk) => {
+        const text = String(chunk);
+        stderr += text;
+        if (stderr.length > 80_000) {
+          stderr = stderr.slice(-80_000);
+        }
+        const current = sessionDownloads.get(record.id);
+        if (!current || current.state !== 'progressing') {
+          return;
+        }
+        for (const line of text.split(/\r?\n/)) {
+          if (line.trim()) {
+            parseYtDlpProgress(line, current);
+          }
+        }
+        broadcastDownloads();
+      };
+      child.stdout?.on('data', onLine);
+      child.stderr?.on('data', onLine);
+      child.on('error', (error) => {
+        hunterJobs.delete(record.id);
+        killHunterProcess(child);
+        if (error && error.code === 'ENOENT') {
+          resolve(tryCandidate(index + 1));
+          return;
+        }
+        currentFail(record, 'interrupted');
+        resolve(false);
+      });
+      child.on('close', (code) => {
+        hunterJobs.delete(record.id);
+        hunterChildren.delete(child);
+        const current = sessionDownloads.get(record.id);
+        if (!current) {
+          resolve(false);
+          return;
+        }
+        if (current.state === 'cancelled') {
+          resolve(false);
+          return;
+        }
+        if (code === 0) {
+          current.state = 'completed';
+          current.progress = 1;
+          current.speed = '';
+          current.filename = path.basename(savePath);
+          broadcastDownloads();
+          emitDiskWarning();
+          resolve(true);
+          return;
+        }
+        if (/No module named|not recognized|not found/i.test(stderr)) {
+          resolve(tryCandidate(index + 1));
+          return;
+        }
+        currentFail(record, 'interrupted');
+        resolve(false);
+      });
+    });
+  };
+
+  return tryCandidate(0);
+}
+
+function currentFail(record, state) {
+  const current = sessionDownloads.get(record.id);
+  if (!current || current.state === 'cancelled') {
+    return;
+  }
+  current.state = state;
+  current.speed = '';
+  broadcastDownloads();
+}
+
+async function downloadWithYtdlCore(pageUrl, record, savePath) {
+  let ytdl;
+  try {
+    ytdl = require('@distube/ytdl-core');
+  } catch {
+    currentFail(record, 'interrupted');
+    return false;
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      hunterJobs.delete(record.id);
+      resolve(ok);
+    };
+    try {
+      const stream = ytdl(pageUrl, { quality: 'highest', filter: 'audioandvideo' });
+      hunterJobs.set(record.id, stream);
+      stream.on('progress', (_chunk, downloaded, total) => {
+        const current = sessionDownloads.get(record.id);
+        if (!current || current.state !== 'progressing') {
+          return;
+        }
+        current.received = downloaded;
+        current.total = total || current.total;
+        current.progress = total > 0 ? downloaded / total : current.progress;
+        broadcastDownloads();
+      });
+      stream.on('error', () => {
+        currentFail(record, 'interrupted');
+        finish(false);
+      });
+      const out = fs.createWriteStream(savePath);
+      stream.pipe(out);
+      out.on('finish', () => {
+        const current = sessionDownloads.get(record.id);
+        if (current && current.state !== 'cancelled') {
+          current.state = 'completed';
+          current.progress = 1;
+          current.filename = path.basename(savePath);
+          current.speed = '';
+          broadcastDownloads();
+          emitDiskWarning();
+        }
+        finish(true);
+      });
+      out.on('error', () => {
+        currentFail(record, 'interrupted');
+        finish(false);
+      });
+    } catch {
+      currentFail(record, 'interrupted');
+      finish(false);
+    }
+  });
+}
+
+function startMediaHunterDownload(pageUrl, srcUrl) {
+  if (!global.isDownloaderEnabled || panicInProgress) {
+    return;
+  }
+  const page = typeof pageUrl === 'string' ? pageUrl : '';
+  const src = typeof srcUrl === 'string' ? srcUrl : '';
+  if (isYoutubeWatchUrl(page) || !isDirectVideoSource(src)) {
+    const target = isYoutubeWatchUrl(page) ? page : src;
+    if (!isDirectVideoSource(target) && !isYoutubeWatchUrl(target)) {
+      return;
+    }
+    const savePath = uniqueSavePath(app.getPath('downloads'), 'agent-video.mp4');
+    const record = createHunterRecord(path.basename(savePath));
+    openDownloadsTab();
+    broadcastDownloads();
+    spawnYtDlpDownload(isYoutubeWatchUrl(page) ? page : target, record, savePath).catch(() => {
+      currentFail(record, 'interrupted');
+    });
+    return;
+  }
+  startDirectMediaDownload(src);
+}
+
 function serializeDownload(record) {
+  const progress =
+    record.total > 0
+      ? Math.min(1, record.received / record.total)
+      : typeof record.progress === 'number'
+        ? Math.min(1, Math.max(0, record.progress))
+        : 0;
   return {
     id: record.id,
     filename: record.filename,
     received: record.received,
     total: record.total,
     state: record.state,
-    progress: record.total > 0 ? Math.min(1, record.received / record.total) : 0,
+    progress,
+    speed: typeof record.speed === 'string' ? record.speed : '',
+    diskPersist: true,
   };
 }
 
-function broadcastDownloads(open = false) {
-  sendToChrome('agent:downloads', {
+function broadcastDownloads() {
+  const payload = {
     items: [...sessionDownloads.values()].map(serializeDownload),
-    open,
-  });
+  };
+  sendToChrome('agent:downloads', payload);
+  for (const entry of views.values()) {
+    const webContents = entry.view?.webContents;
+    if (entry.kind === 'downloads' && webContents && !webContents.isDestroyed()) {
+      webContents.send('agent:downloads', payload);
+    }
+  }
 }
 
 function attachDownloadManager(isolatedSession) {
@@ -780,9 +1253,8 @@ function attachDownloadManager(isolatedSession) {
     };
     sessionDownloads.set(id, record);
     activeDownloadItems.set(id, item);
-    downloadsOpen = true;
-    fitBrowserView();
-    broadcastDownloads(true);
+    openDownloadsTab();
+    broadcastDownloads();
 
     item.on('updated', (_updatedEvent, state) => {
       record.received = item.getReceivedBytes();
@@ -797,6 +1269,9 @@ function attachDownloadManager(isolatedSession) {
       record.state = state;
       activeDownloadItems.delete(id);
       broadcastDownloads();
+      if (state === 'completed') {
+        emitDiskWarning();
+      }
     });
   });
 }
@@ -811,8 +1286,26 @@ function attachGuestContextMenu(webContents) {
     const canCopy = Boolean(params.selectionText) || Boolean(params.editFlags?.canCopy);
     const canPaste = Boolean(params.isEditable) || Boolean(params.editFlags?.canPaste);
     const hasImage = params.mediaType === 'image' || Boolean(params.hasImageContents);
+    const pageUrl = webContents.getURL();
+    const showMediaHunter =
+      Boolean(global.isDownloaderEnabled) &&
+      (params.mediaType === 'video' || isYoutubeWatchUrl(pageUrl));
 
-    const menu = Menu.buildFromTemplate([
+    const template = [];
+    if (showMediaHunter) {
+      const hunterIcon = mediaHunterMenuIcon();
+      template.push(
+        {
+          label: '[Agent] Bu Videoyu İndir',
+          ...(hunterIcon ? { icon: hunterIcon } : {}),
+          click: () => {
+            startMediaHunterDownload(pageUrl, params.srcURL || params.linkURL || '');
+          },
+        },
+        { type: 'separator' },
+      );
+    }
+    template.push(
       {
         label: 'Geri',
         enabled: flags.canGoBack,
@@ -856,9 +1349,9 @@ function attachGuestContextMenu(webContents) {
         label: 'İncele',
         click: () => webContents.inspectElement(params.x, params.y),
       },
-    ]);
+    );
 
-    menu.popup({ window: mainWindow || undefined });
+    Menu.buildFromTemplate(template).popup({ window: mainWindow || undefined });
   });
 }
 
@@ -968,11 +1461,7 @@ function bookmarksBarOpen() {
 }
 
 function chromeHeight() {
-  const extra = Math.max(
-    downloadsOpen ? DOWNLOADS_PANEL_HEIGHT : 0,
-    shieldOpen ? SHIELD_POPUP_HEIGHT : 0,
-    utilityOpen ? SHIELD_POPUP_HEIGHT : 0,
-  );
+  const extra = utilityOpen ? SHIELD_POPUP_HEIGHT : 0;
   const bookmarks = bookmarksBarOpen() ? BOOKMARKS_BAR_HEIGHT : 0;
   return TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT + bookmarks + extra + (findOpen ? FIND_BAR_HEIGHT : 0);
 }
@@ -1007,6 +1496,8 @@ function bringViewToFront(view) {
     try {
       mainWindow.setTopBrowserView(view);
       raiseOverflowMenu();
+      raiseShieldMenu();
+      raiseSiteMenu();
       return;
     } catch {
       // WebContentsView is not a BrowserView; fall through.
@@ -1015,6 +1506,8 @@ function bringViewToFront(view) {
 
   mainWindow.contentView.addChildView(view);
   raiseOverflowMenu();
+  raiseShieldMenu();
+  raiseSiteMenu();
 }
 
 function fileUrlToPath(rawUrl) {
@@ -1055,6 +1548,27 @@ function isSearchFile(rawUrl) {
   return Boolean(filePath) && filePath.toLowerCase() === path.normalize(SEARCH_PATH).toLowerCase();
 }
 
+function isDownloadsFile(rawUrl) {
+  if (!rawUrl) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.pathname.toLowerCase().endsWith('/downloads.html') || parsed.href.split('?')[0] === DOWNLOADS_FILE_URL) {
+      const filePath = fileUrlToPath(parsed.href);
+      if (filePath && filePath.toLowerCase() === path.normalize(DOWNLOADS_PATH).toLowerCase()) {
+        return true;
+      }
+    }
+  } catch {
+    // Compare by filesystem path below.
+  }
+
+  const filePath = fileUrlToPath(rawUrl);
+  return Boolean(filePath) && filePath.toLowerCase() === path.normalize(DOWNLOADS_PATH).toLowerCase();
+}
+
 function searchQueryFromUrl(rawUrl) {
   try {
     return String(new URL(rawUrl).searchParams.get('q') || '').trim().slice(0, 500);
@@ -1085,6 +1599,9 @@ function displayGuestUrl(rawUrl) {
   if (isSearchFile(rawUrl)) {
     return searchQueryFromUrl(rawUrl);
   }
+  if (isDownloadsFile(rawUrl)) {
+    return '';
+  }
   return rawUrl;
 }
 
@@ -1110,7 +1627,7 @@ function isStartPage(rawUrl) {
 }
 
 function isAllowedGuestUrl(rawUrl) {
-  return rawUrl === 'about:blank' || isNewTabFile(rawUrl) || isSearchFile(rawUrl) || Boolean(sanitizeUrl(rawUrl));
+  return rawUrl === 'about:blank' || isNewTabFile(rawUrl) || isSearchFile(rawUrl) || isDownloadsFile(rawUrl) || Boolean(sanitizeUrl(rawUrl));
 }
 
 function loadStartPage(webContents) {
@@ -1126,6 +1643,32 @@ function loadSearchPage(webContents, query) {
   }
   const q = String(query || '').trim().slice(0, 500);
   return webContents.loadFile(SEARCH_PATH, { query: { q } });
+}
+
+function loadDownloadsPage(webContents) {
+  if (!webContents || webContents.isDestroyed()) {
+    return Promise.resolve();
+  }
+  return webContents.loadFile(DOWNLOADS_PATH);
+}
+
+function findDownloadsTabId() {
+  for (const [tabId, entry] of views.entries()) {
+    const webContents = entry.view?.webContents;
+    if (entry.kind === 'downloads' && webContents && !webContents.isDestroyed()) {
+      return tabId;
+    }
+  }
+  return null;
+}
+
+function openDownloadsTab() {
+  const existing = findDownloadsTabId();
+  if (existing) {
+    switchToTab(existing);
+    return existing;
+  }
+  return createGuestTab(DOWNLOADS_FILE_URL, { downloads: true });
 }
 
 function pythonCandidates() {
@@ -1168,6 +1711,7 @@ function killAllScrapers() {
     killScraperProcess(child);
   }
   cachedPython = null;
+  killAllHunters();
 }
 
 function runScraperProcess(command, args, env) {
@@ -1305,6 +1849,9 @@ function tabTitleOf(webContents) {
   }
   if (isSearchFile(url)) {
     return searchQueryFromUrl(url).slice(0, 80) || 'Arama';
+  }
+  if (isDownloadsFile(url)) {
+    return 'İndirmeler';
   }
 
   const title = webContents.getTitle();
@@ -1490,7 +2037,7 @@ function injectVideoAdSkipper(webContents) {
   if (!webContents || webContents.isDestroyed()) {
     return;
   }
-  if (isStartPage(webContents.getURL()) || isSearchFile(webContents.getURL())) {
+  if (isStartPage(webContents.getURL()) || isSearchFile(webContents.getURL()) || isDownloadsFile(webContents.getURL())) {
     return;
   }
   webContents.executeJavaScript(VIDEO_AD_SKIPPER_SOURCE, true).catch(() => {});
@@ -1514,7 +2061,14 @@ function attachTabListeners(tabId, webContents) {
   });
 
   webContents.on('will-navigate', (event, url) => {
-    if (!isAllowedGuestUrl(url)) {
+    const entry = views.get(tabId);
+    if (entry?.kind === 'downloads') {
+      if (!isDownloadsFile(url)) {
+        event.preventDefault();
+      }
+      return;
+    }
+    if (isDownloadsFile(url) || !isAllowedGuestUrl(url)) {
       event.preventDefault();
     }
   });
@@ -1532,7 +2086,11 @@ function attachTabListeners(tabId, webContents) {
   webContents.on('did-start-loading', () => {
     sendToChrome('agent:tab-title-updated', {
       tabId,
-      title: isStartPage(webContents.getURL()) ? 'Yeni Sekme' : 'Yükleniyor...',
+      title: isDownloadsFile(webContents.getURL())
+        ? 'İndirmeler'
+        : isStartPage(webContents.getURL())
+          ? 'Yeni Sekme'
+          : 'Yükleniyor...',
     });
     emitTabUpdated(tabId);
     if (tabId === activeTabId) {
@@ -1603,11 +2161,12 @@ function createGuestTab(initialUrl, options = {}) {
   const activate = options.activate !== false;
   const owner = typeof options.owner === 'string' ? options.owner.trim().slice(0, 80) : '';
 
+  const downloads = options.downloads === true || isDownloadsFile(initialUrl);
   const view = new WebContentsView({
-    webPreferences: guestWebPreferences,
+    webPreferences: downloads ? downloadsWebPreferences : guestWebPreferences,
   });
   view.setBackgroundColor('#070809');
-  views.set(tabId, { id: tabId, view, owner, pinned: false, window: host });
+  views.set(tabId, { id: tabId, view, owner, pinned: false, window: host, kind: downloads ? 'downloads' : 'guest' });
   tabSecurityStats.set(tabId, emptySecurityStats());
   attachTabListeners(tabId, view.webContents);
   host.contentView.addChildView(view);
@@ -1618,7 +2177,9 @@ function createGuestTab(initialUrl, options = {}) {
 
   const target = initialUrl || 'about:blank';
   const searchQuery = parseAgentSearchTarget(target);
-  if (searchQuery) {
+  if (downloads) {
+    loadDownloadsPage(view.webContents);
+  } else if (searchQuery) {
     loadSearchPage(view.webContents, searchQuery);
   } else if (target !== 'about:blank') {
     const safeUrl = sanitizeUrl(target);
@@ -1633,7 +2194,7 @@ function createGuestTab(initialUrl, options = {}) {
 
   sendToChrome('agent:tab-created', {
     tabId,
-    title: target === 'about:blank' ? 'Yeni Sekme' : 'Yükleniyor...',
+    title: downloads ? 'İndirmeler' : target === 'about:blank' ? 'Yeni Sekme' : 'Yükleniyor...',
     url: target,
     active: activate,
     pinned: false,
@@ -1793,6 +2354,8 @@ function triggerExcommunicado() {
     agentControlKey = '';
     privacySettings.agentBridge = false;
     privacySettings.ghostNetwork = false;
+    privacySettings.mediaHunter = false;
+    global.isDownloaderEnabled = false;
     applyGhostNetwork().catch(() => {});
   } catch {
     // Bridge shutdown must not block purge.
@@ -1853,6 +2416,20 @@ function isChromeSender(event) {
   ) {
     return true;
   }
+  if (
+    shieldMenuView &&
+    !shieldMenuView.webContents.isDestroyed() &&
+    event.sender === shieldMenuView.webContents
+  ) {
+    return true;
+  }
+  if (
+    siteMenuView &&
+    !siteMenuView.webContents.isDestroyed() &&
+    event.sender === siteMenuView.webContents
+  ) {
+    return true;
+  }
   return Boolean(chromeWindowFromEvent(event));
 }
 
@@ -1862,6 +2439,24 @@ function isSearchSender(event) {
     return false;
   }
   return isSearchFile(contents.getURL());
+}
+
+function isDownloadsSender(event) {
+  const contents = event?.sender;
+  if (!contents || contents.isDestroyed()) {
+    return false;
+  }
+  for (const entry of views.values()) {
+    if (
+      entry.kind === 'downloads' &&
+      entry.view?.webContents &&
+      !entry.view.webContents.isDestroyed() &&
+      entry.view.webContents === contents
+    ) {
+      return true;
+    }
+  }
+  return isDownloadsFile(contents.getURL());
 }
 
 function notifyChromeMenuClosed() {
@@ -1935,6 +2530,8 @@ function ensureOverflowMenuView() {
 }
 
 function showOverflowMenu(anchor, host) {
+  hideShieldMenu({ notify: false });
+  hideSiteMenu({ notify: false });
   hideOverflowMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
@@ -1995,6 +2592,282 @@ function showOverflowMenu(anchor, host) {
     .catch((error) => {
       console.error('Failed to open overflow menu:', error);
       hideOverflowMenu();
+    });
+}
+
+function shieldViewAlive() {
+  return Boolean(shieldMenuView && !shieldMenuView.webContents.isDestroyed());
+}
+
+function raiseShieldMenu() {
+  if (!shieldOpen || !shieldViewAlive() || !shieldHostWindow || shieldHostWindow.isDestroyed()) {
+    return;
+  }
+  shieldHostWindow.contentView.addChildView(shieldMenuView);
+}
+
+function detachShieldHost() {
+  if (shieldHostWindow && !shieldHostWindow.isDestroyed() && shieldHostDismiss) {
+    shieldHostWindow.removeListener('move', shieldHostDismiss);
+    shieldHostWindow.removeListener('resize', shieldHostDismiss);
+  }
+  shieldHostWindow = null;
+  shieldHostDismiss = null;
+}
+
+function notifyChromeShieldClosed() {
+  for (const win of chromeWindows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('agent:shield-closed');
+    }
+  }
+}
+
+function hideShieldMenu(options = {}) {
+  const notify = options.notify !== false;
+  shieldOpen = false;
+  const host = shieldHostWindow;
+  detachShieldHost();
+  if (shieldViewAlive() && host && !host.isDestroyed()) {
+    try {
+      host.contentView.removeChildView(shieldMenuView);
+    } catch {
+      // View may already have been detached.
+    }
+  }
+  if (notify) {
+    notifyChromeShieldClosed();
+  }
+}
+
+function ensureShieldMenuView() {
+  if (shieldViewAlive()) {
+    return shieldMenuReady;
+  }
+
+  shieldMenuView = new WebContentsView({
+    webPreferences: chromeWebPreferences,
+  });
+  shieldMenuView.setBackgroundColor('#292a2d');
+  shieldMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  shieldMenuView.webContents.on('blur', () => {
+    setTimeout(() => {
+      if (
+        shieldOpen &&
+        shieldViewAlive() &&
+        !shieldMenuView.webContents.isFocused()
+      ) {
+        hideShieldMenu();
+      }
+    }, 0);
+  });
+  shieldMenuReady = shieldMenuView.webContents.loadFile(path.join(__dirname, 'shield-menu.html'));
+  return shieldMenuReady;
+}
+
+function showShieldMenu(anchor, host) {
+  hideOverflowMenu({ notify: false });
+  hideSiteMenu({ notify: false });
+  hideShieldMenu({ notify: false });
+  if (!host || host.isDestroyed()) {
+    return;
+  }
+
+  const { width: contentWidth, height: contentHeight } = host.getContentBounds();
+  const width = MENU_DROPDOWN_WIDTH;
+  const btnBottom = Number(anchor && anchor.bottom);
+  const btnRight = Number(anchor && anchor.right);
+  const bottom = Number.isFinite(btnBottom) ? btnBottom : TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT;
+  const right = Number.isFinite(btnRight) ? btnRight : contentWidth - 8;
+  let x = Math.round(right - width);
+  let y = Math.round(bottom + 4);
+  x = Math.max(8, Math.min(x, Math.max(8, contentWidth - width - 8)));
+  if (y < 8) {
+    y = 8;
+  }
+  const maxH = Math.max(160, contentHeight - y - 8);
+  const initialH = Math.min(420, maxH);
+
+  shieldHostWindow = host;
+  shieldOpen = true;
+  shieldHostDismiss = () => {
+    if (shieldHostWindow === host) {
+      hideShieldMenu();
+    }
+  };
+  host.on('move', shieldHostDismiss);
+  host.on('resize', shieldHostDismiss);
+
+  ensureShieldMenuView()
+    .then(async () => {
+      if (!shieldOpen || shieldHostWindow !== host || host.isDestroyed() || !shieldViewAlive()) {
+        return;
+      }
+      shieldMenuView.setBounds({ x, y, width, height: Math.min(520, maxH) });
+      let measured = initialH;
+      try {
+        measured = await shieldMenuView.webContents.executeJavaScript(`(() => {
+          const menu = document.getElementById('agent-shield-menu');
+          if (!menu) {
+            return 0;
+          }
+          return Math.ceil(Math.max(menu.scrollHeight, menu.getBoundingClientRect().height));
+        })()`);
+      } catch {
+        // Keep the initial height if measurement fails.
+      }
+      if (!shieldOpen || shieldHostWindow !== host || !shieldViewAlive()) {
+        return;
+      }
+      const raw = Number(measured);
+      const height = Math.min(Math.max(raw >= 80 ? raw : initialH, 120), maxH);
+      shieldMenuView.setBounds({ x, y, width, height });
+      host.contentView.addChildView(shieldMenuView);
+      shieldMenuView.webContents.focus();
+    })
+    .catch((error) => {
+      console.error('Failed to open shield menu:', error);
+      hideShieldMenu();
+    });
+}
+
+function siteViewAlive() {
+  return Boolean(siteMenuView && !siteMenuView.webContents.isDestroyed());
+}
+
+function raiseSiteMenu() {
+  if (!siteOpen || !siteViewAlive() || !siteHostWindow || siteHostWindow.isDestroyed()) {
+    return;
+  }
+  siteHostWindow.contentView.addChildView(siteMenuView);
+}
+
+function detachSiteHost() {
+  if (siteHostWindow && !siteHostWindow.isDestroyed() && siteHostDismiss) {
+    siteHostWindow.removeListener('move', siteHostDismiss);
+    siteHostWindow.removeListener('resize', siteHostDismiss);
+  }
+  siteHostWindow = null;
+  siteHostDismiss = null;
+}
+
+function notifyChromeSiteClosed() {
+  for (const win of chromeWindows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('agent:site-closed');
+    }
+  }
+}
+
+function hideSiteMenu(options = {}) {
+  const notify = options.notify !== false;
+  siteOpen = false;
+  const host = siteHostWindow;
+  detachSiteHost();
+  if (siteViewAlive() && host && !host.isDestroyed()) {
+    try {
+      host.contentView.removeChildView(siteMenuView);
+    } catch {
+      // View may already have been detached.
+    }
+  }
+  if (notify) {
+    notifyChromeSiteClosed();
+  }
+}
+
+function ensureSiteMenuView() {
+  if (siteViewAlive()) {
+    return siteMenuReady;
+  }
+
+  siteMenuView = new WebContentsView({
+    webPreferences: chromeWebPreferences,
+  });
+  siteMenuView.setBackgroundColor('#292a2d');
+  siteMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  siteMenuView.webContents.on('blur', () => {
+    setTimeout(() => {
+      if (
+        siteOpen &&
+        siteViewAlive() &&
+        !siteMenuView.webContents.isFocused()
+      ) {
+        hideSiteMenu();
+      }
+    }, 0);
+  });
+  siteMenuReady = siteMenuView.webContents.loadFile(path.join(__dirname, 'site-menu.html'));
+  return siteMenuReady;
+}
+
+function showSiteMenu(anchor, host) {
+  hideOverflowMenu({ notify: false });
+  hideShieldMenu({ notify: false });
+  hideSiteMenu({ notify: false });
+  if (!host || host.isDestroyed()) {
+    return;
+  }
+
+  const { width: contentWidth, height: contentHeight } = host.getContentBounds();
+  const width = MENU_DROPDOWN_WIDTH;
+  const btnBottom = Number(anchor && anchor.bottom);
+  const btnRight = Number(anchor && anchor.right);
+  const bottom = Number.isFinite(btnBottom) ? btnBottom : TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT;
+  const right = Number.isFinite(btnRight) ? btnRight : contentWidth - 8;
+  let x = Math.round(right - width);
+  let y = Math.round(bottom + 4);
+  x = Math.max(8, Math.min(x, Math.max(8, contentWidth - width - 8)));
+  if (y < 8) {
+    y = 8;
+  }
+  const maxH = Math.max(160, contentHeight - y - 8);
+  const initialH = Math.min(280, maxH);
+
+  siteHostWindow = host;
+  siteOpen = true;
+  siteHostDismiss = () => {
+    if (siteHostWindow === host) {
+      hideSiteMenu();
+    }
+  };
+  host.on('move', siteHostDismiss);
+  host.on('resize', siteHostDismiss);
+
+  ensureSiteMenuView()
+    .then(async () => {
+      if (!siteOpen || siteHostWindow !== host || host.isDestroyed() || !siteViewAlive()) {
+        return;
+      }
+      siteMenuView.setBounds({ x, y, width, height: Math.min(360, maxH) });
+      let measured = initialH;
+      try {
+        measured = await siteMenuView.webContents.executeJavaScript(`(() => {
+          const menu = document.getElementById('agent-site-menu');
+          if (!menu) {
+            return 0;
+          }
+          return Math.ceil(Math.max(menu.scrollHeight, menu.getBoundingClientRect().height));
+        })()`);
+      } catch {
+        // Keep the initial height if measurement fails.
+      }
+      if (!siteOpen || siteHostWindow !== host || !siteViewAlive()) {
+        return;
+      }
+      const raw = Number(measured);
+      const height = Math.min(Math.max(raw >= 80 ? raw : initialH, 120), maxH);
+      siteMenuView.setBounds({ x, y, width, height });
+      host.contentView.addChildView(siteMenuView);
+      const info = snapshotSiteInfo();
+      if (!siteMenuView.webContents.isDestroyed()) {
+        siteMenuView.webContents.send('agent:site-info', info);
+      }
+      siteMenuView.webContents.focus();
+    })
+    .catch((error) => {
+      console.error('Failed to open site menu:', error);
+      hideSiteMenu();
     });
 }
 
@@ -2110,7 +2983,7 @@ function handleAppShortcut(event, input) {
   }
   if (lower === 'j' && !shift) {
     event.preventDefault();
-    sendToChrome('agent:menu-command', { action: 'downloads' });
+    openDownloadsTab();
     return;
   }
   if (lower === 'p' && !shift) {
@@ -2166,6 +3039,9 @@ function broadcastBrowserState() {
     bookmarked: isCurrentUrlBookmarked(),
     bookmarksBar: isStartPage(url),
   });
+  if (siteOpen && siteViewAlive() && !siteMenuView.webContents.isDestroyed()) {
+    siteMenuView.webContents.send('agent:site-info', snapshotSiteInfo());
+  }
   broadcastBookmarks();
   fitBrowserView();
 }
@@ -2210,6 +3086,19 @@ ipcMain.handle('agent:navigate', async (event, rawUrl) => {
   }
 
   const searchQuery = parseAgentSearchTarget(rawUrl);
+  if (isDownloadsFile(guest.getURL()) || views.get(activeTabId)?.kind === 'downloads') {
+    if (searchQuery) {
+      const tabId = createGuestTab(`${AGENT_SEARCH_PREFIX}${encodeURIComponent(searchQuery)}`);
+      return { ok: Boolean(tabId), url: searchQuery };
+    }
+    const nextUrl = sanitizeUrl(rawUrl);
+    if (!nextUrl) {
+      return { ok: false };
+    }
+    const tabId = createGuestTab(nextUrl);
+    return { ok: Boolean(tabId), url: nextUrl };
+  }
+
   if (searchQuery) {
     await loadSearchPage(guest, searchQuery);
     return { ok: true, url: searchQuery };
@@ -2432,7 +3321,7 @@ ipcMain.handle('agent:bookmark-rename', async (event, payload) => {
 });
 
 ipcMain.handle('agent:download-cancel', async (event, downloadId) => {
-  if (!isChromeSender(event) || typeof downloadId !== 'string') {
+  if ((!isChromeSender(event) && !isDownloadsSender(event)) || typeof downloadId !== 'string') {
     return { ok: false };
   }
 
@@ -2442,6 +3331,19 @@ ipcMain.handle('agent:download-cancel', async (event, downloadId) => {
       item.cancel();
     } catch {
       return { ok: false };
+    }
+  }
+  const hunter = hunterJobs.get(downloadId);
+  if (hunter) {
+    hunterJobs.delete(downloadId);
+    if (typeof hunter.kill === 'function') {
+      killHunterProcess(hunter);
+    } else if (typeof hunter.destroy === 'function') {
+      try {
+        hunter.destroy();
+      } catch {
+        // Stream may already be closed.
+      }
     }
   }
 
@@ -2458,9 +3360,30 @@ ipcMain.handle('agent:downloads-panel', async (event, open) => {
     return { ok: false };
   }
 
-  downloadsOpen = Boolean(open);
+  downloadsOpen = false;
+  if (open) {
+    openDownloadsTab();
+  }
   fitBrowserView();
-  return { ok: true, open: downloadsOpen };
+  return { ok: true, open: Boolean(findDownloadsTabId()) };
+});
+
+ipcMain.handle('agent:downloads-open', async (event) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+  const tabId = openDownloadsTab();
+  return { ok: Boolean(tabId), tabId };
+});
+
+ipcMain.handle('agent:downloads-get', async (event) => {
+  if (!isChromeSender(event) && !isDownloadsSender(event)) {
+    return { ok: false, items: [] };
+  }
+  return {
+    ok: true,
+    items: [...sessionDownloads.values()].map(serializeDownload),
+  };
 });
 
 ipcMain.handle('agent:menu-panel', async (event, payload) => {
@@ -2472,7 +3395,6 @@ ipcMain.handle('agent:menu-panel', async (event, payload) => {
   const anchor = payload && typeof payload === 'object' ? payload.anchor : null;
   const host = chromeWindowFromEvent(event) || mainWindow;
   if (open) {
-    shieldOpen = false;
     utilityOpen = false;
     showOverflowMenu(anchor, host);
   } else {
@@ -2481,18 +3403,45 @@ ipcMain.handle('agent:menu-panel', async (event, payload) => {
   return { ok: true, open: menuOpen };
 });
 
-ipcMain.handle('agent:shield-panel', async (event, open) => {
+ipcMain.handle('agent:shield-panel', async (event, payload) => {
   if (!isChromeSender(event)) {
     return { ok: false };
   }
 
-  shieldOpen = Boolean(open);
-  if (shieldOpen) {
-    hideOverflowMenu();
+  const open = typeof payload === 'object' && payload !== null ? Boolean(payload.open) : Boolean(payload);
+  const anchor = payload && typeof payload === 'object' ? payload.anchor : null;
+  const host = chromeWindowFromEvent(event) || mainWindow;
+  if (open) {
     utilityOpen = false;
+    showShieldMenu(anchor, host);
+  } else {
+    hideShieldMenu();
   }
-  fitBrowserView();
   return { ok: true, open: shieldOpen, settings: snapshotSettings(), stats: snapshotSecurityStats() };
+});
+
+ipcMain.handle('agent:site-panel', async (event, payload) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+
+  const open = typeof payload === 'object' && payload !== null ? Boolean(payload.open) : Boolean(payload);
+  const anchor = payload && typeof payload === 'object' ? payload.anchor : null;
+  const host = chromeWindowFromEvent(event) || mainWindow;
+  if (open) {
+    utilityOpen = false;
+    showSiteMenu(anchor, host);
+  } else {
+    hideSiteMenu();
+  }
+  return { ok: true, open: siteOpen, ...snapshotSiteInfo() };
+});
+
+ipcMain.handle('agent:site-info', async (event) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+  return { ok: true, ...snapshotSiteInfo() };
 });
 
 ipcMain.handle('agent:utility-panel', async (event, open) => {
@@ -2503,7 +3452,8 @@ ipcMain.handle('agent:utility-panel', async (event, open) => {
   utilityOpen = Boolean(open);
   if (utilityOpen) {
     hideOverflowMenu();
-    shieldOpen = false;
+    hideShieldMenu({ notify: false });
+    hideSiteMenu({ notify: false });
   }
   fitBrowserView();
   return { ok: true, open: utilityOpen };
@@ -2611,6 +3561,8 @@ ipcMain.handle('agent:ram-sheet', async (event, open) => {
     sidebarOpen = false;
     bookmarksPanelOpen = false;
     hideOverflowMenu();
+    hideShieldMenu();
+    hideSiteMenu();
   }
   fitBrowserView();
   return { ok: true, open: ramSheetOpen };
@@ -3063,10 +4015,17 @@ function snapshotSettings() {
     agentBridgeUrl: listen ? `http://${listen.host}:${listen.port}/v1` : '',
     agentBridgeToken: privacySettings.agentBridge ? agentBridgeToken : '',
     ghostNetwork: privacySettings.ghostNetwork,
+    mediaHunter: Boolean(privacySettings.mediaHunter),
     proxyUrl: privacySettings.ghostNetwork ? SOCKS5_PROXY : '',
     blockedRequestCount,
     securityStats: snapshotSecurityStats(),
   };
+}
+
+function broadcastSettings() {
+  const settings = snapshotSettings();
+  sendToChrome('agent:settings', settings);
+  return settings;
 }
 
 function applySpoofedUserAgent() {
@@ -3127,12 +4086,17 @@ const agentBridgeHandlers = {
   },
   navigate: async (tabId, body) => {
     const guest = getTabWebContents(tabId);
+    const entry = views.get(tabId);
     const url = sanitizeUrl(body?.url);
     if (!guest) {
       return failTab('tab-not-found');
     }
     if (!url) {
       return { ok: false, error: 'invalid-url' };
+    }
+    if (entry?.kind === 'downloads') {
+      const nextId = createGuestTab(url, { owner: entry.owner });
+      return nextId ? { ok: true, tab: serializeTab(nextId) } : failTab('cannot-create-tab');
     }
     await guest.loadURL(url);
     return { ok: true, tab: serializeTab(tabId) };
@@ -3298,7 +4262,11 @@ ipcMain.handle('agent:settings-set', async (event, payload) => {
 
   const key = payload.key;
   if (BOOLEAN_SETTINGS.has(key)) {
-    privacySettings[key] = Boolean(payload.value);
+    if (key === 'mediaHunter') {
+      setMediaHunterEnabled(payload.value);
+    } else {
+      privacySettings[key] = Boolean(payload.value);
+    }
     if (key === 'spoofUserAgent') {
       applySpoofedUserAgent();
     }
@@ -3307,7 +4275,7 @@ ipcMain.handle('agent:settings-set', async (event, payload) => {
         await ensureAgentBridge(privacySettings.agentBridge);
       } catch {
         privacySettings.agentBridge = false;
-        return { ok: false, error: 'Ajan köprüsü dinlenemedi.', settings: snapshotSettings() };
+        return { ok: false, error: 'Ajan köprüsü dinlenemedi.', settings: broadcastSettings() };
       }
     }
     if (key === 'ghostNetwork') {
@@ -3319,7 +4287,7 @@ ipcMain.handle('agent:settings-set', async (event, payload) => {
         return {
           ok: false,
           error: 'SOCKS5 vekil uygulanamadı. 127.0.0.1:1080 dinleniyor mu?',
-          settings: snapshotSettings(),
+          settings: broadcastSettings(),
         };
       }
     }
@@ -3329,7 +4297,7 @@ ipcMain.handle('agent:settings-set', async (event, payload) => {
     return { ok: false, settings: snapshotSettings() };
   }
 
-  return { ok: true, settings: snapshotSettings() };
+  return { ok: true, settings: broadcastSettings() };
 });
 
 ipcMain.handle('agent:settings-panel', async (event, open) => {
@@ -3338,6 +4306,11 @@ ipcMain.handle('agent:settings-panel', async (event, open) => {
   }
 
   settingsOpen = Boolean(open);
+  if (settingsOpen) {
+    hideOverflowMenu();
+    hideShieldMenu({ notify: false });
+    hideSiteMenu({ notify: false });
+  }
   fitBrowserView();
   return { ok: true, open: settingsOpen };
 });
@@ -3473,6 +4446,12 @@ function createAgentWindow() {
   win.on('closed', () => {
     if (overflowHostWindow === win) {
       hideOverflowMenu({ notify: false });
+    }
+    if (shieldHostWindow === win) {
+      hideShieldMenu({ notify: false });
+    }
+    if (siteHostWindow === win) {
+      hideSiteMenu({ notify: false });
     }
     chromeWindows.delete(win);
     for (const [tabId, entry] of [...views.entries()]) {

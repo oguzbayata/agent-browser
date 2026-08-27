@@ -69,63 +69,19 @@
             <div id="nav-sag">
               <div class="ext-pill">
                 <div class="shield-wrap">
-                  <button class="chrome-icon is-armed" id="shield-toggle" type="button" aria-label="Kalkan" aria-expanded="false" aria-haspopup="true" aria-controls="shield-pop" title="Kalkan">
+                  <button class="chrome-icon is-armed" id="shield-toggle" type="button" aria-label="Kalkan" aria-expanded="false" aria-haspopup="true" title="Kalkan">
                     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6 13.2 4v3.7c0 3.4-2.1 5.7-5.2 6.7C4.9 13.4 2.8 11.1 2.8 7.7V4Z" /></svg>
                   </button>
-                  <div id="shield-pop" class="shield-pop hidden" role="dialog" aria-label="Güvenlik Merkezi">
-                    <p class="shield-kicker">Güvenlik Merkezi</p>
-                    <p class="shield-sub">oturum · ram · bu sekme</p>
-                    <ul class="security-stats" aria-label="Engelleme istatistikleri">
-                      <li>
-                        <span>Engellenen İzleyiciler</span>
-                        <strong id="stat-trackers">0</strong>
-                      </li>
-                      <li>
-                        <span>Engellenen Çerezler</span>
-                        <strong id="stat-cookies">0</strong>
-                      </li>
-                      <li>
-                        <span>Şifrelenen Bağlantılar</span>
-                        <strong id="stat-upgrades">0</strong>
-                      </li>
-                    </ul>
-                    <label class="neon-toggle">
-                      <span>
-                        <strong>Kalkan (Reklam Engelleyici)</strong>
-                        <em id="shield-blocked">0 izleyici engellendi</em>
-                      </span>
-                      <input id="toggle-blockTrackers" type="checkbox" data-setting="blockTrackers" checked />
-                      <i class="neon-switch" aria-hidden="true"></i>
-                    </label>
-                    <label class="neon-toggle">
-                      <span>
-                        <strong>Hayalet Ağ (VPN/Proxy)</strong>
-                        <em>SOCKS5 · 127.0.0.1:1080</em>
-                      </span>
-                      <input id="toggle-ghostNetwork" type="checkbox" data-setting="ghostNetwork" />
-                      <i class="neon-switch" aria-hidden="true"></i>
-                    </label>
-                    <p class="shield-note">Hayalet Ağ yerel bir SOCKS5 dinleyicisi ister (ör. Tor veya ssh -D). Ticari VPN yoktur; vekil yoksa sayfalar açılmaz.</p>
-                  </div>
                 </div>
                 <div class="toolbar-wrap">
-                  <button class="chrome-icon chrome-icon-globe" id="site-toggle" type="button" aria-label="Site bilgisi" aria-expanded="false" aria-haspopup="true" aria-controls="site-pop" title="Site bilgisi">
+                  <button class="chrome-icon chrome-icon-globe" id="site-toggle" type="button" aria-label="Site bilgisi" aria-expanded="false" aria-haspopup="true" title="Site bilgisi">
                     <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.2"/><path d="M2.8 8h10.4M8 2.8c1.6 1.6 2.4 3.4 2.4 5.2S9.6 12.6 8 13.2C6.4 12.6 5.6 10.8 5.6 8S6.4 3.4 8 2.8Z"/></svg>
                   </button>
-                  <div id="site-pop" class="toolbar-pop hidden" role="dialog" aria-label="Site bilgisi">
-                    <p class="shield-kicker">site bilgisi</p>
-                    <p class="toolbar-pop-host" id="site-host">sayfa yok</p>
-                    <p class="toolbar-pop-meta" id="site-scheme">Adres çubuğundan bir hedef açın.</p>
-                    <div class="toolbar-pop-actions">
-                      <button type="button" id="site-copy">Adresi kopyala</button>
-                      <button type="button" id="site-reload">Yenile</button>
-                    </div>
-                  </div>
                 </div>
                 <button class="chrome-icon chrome-icon-ghost" id="ghost-toggle" type="button" aria-label="Hayalet Ağ" aria-pressed="false" title="Hayalet Ağ">
                   <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2c-2.6 0-4.6 1.9-4.6 4.6v6.4l1.5-1 1.5 1 1.6-1 1.6 1 1.5-1 1.5 1V6.8C12.6 4.1 10.6 2.2 8 2.2Z"/><circle cx="6.2" cy="7.1" r="0.7" fill="currentColor" stroke="none"/><circle cx="9.8" cy="7.1" r="0.7" fill="currentColor" stroke="none"/></svg>
                 </button>
-                <button class="chrome-icon" id="downloads-toggle" type="button" aria-label="İndirmeler" aria-expanded="false" aria-controls="downloads-pop" title="İndirmeler">
+                <button class="chrome-icon" id="downloads-toggle" type="button" aria-label="İndirmeler" title="İndirmeler">
                   <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.4 4.2h9.2v9H3.4zM5 6.6h6M5 8.8h4.4"/><path d="M6.2 2.6h3.6v1.8H6.2z"/></svg>
                   <span class="downloads-badge" id="downloads-badge" hidden>0</span>
                 </button>
@@ -221,14 +177,6 @@
           <button type="button" id="find-next" aria-label="Next">↓</button>
           <button type="button" id="find-close" aria-label="Close find">×</button>
         </div>
-        <div class="downloads-pop" id="downloads-pop" hidden>
-          <header class="downloads-head">
-            <p>İndirmeler</p>
-            <span>oturum listesi · ram</span>
-          </header>
-          <p class="downloads-empty" id="downloads-empty">indirilen yok</p>
-          <div class="downloads-list" id="downloads-list"></div>
-        </div>
         <div class="downloads-pop history-pop" id="session-history-pop" hidden>
           <header class="downloads-head">
             <p>Oturum geçmişi</p>
@@ -307,6 +255,13 @@
               <em>Tüm trafiği SOCKS5 127.0.0.1:1080 üzerinden geçir</em>
             </span>
             <input id="setting-ghostNetwork" type="checkbox" data-setting="ghostNetwork" />
+          </label>
+          <label class="setting">
+            <span>
+              <strong>Evrensel Medya Avcısı (Video Downloader)</strong>
+              <em>Sağ tık menüsünden HTML5 ve YouTube videolarını indir</em>
+            </span>
+            <input id="setting-mediaHunter" type="checkbox" data-setting="mediaHunter" />
           </label>
 
           <p class="settings-section">Arama</p>
@@ -447,6 +402,8 @@
     </div>
 
     </div>
+
+    <p id="disk-warning" class="disk-warning" hidden role="status"></p>
 
     <div id="excommunicado" class="excommunicado" hidden>
       <p class="excommunicado-mark">EXCOMMUNICADO PROTOCOL: PURGED</p>

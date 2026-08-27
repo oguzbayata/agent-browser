@@ -329,7 +329,6 @@ function refreshSecurityStats() {
 }
 
 const UTILITY_POPS = [
-  { pop: 'site-pop', toggle: 'site-toggle' },
   { pop: 'tools-pop', toggle: 'tools-toggle' },
   { pop: 'profile-pop', toggle: 'profile-toggle' },
   { pop: 'apps-pop', toggle: 'apps-toggle' },
@@ -351,14 +350,13 @@ function showUtilityPop(popId) {
   }
   const alreadyOpen = !target.classList.contains('hidden');
   hideUtilityPops();
-  document.getElementById('agent-main-menu')?.classList.add('hidden');
   document.getElementById('settings-toggle')?.setAttribute('aria-expanded', 'false');
   document.body.classList.remove('menu-open');
-  document.getElementById('shield-pop')?.classList.add('hidden');
   document.getElementById('shield-toggle')?.setAttribute('aria-expanded', 'false');
-  document.body.classList.remove('shield-open');
+  document.getElementById('site-toggle')?.setAttribute('aria-expanded', 'false');
   window.electronAPI?.setMenuOpen?.(false);
   window.electronAPI?.setShieldOpen?.(false);
+  window.electronAPI?.setSiteOpen?.(false);
   if (alreadyOpen) {
     return;
   }
@@ -369,22 +367,6 @@ function showUtilityPop(popId) {
   }
   document.body.classList.add('utility-open');
   window.electronAPI?.setUtilityOpen?.(true);
-}
-
-function siteSummary() {
-  if (!currentPageUrl) {
-    return { host: 'sayfa yok', meta: 'Adres çubuğundan bir hedef açın.' };
-  }
-  try {
-    const parsed = new URL(currentPageUrl);
-    const secure = parsed.protocol === 'https:';
-    return {
-      host: parsed.hostname || parsed.href,
-      meta: secure ? 'Bağlantı şifreli (HTTPS)' : `${parsed.protocol.replace(':', '')} · şifresiz`,
-    };
-  } catch {
-    return { host: currentPageUrl, meta: 'Adres çözümlenemedi.' };
-  }
 }
 
 const BOOKMARK_MARK_COLORS = ['#e53935', '#43a047', '#1e88e5', '#8e24aa', '#fb8c00', '#00897b', '#3949ab'];
@@ -557,6 +539,11 @@ function setSettingsPanelOpen(open) {
     return;
   }
   panel.hidden = !open;
+  if (open) {
+    window.electronAPI?.setMenuOpen?.(false);
+    window.electronAPI?.setShieldOpen?.(false);
+    window.electronAPI?.setSiteOpen?.(false);
+  }
   window.electronAPI?.setSettingsOpen?.(open);
 }
 
@@ -1072,60 +1059,39 @@ function bindBookmarks() {
 function bindDownloads() {
   const api = window.electronAPI;
   const toggle = document.getElementById('downloads-toggle');
-  const pop = document.getElementById('downloads-pop');
-  const list = document.getElementById('downloads-list');
-  const empty = document.getElementById('downloads-empty');
   const badge = document.getElementById('downloads-badge');
-  if (!toggle || !pop || !list || !empty) {
+  if (!toggle) {
     return;
-  }
-
-  function setOpen(open) {
-    pop.hidden = !open;
-    document.body.classList.toggle('downloads-open', open);
-    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    api?.setDownloadsOpen?.(open);
   }
 
   toggle.addEventListener('click', (event) => {
     event.stopPropagation();
-    setOpen(pop.hasAttribute('hidden'));
+    api?.openDownloadsTab?.();
   });
 
   api?.onDownloads?.((payload) => {
     const items = Array.isArray(payload?.items) ? payload.items : [];
-    empty.hidden = items.length > 0;
-    list.replaceChildren();
     const activeCount = items.filter((item) => item.state === 'progressing').length;
     if (badge) {
       badge.hidden = activeCount === 0;
       badge.textContent = String(activeCount);
     }
-    if (payload?.open) {
-      setOpen(true);
-    } else if (payload?.open === false) {
-      setOpen(false);
-    }
+  });
 
-    for (const item of items) {
-      const row = document.createElement('div');
-      row.className = 'download-row';
-      const name = document.createElement('p');
-      name.textContent = item.filename || 'indirilen';
-      const cancel = document.createElement('button');
-      cancel.type = 'button';
-      cancel.textContent = '×';
-      cancel.setAttribute('aria-label', 'İndirmeyi iptal et');
-      cancel.disabled = item.state !== 'progressing';
-      cancel.addEventListener('click', () => api?.cancelDownload?.(item.id));
-      const bar = document.createElement('div');
-      bar.className = 'download-bar';
-      const fill = document.createElement('span');
-      fill.style.width = `${Math.round((item.progress || 0) * 100)}%`;
-      bar.append(fill);
-      row.append(name, cancel, bar);
-      list.appendChild(row);
+  let diskWarningTimer = 0;
+  api?.onDiskWarning?.((payload) => {
+    const banner = document.getElementById('disk-warning');
+    if (!banner) {
+      return;
     }
+    banner.textContent =
+      payload?.message ||
+      'Uyarı: Bu dosya yerel diskinize kaydedildi. Excommunicado protokolü bu dosyayı silmeyebilir.';
+    banner.hidden = false;
+    window.clearTimeout(diskWarningTimer);
+    diskWarningTimer = window.setTimeout(() => {
+      banner.hidden = true;
+    }, 8000);
   });
 }
 
@@ -1180,129 +1146,140 @@ bindPanic();
 bindSettings();
 bindAppMenu();
 bindShield();
+bindSite();
 bindToolbarControls();
 
 function bindShield() {
   const api = window.electronAPI;
   const toggle = document.getElementById('shield-toggle');
-  const pop = document.getElementById('shield-pop');
-  if (!toggle || !pop) {
+  if (!toggle) {
     return;
   }
 
+  let shieldVisible = false;
+  let ignoreToggleUntil = 0;
+
+  function shieldAnchor() {
+    const box = toggle.getBoundingClientRect();
+    return {
+      left: box.left,
+      top: box.top,
+      right: box.right,
+      bottom: box.bottom,
+      width: box.width,
+      height: box.height,
+    };
+  }
+
   function setShieldVisible(open) {
-    pop.classList.toggle('hidden', !open);
+    shieldVisible = open;
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    document.body.classList.toggle('shield-open', open);
     if (open) {
       hideUtilityPops();
-      document.getElementById('agent-main-menu')?.classList.add('hidden');
       document.getElementById('settings-toggle')?.setAttribute('aria-expanded', 'false');
       document.body.classList.remove('menu-open');
       api?.setMenuOpen?.(false);
+      api?.setSiteOpen?.(false);
+      ignoreToggleUntil = Date.now() + 280;
     }
-    api?.setShieldOpen?.(open)?.then((result) => {
+    api?.setShieldOpen?.(open, open ? shieldAnchor() : null)?.then((result) => {
       if (result?.ok && result.settings) {
         applyPrivacyChrome(result.settings);
-      }
-      if (result?.ok && result.stats) {
-        applySecurityStats(result.stats);
-      } else if (open) {
-        refreshSecurityStats();
       }
     });
   }
 
   toggle.addEventListener('click', (event) => {
     event.stopPropagation();
-    setShieldVisible(pop.classList.contains('hidden'));
-  });
-
-  pop.addEventListener('click', (event) => {
-    event.stopPropagation();
-  });
-
-  pop.addEventListener('change', (event) => {
-    const field = event.target;
-    if (!(field instanceof HTMLInputElement) || !field.dataset.setting) {
+    if (Date.now() < ignoreToggleUntil) {
       return;
     }
-    api?.setSetting?.(field.dataset.setting, field.checked)?.then((result) => {
-      if (result?.settings) {
-        applyPrivacyChrome(result.settings);
-        return;
-      }
-      applyPrivacyChrome({
-        blockTrackers: document.getElementById('toggle-blockTrackers')?.checked,
-        ghostNetwork: document.getElementById('toggle-ghostNetwork')?.checked,
-      });
-    });
-    applyPrivacyChrome({
-      blockTrackers: document.getElementById('toggle-blockTrackers')?.checked,
-      ghostNetwork: document.getElementById('toggle-ghostNetwork')?.checked,
-    });
-  });
-
-  document.addEventListener('click', (event) => {
-    if (pop.classList.contains('hidden')) {
-      return;
-    }
-    if (pop.contains(event.target) || toggle.contains(event.target)) {
-      return;
-    }
-    setShieldVisible(false);
+    setShieldVisible(!shieldVisible);
   });
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !pop.classList.contains('hidden')) {
+    if (event.key === 'Escape' && shieldVisible) {
       setShieldVisible(false);
     }
   });
 
+  api?.onShieldClosed?.(() => {
+    shieldVisible = false;
+    ignoreToggleUntil = Date.now() + 280;
+    toggle.setAttribute('aria-expanded', 'false');
+  });
   api?.onSecurityStats?.((payload) => {
     applySecurityStats(payload);
   });
   refreshSecurityStats();
 }
 
-function bindToolbarControls() {
+function bindSite() {
   const api = window.electronAPI;
+  const toggle = document.getElementById('site-toggle');
+  if (!toggle) {
+    return;
+  }
 
-  document.getElementById('site-toggle')?.addEventListener('click', (event) => {
+  let siteVisible = false;
+  let ignoreToggleUntil = 0;
+
+  function siteAnchor() {
+    const box = toggle.getBoundingClientRect();
+    return {
+      left: box.left,
+      top: box.top,
+      right: box.right,
+      bottom: box.bottom,
+      width: box.width,
+      height: box.height,
+    };
+  }
+
+  function setSiteVisible(open) {
+    siteVisible = open;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      hideUtilityPops();
+      document.getElementById('settings-toggle')?.setAttribute('aria-expanded', 'false');
+      document.getElementById('shield-toggle')?.setAttribute('aria-expanded', 'false');
+      document.body.classList.remove('menu-open');
+      api?.setMenuOpen?.(false);
+      api?.setShieldOpen?.(false);
+      ignoreToggleUntil = Date.now() + 280;
+    }
+    api?.setSiteOpen?.(open, open ? siteAnchor() : null);
+  }
+
+  toggle.addEventListener('click', (event) => {
     event.stopPropagation();
-    const summary = siteSummary();
-    const host = document.getElementById('site-host');
-    const meta = document.getElementById('site-scheme');
-    if (host) {
-      host.textContent = summary.host;
-    }
-    if (meta) {
-      meta.textContent = summary.meta;
-    }
-    showUtilityPop('site-pop');
-  });
-
-  document.getElementById('site-copy')?.addEventListener('click', async () => {
-    if (!currentPageUrl || !navigator.clipboard?.writeText) {
+    if (Date.now() < ignoreToggleUntil) {
       return;
     }
-    try {
-      await navigator.clipboard.writeText(currentPageUrl);
-    } catch {
-      // Clipboard may be denied in some hosts; the button still exists.
+    setSiteVisible(!siteVisible);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && siteVisible) {
+      setSiteVisible(false);
     }
   });
 
-  document.getElementById('site-reload')?.addEventListener('click', () => {
-    api?.reload?.();
-    hideUtilityPops();
+  api?.onSiteClosed?.(() => {
+    siteVisible = false;
+    ignoreToggleUntil = Date.now() + 280;
+    toggle.setAttribute('aria-expanded', 'false');
   });
+}
+
+function bindToolbarControls() {
+  const api = window.electronAPI;
 
   document.getElementById('ghost-toggle')?.addEventListener('click', () => {
     const next = !document.body.classList.contains('ghost-network');
     applyPrivacyChrome({
       ghostNetwork: next,
-      blockTrackers: document.getElementById('toggle-blockTrackers')?.checked !== false,
+      blockTrackers: document.getElementById('shield-toggle')?.classList.contains('is-armed') !== false,
     });
     api?.setSetting?.('ghostNetwork', next)?.then((result) => {
       if (result?.settings) {
@@ -1328,7 +1305,7 @@ function bindToolbarControls() {
     } else if (action === 'ghost') {
       document.getElementById('ghost-toggle')?.click();
     } else if (action === 'downloads') {
-      document.getElementById('downloads-toggle')?.click();
+      api?.openDownloadsTab?.();
     } else if (action === 'settings') {
       setSettingsPanelOpen(true);
     }
@@ -1445,10 +1422,10 @@ function bindAppMenu() {
     document.body.classList.toggle('menu-open', open);
     if (open) {
       hideUtilityPops();
-      document.getElementById('shield-pop')?.classList.add('hidden');
       document.getElementById('shield-toggle')?.setAttribute('aria-expanded', 'false');
-      document.body.classList.remove('shield-open');
+      document.getElementById('site-toggle')?.setAttribute('aria-expanded', 'false');
       api?.setShieldOpen?.(false);
+      api?.setSiteOpen?.(false);
       api?.setMenuOpen?.(true, kebabAnchor());
       return;
     }
@@ -1538,7 +1515,7 @@ function bindAppMenu() {
       return;
     }
     if (action === 'downloads') {
-      document.getElementById('downloads-toggle')?.click();
+      api?.openDownloadsTab?.();
       return;
     }
     if (action === 'bookmarks') {
@@ -1764,6 +1741,9 @@ function bindSettings() {
     });
   });
 
+  api?.onSettings?.((settings) => {
+    applySettings(settings);
+  });
   api?.getSettings?.()?.then((result) => {
     if (result?.ok && result.settings) {
       applySettings(result.settings);
