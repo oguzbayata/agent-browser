@@ -1,0 +1,163 @@
+:root {
+  --bg: #070809;
+  --text: #d5dce3;
+  --muted: #7a848f;
+  --accent: #3dffc8;
+  --ink: #070809;
+  --card: rgba(10, 16, 18, 0.88);
+  --line: rgba(61, 255, 200, 0.18);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(ellipse at 50% 8%, #10181d 0%, var(--bg) 52%);
+  color: var(--text);
+  font-family: "Segoe UI", "Cascadia Code", "Consolas", system-ui, sans-serif;
+}
+
+body {
+  padding: 36px 28px 56px;
+}
+
+.intel {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.intel-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 36px;
+  text-align: center;
+}
+
+.brand-mark {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.kicker {
+  margin: 16px 0 8px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.lede {
+  margin: 0;
+  max-width: 520px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.card {
+  padding: 22px 20px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 0 18px rgba(61, 255, 200, 0.04);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.card:hover {
+  border-color: rgba(61, 255, 200, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(61, 255, 200, 0.18),
+    0 0 28px rgba(61, 255, 200, 0.22);
+  transform: translateY(-2px);
+}
+
+.card-kicker {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.22em;
+}
+
+.card h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+}
+
+.card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card li {
+  margin: 0 0 12px;
+}
+
+.card li:last-child {
+  margin-bottom: 0;
+}
+
+.card a {
+  display: block;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: none;
+  text-shadow: 0 0 10px rgba(61, 255, 200, 0.18);
+}
+
+.card a:hover,
+.card a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.card span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+  body {
+    padding: 24px 16px 40px;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+}

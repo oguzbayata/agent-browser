@@ -39,6 +39,8 @@ const SEARCH_PRELOAD_PATH = path.join(__dirname, 'search-preload.js');
 const DOWNLOADS_PATH = path.join(__dirname, 'downloads.html');
 const DOWNLOADS_FILE_URL = pathToFileURL(DOWNLOADS_PATH).href;
 const DOWNLOADS_PRELOAD_PATH = path.join(__dirname, 'downloads-preload.js');
+const USEFUL_LINKS_PATH = path.join(__dirname, 'useful-links.html');
+const USEFUL_LINKS_FILE_URL = pathToFileURL(USEFUL_LINKS_PATH).href;
 const SCRAPER_PATH = path.join(__dirname, 'engine', 'scraper.py');
 const AGENT_SEARCH_PREFIX = 'agent-search:';
 const PYTHON_MISSING_MESSAGE = 'Yerel İstihbarat Ajanı başlatılamadı: Python bulunamadı';
@@ -696,7 +698,7 @@ function currentGuestUrl() {
     return '';
   }
   const url = guest.getURL();
-  if (isStartPage(url) || isSearchFile(url) || isDownloadsFile(url)) {
+  if (isStartPage(url) || isSearchFile(url) || isDownloadsFile(url) || isUsefulLinksFile(url)) {
     return '';
   }
   return url;
@@ -1976,6 +1978,27 @@ function isDownloadsFile(rawUrl) {
   return Boolean(filePath) && filePath.toLowerCase() === path.normalize(DOWNLOADS_PATH).toLowerCase();
 }
 
+function isUsefulLinksFile(rawUrl) {
+  if (!rawUrl) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.pathname.toLowerCase().endsWith('/useful-links.html') || parsed.href.split('?')[0] === USEFUL_LINKS_FILE_URL) {
+      const filePath = fileUrlToPath(parsed.href);
+      if (filePath && filePath.toLowerCase() === path.normalize(USEFUL_LINKS_PATH).toLowerCase()) {
+        return true;
+      }
+    }
+  } catch {
+    // Compare by filesystem path below.
+  }
+
+  const filePath = fileUrlToPath(rawUrl);
+  return Boolean(filePath) && filePath.toLowerCase() === path.normalize(USEFUL_LINKS_PATH).toLowerCase();
+}
+
 function searchQueryFromUrl(rawUrl) {
   try {
     return String(new URL(rawUrl).searchParams.get('q') || '').trim().slice(0, 500);
@@ -2009,6 +2032,9 @@ function displayGuestUrl(rawUrl) {
   if (isDownloadsFile(rawUrl)) {
     return '';
   }
+  if (isUsefulLinksFile(rawUrl)) {
+    return '';
+  }
   return rawUrl;
 }
 
@@ -2034,7 +2060,7 @@ function isStartPage(rawUrl) {
 }
 
 function isAllowedGuestUrl(rawUrl) {
-  return rawUrl === 'about:blank' || isNewTabFile(rawUrl) || isSearchFile(rawUrl) || isDownloadsFile(rawUrl) || Boolean(sanitizeUrl(rawUrl));
+  return rawUrl === 'about:blank' || isNewTabFile(rawUrl) || isSearchFile(rawUrl) || isDownloadsFile(rawUrl) || isUsefulLinksFile(rawUrl) || Boolean(sanitizeUrl(rawUrl));
 }
 
 function loadStartPage(webContents) {
@@ -2057,6 +2083,17 @@ function loadDownloadsPage(webContents) {
     return Promise.resolve();
   }
   return webContents.loadFile(DOWNLOADS_PATH);
+}
+
+function loadUsefulLinksPage(webContents) {
+  if (!webContents || webContents.isDestroyed()) {
+    return Promise.resolve();
+  }
+  return webContents.loadFile(USEFUL_LINKS_PATH);
+}
+
+function openUsefulLinksTab() {
+  return createGuestTab(USEFUL_LINKS_FILE_URL);
 }
 
 function findDownloadsTabId() {
@@ -2260,6 +2297,9 @@ function tabTitleOf(webContents) {
   if (isDownloadsFile(url)) {
     return 'İndirmeler';
   }
+  if (isUsefulLinksFile(url)) {
+    return 'Faydalı Linkler';
+  }
 
   const title = webContents.getTitle();
   if (title && title !== 'about:blank' && title !== 'Yeni Sekme') {
@@ -2444,7 +2484,7 @@ function injectVideoAdSkipper(webContents) {
   if (!webContents || webContents.isDestroyed()) {
     return;
   }
-  if (isStartPage(webContents.getURL()) || isSearchFile(webContents.getURL()) || isDownloadsFile(webContents.getURL())) {
+  if (isStartPage(webContents.getURL()) || isSearchFile(webContents.getURL()) || isDownloadsFile(webContents.getURL()) || isUsefulLinksFile(webContents.getURL())) {
     return;
   }
   webContents.executeJavaScript(VIDEO_AD_SKIPPER_SOURCE, true).catch(() => {});
@@ -2495,9 +2535,11 @@ function attachTabListeners(tabId, webContents) {
       tabId,
       title: isDownloadsFile(webContents.getURL())
         ? 'İndirmeler'
-        : isStartPage(webContents.getURL())
-          ? 'Yeni Sekme'
-          : 'Yükleniyor...',
+        : isUsefulLinksFile(webContents.getURL())
+          ? 'Faydalı Linkler'
+          : isStartPage(webContents.getURL())
+            ? 'Yeni Sekme'
+            : 'Yükleniyor...',
     });
     emitTabUpdated(tabId);
     if (tabId === activeTabId) {
@@ -2569,6 +2611,7 @@ function createGuestTab(initialUrl, options = {}) {
   const owner = typeof options.owner === 'string' ? options.owner.trim().slice(0, 80) : '';
 
   const downloads = options.downloads === true || isDownloadsFile(initialUrl);
+  const usefulLinks = isUsefulLinksFile(initialUrl);
   const view = new WebContentsView({
     webPreferences: downloads ? downloadsWebPreferences : guestWebPreferences,
   });
@@ -2586,6 +2629,8 @@ function createGuestTab(initialUrl, options = {}) {
   const searchQuery = parseAgentSearchTarget(target);
   if (downloads) {
     loadDownloadsPage(view.webContents);
+  } else if (usefulLinks) {
+    loadUsefulLinksPage(view.webContents);
   } else if (searchQuery) {
     loadSearchPage(view.webContents, searchQuery);
   } else if (target !== 'about:blank') {
@@ -2601,7 +2646,7 @@ function createGuestTab(initialUrl, options = {}) {
 
   sendToChrome('agent:tab-created', {
     tabId,
-    title: downloads ? 'İndirmeler' : target === 'about:blank' ? 'Yeni Sekme' : 'Yükleniyor...',
+    title: downloads ? 'İndirmeler' : usefulLinks ? 'Faydalı Linkler' : target === 'about:blank' ? 'Yeni Sekme' : 'Yükleniyor...',
     url: target,
     active: activate,
     pinned: false,
@@ -4939,6 +4984,17 @@ ipcMain.handle('agent:ai-message', async (event, payload) => {
   }
 });
 
+ipcMain.on('open-useful-links', (event) => {
+  if (panicInProgress) {
+    return;
+  }
+  const senderUrl = event.sender?.getURL?.() || '';
+  if (!isChromeSender(event) && !isNewTabFile(senderUrl) && !isStartPage(senderUrl)) {
+    return;
+  }
+  openUsefulLinksTab();
+});
+
 ipcMain.on('trigger-panic', (event) => {
   if (!isChromeSender(event)) {
     return;
@@ -5011,12 +5067,12 @@ function createAgentWindow() {
     show: false,
     frame: false,
     autoHideMenuBar: true,
-    backgroundColor: '#0d47a1',
+    backgroundColor: '#0a0c0f',
     title: 'Agent Browser',
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#0d47a1',
-      symbolColor: '#ffffff',
+      color: '#0a0c0f',
+      symbolColor: '#d5dce3',
       height: TAB_STRIP_HEIGHT,
     },
     webPreferences: chromeWebPreferences,

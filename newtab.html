@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Yeni Sekme</title>
@@ -14,7 +14,7 @@
     <main class="start">
       <img
         class="brand-mark"
-        src="assets/agent-browser-logo.png"
+        src="assets/agent-browser-logo.svg"
         width="168"
         height="168"
         alt="Agent Browser"
@@ -27,6 +27,8 @@
         protokolü her izi siler.
       </p>
       <p class="hint">Adres çubuğuna bir hedef yazın veya arama yapın.</p>
+      <button type="button" id="btn-useful-links">Faydalı Linkler</button>
     </main>
+    <script src="newtab.js"></script>
   </body>
 </html>

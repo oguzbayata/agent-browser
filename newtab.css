@@ -3,7 +3,7 @@
   --text: #d5dce3;
   --muted: #7a848f;
   --accent: #3dffc8;
-  --accent-blue: #3dc8ff;
+  --accent-blue: #3dffc8;
 }
 
 *,
@@ -21,7 +21,8 @@ body {
     radial-gradient(ellipse at 50% 32%, #10181d 0%, var(--bg) 58%);
   color: var(--text);
   font-family: "Segoe UI", "Cascadia Code", "Consolas", system-ui, sans-serif;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 body {
@@ -42,8 +43,6 @@ body {
   width: 168px;
   height: 168px;
   object-fit: contain;
-  mix-blend-mode: screen;
-  filter: drop-shadow(0 0 22px rgba(61, 255, 200, 0.28));
   user-select: none;
   -webkit-user-drag: none;
 }
@@ -78,4 +77,31 @@ h1 {
   font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+#btn-useful-links {
+  margin-top: 22px;
+  padding: 10px 22px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+#btn-useful-links:hover,
+#btn-useful-links:focus-visible {
+  background: var(--accent);
+  color: #070809;
+  box-shadow: 0 0 22px rgba(61, 255, 200, 0.35);
+  outline: none;
 }

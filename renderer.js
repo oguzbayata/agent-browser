@@ -1149,7 +1149,14 @@ function bindPanic() {
   });
 }
 
+function bindUsefulLinks() {
+  document.getElementById('btn-useful-links')?.addEventListener('click', () => {
+    window.electronAPI?.openUsefulLinks?.();
+  });
+}
+
 bindChrome();
+bindUsefulLinks();
 bindAiSidebar();
 bindTabs();
 bindBookmarks();
