@@ -329,7 +329,6 @@ function refreshSecurityStats() {
 }
 
 const UTILITY_POPS = [
-  { pop: 'tools-pop', toggle: 'tools-toggle' },
   { pop: 'profile-pop', toggle: 'profile-toggle' },
   { pop: 'apps-pop', toggle: 'apps-toggle' },
 ];
@@ -357,6 +356,7 @@ function showUtilityPop(popId) {
   window.electronAPI?.setMenuOpen?.(false);
   window.electronAPI?.setShieldOpen?.(false);
   window.electronAPI?.setSiteOpen?.(false);
+  window.electronAPI?.setToolsOpen?.(false);
   if (alreadyOpen) {
     return;
   }
@@ -543,6 +543,7 @@ function setSettingsPanelOpen(open) {
     window.electronAPI?.setMenuOpen?.(false);
     window.electronAPI?.setShieldOpen?.(false);
     window.electronAPI?.setSiteOpen?.(false);
+    window.electronAPI?.setToolsOpen?.(false);
   }
   window.electronAPI?.setSettingsOpen?.(open);
 }
@@ -1158,6 +1159,7 @@ bindSettings();
 bindAppMenu();
 bindShield();
 bindSite();
+bindTools();
 bindToolbarControls();
 
 function bindShield() {
@@ -1191,6 +1193,7 @@ function bindShield() {
       document.body.classList.remove('menu-open');
       api?.setMenuOpen?.(false);
       api?.setSiteOpen?.(false);
+      api?.setToolsOpen?.(false);
       ignoreToggleUntil = Date.now() + 280;
     }
     api?.setShieldOpen?.(open, open ? shieldAnchor() : null)?.then((result) => {
@@ -1257,6 +1260,7 @@ function bindSite() {
       document.body.classList.remove('menu-open');
       api?.setMenuOpen?.(false);
       api?.setShieldOpen?.(false);
+      api?.setToolsOpen?.(false);
       ignoreToggleUntil = Date.now() + 280;
     }
     api?.setSiteOpen?.(open, open ? siteAnchor() : null);
@@ -1283,6 +1287,76 @@ function bindSite() {
   });
 }
 
+function bindTools() {
+  const api = window.electronAPI;
+  const toggle = document.getElementById('tools-toggle');
+  if (!toggle) {
+    return;
+  }
+
+  let toolsVisible = false;
+  let ignoreToggleUntil = 0;
+
+  function toolsAnchor() {
+    const box = toggle.getBoundingClientRect();
+    return {
+      left: box.left,
+      top: box.top,
+      right: box.right,
+      bottom: box.bottom,
+      width: box.width,
+      height: box.height,
+    };
+  }
+
+  function setToolsVisible(open) {
+    toolsVisible = open;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      hideUtilityPops();
+      document.getElementById('settings-toggle')?.setAttribute('aria-expanded', 'false');
+      document.getElementById('shield-toggle')?.setAttribute('aria-expanded', 'false');
+      document.getElementById('site-toggle')?.setAttribute('aria-expanded', 'false');
+      document.body.classList.remove('menu-open');
+      api?.setMenuOpen?.(false);
+      api?.setShieldOpen?.(false);
+      api?.setSiteOpen?.(false);
+      ignoreToggleUntil = Date.now() + 280;
+    }
+    api?.setToolsOpen?.(open, open ? toolsAnchor() : null);
+  }
+
+  toggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (Date.now() < ignoreToggleUntil) {
+      return;
+    }
+    setToolsVisible(!toolsVisible);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && toolsVisible) {
+      setToolsVisible(false);
+    }
+  });
+
+  api?.onToolsClosed?.(() => {
+    toolsVisible = false;
+    ignoreToggleUntil = Date.now() + 280;
+    toggle.setAttribute('aria-expanded', 'false');
+  });
+  api?.onToolsCommand?.((payload) => {
+    const action = payload?.action;
+    if (action === 'shield') {
+      document.getElementById('shield-toggle')?.click();
+    } else if (action === 'ghost') {
+      document.getElementById('ghost-toggle')?.click();
+    } else if (action === 'settings') {
+      setSettingsPanelOpen(true);
+    }
+  });
+}
+
 function bindToolbarControls() {
   const api = window.electronAPI;
 
@@ -1297,29 +1371,6 @@ function bindToolbarControls() {
         applyPrivacyChrome(result.settings);
       }
     });
-  });
-
-  document.getElementById('tools-toggle')?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    showUtilityPop('tools-pop');
-  });
-
-  document.getElementById('tools-pop')?.addEventListener('click', (event) => {
-    const item = event.target.closest('[data-tools]');
-    if (!item) {
-      return;
-    }
-    const action = item.dataset.tools;
-    hideUtilityPops();
-    if (action === 'shield') {
-      document.getElementById('shield-toggle')?.click();
-    } else if (action === 'ghost') {
-      document.getElementById('ghost-toggle')?.click();
-    } else if (action === 'downloads') {
-      api?.openDownloadsTab?.();
-    } else if (action === 'settings') {
-      setSettingsPanelOpen(true);
-    }
   });
 
   document.getElementById('profile-toggle')?.addEventListener('click', (event) => {
@@ -1437,6 +1488,7 @@ function bindAppMenu() {
       document.getElementById('site-toggle')?.setAttribute('aria-expanded', 'false');
       api?.setShieldOpen?.(false);
       api?.setSiteOpen?.(false);
+      api?.setToolsOpen?.(false);
       api?.setMenuOpen?.(true, kebabAnchor());
       return;
     }

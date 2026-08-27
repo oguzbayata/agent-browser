@@ -136,6 +136,26 @@ contextBridge.exposeInMainWorld(
         } : null,
       }),
     onSiteClosed: (callback) => subscribePayload('agent:site-closed', callback),
+    setToolsOpen: (open, anchor) =>
+      ipcRenderer.invoke('agent:tools-panel', {
+        open: Boolean(open),
+        anchor: anchor && typeof anchor === 'object' ? {
+          left: Number(anchor.left),
+          top: Number(anchor.top),
+          right: Number(anchor.right),
+          bottom: Number(anchor.bottom),
+          width: Number(anchor.width),
+          height: Number(anchor.height),
+        } : null,
+      }),
+    onToolsClosed: (callback) => subscribePayload('agent:tools-closed', callback),
+    toolsAction: (action) => {
+      if (typeof action !== 'string') {
+        return Promise.resolve({ ok: false });
+      }
+      return ipcRenderer.invoke('agent:tools-action', action);
+    },
+    onToolsCommand: (callback) => subscribePayload('agent:tools-command', callback),
     getSiteInfo: () => ipcRenderer.invoke('agent:site-info'),
     onSiteInfo: (callback) => subscribePayload('agent:site-info', callback),
     getSecurityStats: () => ipcRenderer.invoke('agent:security-stats'),

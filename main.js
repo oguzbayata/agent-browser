@@ -231,6 +231,7 @@ let downloadsOpen = false;
 let menuOpen = false;
 let shieldOpen = false;
 let siteOpen = false;
+let toolsOpen = false;
 let utilityOpen = false;
 let findOpen = false;
 let ramSheetOpen = false;
@@ -248,6 +249,10 @@ let siteMenuView = null;
 let siteMenuReady = Promise.resolve();
 let siteHostWindow = null;
 let siteHostDismiss = null;
+let toolsMenuView = null;
+let toolsMenuReady = Promise.resolve();
+let toolsHostWindow = null;
+let toolsHostDismiss = null;
 const sessionLocalFiles = [];
 const sessionLocalDirs = [];
 let selectedLocalModel = null;
@@ -794,7 +799,20 @@ function purgeSessionChromeState() {
     siteMenuView = null;
     siteMenuReady = Promise.resolve();
   }
+  hideToolsMenu({ notify: false });
+  if (toolsMenuView) {
+    try {
+      if (!toolsMenuView.webContents.isDestroyed()) {
+        toolsMenuView.webContents.close();
+      }
+    } catch {
+      // Wipe still proceeds if the popup view is already gone.
+    }
+    toolsMenuView = null;
+    toolsMenuReady = Promise.resolve();
+  }
   siteOpen = false;
+  toolsOpen = false;
   tabSecurityStats.clear();
   blockedRequestCount = 0;
   if (securityStatsFlush) {
@@ -1885,6 +1903,7 @@ function bringViewToFront(view) {
       raiseOverflowMenu();
       raiseShieldMenu();
       raiseSiteMenu();
+      raiseToolsMenu();
       return;
     } catch {
       // WebContentsView is not a BrowserView; fall through.
@@ -1895,6 +1914,7 @@ function bringViewToFront(view) {
   raiseOverflowMenu();
   raiseShieldMenu();
   raiseSiteMenu();
+  raiseToolsMenu();
 }
 
 function fileUrlToPath(rawUrl) {
@@ -2731,6 +2751,9 @@ function triggerExcommunicado() {
   panicInProgress = true;
   isWipingSession = true;
   hideOverflowMenu({ notify: false });
+  hideShieldMenu({ notify: false });
+  hideSiteMenu({ notify: false });
+  hideToolsMenu({ notify: false });
   setTimeout(forcePanicQuit, PANIC_QUIT_MS);
 
   try {
@@ -2814,6 +2837,13 @@ function isChromeSender(event) {
     siteMenuView &&
     !siteMenuView.webContents.isDestroyed() &&
     event.sender === siteMenuView.webContents
+  ) {
+    return true;
+  }
+  if (
+    toolsMenuView &&
+    !toolsMenuView.webContents.isDestroyed() &&
+    event.sender === toolsMenuView.webContents
   ) {
     return true;
   }
@@ -2919,6 +2949,7 @@ function ensureOverflowMenuView() {
 function showOverflowMenu(anchor, host) {
   hideShieldMenu({ notify: false });
   hideSiteMenu({ notify: false });
+  hideToolsMenu({ notify: false });
   hideOverflowMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
@@ -3055,6 +3086,7 @@ function ensureShieldMenuView() {
 function showShieldMenu(anchor, host) {
   hideOverflowMenu({ notify: false });
   hideSiteMenu({ notify: false });
+  hideToolsMenu({ notify: false });
   hideShieldMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
@@ -3191,6 +3223,7 @@ function ensureSiteMenuView() {
 function showSiteMenu(anchor, host) {
   hideOverflowMenu({ notify: false });
   hideShieldMenu({ notify: false });
+  hideToolsMenu({ notify: false });
   hideSiteMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
@@ -3255,6 +3288,143 @@ function showSiteMenu(anchor, host) {
     .catch((error) => {
       console.error('Failed to open site menu:', error);
       hideSiteMenu();
+    });
+}
+
+function toolsViewAlive() {
+  return Boolean(toolsMenuView && !toolsMenuView.webContents.isDestroyed());
+}
+
+function raiseToolsMenu() {
+  if (!toolsOpen || !toolsViewAlive() || !toolsHostWindow || toolsHostWindow.isDestroyed()) {
+    return;
+  }
+  toolsHostWindow.contentView.addChildView(toolsMenuView);
+}
+
+function detachToolsHost() {
+  if (toolsHostWindow && !toolsHostWindow.isDestroyed() && toolsHostDismiss) {
+    toolsHostWindow.removeListener('move', toolsHostDismiss);
+    toolsHostWindow.removeListener('resize', toolsHostDismiss);
+  }
+  toolsHostWindow = null;
+  toolsHostDismiss = null;
+}
+
+function notifyChromeToolsClosed() {
+  for (const win of chromeWindows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('agent:tools-closed');
+    }
+  }
+}
+
+function hideToolsMenu(options = {}) {
+  const notify = options.notify !== false;
+  toolsOpen = false;
+  const host = toolsHostWindow;
+  detachToolsHost();
+  if (toolsViewAlive() && host && !host.isDestroyed()) {
+    try {
+      host.contentView.removeChildView(toolsMenuView);
+    } catch {
+      // View may already have been detached.
+    }
+  }
+  if (notify) {
+    notifyChromeToolsClosed();
+  }
+}
+
+function ensureToolsMenuView() {
+  if (toolsViewAlive()) {
+    return toolsMenuReady;
+  }
+
+  toolsMenuView = new WebContentsView({
+    webPreferences: chromeWebPreferences,
+  });
+  toolsMenuView.setBackgroundColor('#292a2d');
+  toolsMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  toolsMenuView.webContents.on('blur', () => {
+    setTimeout(() => {
+      if (
+        toolsOpen &&
+        toolsViewAlive() &&
+        !toolsMenuView.webContents.isFocused()
+      ) {
+        hideToolsMenu();
+      }
+    }, 0);
+  });
+  toolsMenuReady = toolsMenuView.webContents.loadFile(path.join(__dirname, 'tools-menu.html'));
+  return toolsMenuReady;
+}
+
+function showToolsMenu(anchor, host) {
+  hideOverflowMenu({ notify: false });
+  hideShieldMenu({ notify: false });
+  hideSiteMenu({ notify: false });
+  hideToolsMenu({ notify: false });
+  if (!host || host.isDestroyed()) {
+    return;
+  }
+
+  const { width: contentWidth, height: contentHeight } = host.getContentBounds();
+  const width = MENU_DROPDOWN_WIDTH;
+  const btnBottom = Number(anchor && anchor.bottom);
+  const btnRight = Number(anchor && anchor.right);
+  const bottom = Number.isFinite(btnBottom) ? btnBottom : TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT;
+  const right = Number.isFinite(btnRight) ? btnRight : contentWidth - 8;
+  let x = Math.round(right - width);
+  let y = Math.round(bottom + 4);
+  x = Math.max(8, Math.min(x, Math.max(8, contentWidth - width - 8)));
+  if (y < 8) {
+    y = 8;
+  }
+  const maxH = Math.max(160, contentHeight - y - 8);
+  const initialH = Math.min(360, maxH);
+
+  toolsHostWindow = host;
+  toolsOpen = true;
+  toolsHostDismiss = () => {
+    if (toolsHostWindow === host) {
+      hideToolsMenu();
+    }
+  };
+  host.on('move', toolsHostDismiss);
+  host.on('resize', toolsHostDismiss);
+
+  ensureToolsMenuView()
+    .then(async () => {
+      if (!toolsOpen || toolsHostWindow !== host || host.isDestroyed() || !toolsViewAlive()) {
+        return;
+      }
+      toolsMenuView.setBounds({ x, y, width, height: Math.min(480, maxH) });
+      let measured = initialH;
+      try {
+        measured = await toolsMenuView.webContents.executeJavaScript(`(() => {
+          const menu = document.getElementById('agent-tools-menu');
+          if (!menu) {
+            return 0;
+          }
+          return Math.ceil(Math.max(menu.scrollHeight, menu.getBoundingClientRect().height));
+        })()`);
+      } catch {
+        // Keep the initial height if measurement fails.
+      }
+      if (!toolsOpen || toolsHostWindow !== host || !toolsViewAlive()) {
+        return;
+      }
+      const raw = Number(measured);
+      const height = Math.min(Math.max(raw >= 80 ? raw : initialH, 120), maxH);
+      toolsMenuView.setBounds({ x, y, width, height });
+      host.contentView.addChildView(toolsMenuView);
+      toolsMenuView.webContents.focus();
+    })
+    .catch((error) => {
+      console.error('Failed to open tools menu:', error);
+      hideToolsMenu();
     });
 }
 
@@ -3824,6 +3994,39 @@ ipcMain.handle('agent:site-panel', async (event, payload) => {
   return { ok: true, open: siteOpen, ...snapshotSiteInfo() };
 });
 
+ipcMain.handle('agent:tools-panel', async (event, payload) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+
+  const open = typeof payload === 'object' && payload !== null ? Boolean(payload.open) : Boolean(payload);
+  const anchor = payload && typeof payload === 'object' ? payload.anchor : null;
+  const host = chromeWindowFromEvent(event) || mainWindow;
+  if (open) {
+    utilityOpen = false;
+    showToolsMenu(anchor, host);
+  } else {
+    hideToolsMenu();
+  }
+  return { ok: true, open: toolsOpen };
+});
+
+ipcMain.handle('agent:tools-action', async (event, action) => {
+  if (!isChromeSender(event) || typeof action !== 'string') {
+    return { ok: false };
+  }
+  hideToolsMenu();
+  if (action === 'downloads') {
+    openDownloadsTab();
+    return { ok: true };
+  }
+  if (action === 'shield' || action === 'ghost' || action === 'settings') {
+    sendToChrome('agent:tools-command', { action });
+    return { ok: true };
+  }
+  return { ok: false };
+});
+
 ipcMain.handle('agent:site-info', async (event) => {
   if (!isChromeSender(event)) {
     return { ok: false };
@@ -3841,6 +4044,7 @@ ipcMain.handle('agent:utility-panel', async (event, open) => {
     hideOverflowMenu();
     hideShieldMenu({ notify: false });
     hideSiteMenu({ notify: false });
+    hideToolsMenu({ notify: false });
   }
   fitBrowserView();
   return { ok: true, open: utilityOpen };
@@ -3950,6 +4154,7 @@ ipcMain.handle('agent:ram-sheet', async (event, open) => {
     hideOverflowMenu();
     hideShieldMenu();
     hideSiteMenu();
+    hideToolsMenu();
   }
   fitBrowserView();
   return { ok: true, open: ramSheetOpen };
@@ -4697,6 +4902,7 @@ ipcMain.handle('agent:settings-panel', async (event, open) => {
     hideOverflowMenu();
     hideShieldMenu({ notify: false });
     hideSiteMenu({ notify: false });
+    hideToolsMenu({ notify: false });
   }
   fitBrowserView();
   return { ok: true, open: settingsOpen };
@@ -4839,6 +5045,9 @@ function createAgentWindow() {
     }
     if (siteHostWindow === win) {
       hideSiteMenu({ notify: false });
+    }
+    if (toolsHostWindow === win) {
+      hideToolsMenu({ notify: false });
     }
     chromeWindows.delete(win);
     for (const [tabId, entry] of [...views.entries()]) {

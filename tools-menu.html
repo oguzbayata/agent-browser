@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="tr" class="overflow-surface">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'none'; connect-src 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Oturum araçları</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="overflow-surface">
+    <div id="agent-tools-menu" class="dropdown-menu" role="menu" aria-label="Oturum araçları">
+      <div class="menu-heading">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.4 3.4h2.2v2.4h2.6a2 2 0 0 1 2 2v2.4h2.4v2.2h-2.4V15a2 2 0 0 1-2 2H9.6v2.2H7.4V17H5a2 2 0 0 1-2-2v-2.6H.8V10.2H3V7.8a2 2 0 0 1 2-2h2.4z"/></svg>
+        <span class="menu-profile-copy">
+          <strong>Oturum Araçları</strong>
+        </span>
+        <em class="menu-signed">oturum · ram</em>
+      </div>
+      <hr />
+      <button type="button" class="menu-item" data-tools="shield" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.6 16.2 5.2v4.4c0 4.1-2.5 6.9-6.2 8.1C6.3 16.5 3.8 13.7 3.8 9.6V5.2Z" /></svg>
+        <span>Kalkan (reklam engeli)</span>
+      </button>
+      <button type="button" class="menu-item" data-tools="ghost" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.2c-2.8 0-5 2-5 4.8v6.2l1.6-1.1 1.6 1.1 1.8-1.1 1.8 1.1 1.6-1.1 1.6 1.1V8c0-2.8-2.2-4.8-5-4.8z"/><circle cx="8" cy="8.4" r="0.8" fill="currentColor" stroke="none"/><circle cx="12" cy="8.4" r="0.8" fill="currentColor" stroke="none"/></svg>
+        <span>Hayalet Ağ</span>
+      </button>
+      <button type="button" class="menu-item" data-tools="downloads" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.4v9.2M6.6 9.4 10 12.8l3.4-3.4M4 16.4h12"/></svg>
+        <span>İndirmeler</span>
+      </button>
+      <button type="button" class="menu-item" data-tools="settings" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.4"/><path d="M10 3.2v2M10 14.8v2M3.2 10h2M14.8 10h2M5.2 5.2l1.4 1.4M13.4 13.4l1.4 1.4M14.8 5.2l-1.4 1.4M6.6 13.4 5.2 14.8"/></svg>
+        <span>Agent Ayarları</span>
+      </button>
+      <hr />
+      <p class="menu-caption">Kalıcı uzantı yok. Araçlar yalnızca bu RAM oturumunda durur.</p>
+    </div>
+    <script src="tools-menu.js"></script>
+  </body>
+</html>
