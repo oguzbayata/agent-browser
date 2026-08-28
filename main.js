@@ -832,6 +832,9 @@ function sendToChrome(channel, payload) {
   if (overflowViewAlive() && !overflowMenuView.webContents.isDestroyed()) {
     overflowMenuView.webContents.send(channel, payload);
   }
+  if (toolsViewAlive() && !toolsMenuView.webContents.isDestroyed()) {
+    toolsMenuView.webContents.send(channel, payload);
+  }
 }
 
 function emitTabUpdated(tabId) {
@@ -3589,7 +3592,7 @@ function showToolsMenu(anchor, host) {
     y = 8;
   }
   const maxH = Math.max(160, contentHeight - y - 8);
-  const initialH = Math.min(360, maxH);
+  const initialH = Math.min(440, maxH);
 
   toolsHostWindow = host;
   toolsOpen = true;
@@ -3606,16 +3609,23 @@ function showToolsMenu(anchor, host) {
       if (!toolsOpen || toolsHostWindow !== host || host.isDestroyed() || !toolsViewAlive()) {
         return;
       }
-      toolsMenuView.setBounds({ x, y, width, height: Math.min(480, maxH) });
+      await pushLocalIntel();
+      if (!toolsOpen || toolsHostWindow !== host || host.isDestroyed() || !toolsViewAlive()) {
+        return;
+      }
+      toolsMenuView.setBounds({ x, y, width, height: Math.min(520, maxH) });
       let measured = initialH;
       try {
-        measured = await toolsMenuView.webContents.executeJavaScript(`(() => {
-          const menu = document.getElementById('agent-tools-menu');
-          if (!menu) {
-            return 0;
-          }
-          return Math.ceil(Math.max(menu.scrollHeight, menu.getBoundingClientRect().height));
-        })()`);
+        measured = await toolsMenuView.webContents.executeJavaScript(`(() => new Promise((resolve) => {
+          requestAnimationFrame(() => {
+            const menu = document.getElementById('agent-tools-menu');
+            if (!menu) {
+              resolve(0);
+              return;
+            }
+            resolve(Math.ceil(Math.max(menu.scrollHeight, menu.getBoundingClientRect().height)));
+          });
+        }))()`);
       } catch {
         // Keep the initial height if measurement fails.
       }
@@ -4235,7 +4245,7 @@ ipcMain.handle('agent:tools-action', async (event, action) => {
     openDownloadsTab();
     return { ok: true };
   }
-  if (action === 'shield' || action === 'ghost' || action === 'settings') {
+  if (action === 'shield' || action === 'ghost' || action === 'settings' || action === 'models') {
     sendToChrome('agent:tools-command', { action });
     return { ok: true };
   }

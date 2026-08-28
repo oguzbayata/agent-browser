@@ -1265,6 +1265,43 @@ body.is-purged .disk-warning {
   background: #0b1412;
 }
 
+.menu-bound-agent {
+  align-items: flex-start;
+  min-height: 64px;
+  margin: 0 8px 4px;
+  padding: 10px 10px 10px 12px;
+  width: calc(100% - 16px);
+  border: 1px solid #3c4043;
+  border-radius: 10px;
+  background: #0f1115;
+}
+
+.menu-bound-agent:hover {
+  background: #161b22;
+}
+
+.menu-bound-agent.is-live {
+  border-color: rgba(61, 255, 200, 0.35);
+}
+
+.menu-bound-agent span {
+  gap: 3px;
+}
+
+.bound-dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: #5f6b75;
+}
+
+.menu-bound-agent.is-live .bound-dot {
+  background: #3dffc8;
+  box-shadow: 0 0 8px rgba(61, 255, 200, 0.55);
+}
+
 .menu-caption {
   margin: 0;
   padding: 6px 16px 8px;

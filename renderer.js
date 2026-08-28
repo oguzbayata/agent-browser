@@ -1398,6 +1398,11 @@ function bindTools() {
       document.getElementById('ghost-toggle')?.click();
     } else if (action === 'settings') {
       setSettingsPanelOpen(true);
+    } else if (action === 'models') {
+      const toggle = document.getElementById('ai-toggle');
+      if (toggle && toggle.getAttribute('aria-expanded') !== 'true') {
+        toggle.click();
+      }
     }
   });
 }
