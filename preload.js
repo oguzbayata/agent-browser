@@ -69,6 +69,20 @@ contextBridge.exposeInMainWorld(
       }
       return ipcRenderer.invoke('agent:settings-set', { key, value });
     },
+    toggleExtension: (id, state) => {
+      if (typeof id !== 'string') {
+        return Promise.resolve({ ok: false });
+      }
+      const payload = { id, state: Boolean(state) };
+      ipcRenderer.send('update-agent-extension', payload);
+      return ipcRenderer.invoke('agent:toggle-extension', payload);
+    },
+    updateAgentExtension: (id, state) => {
+      if (typeof id !== 'string') {
+        return;
+      }
+      ipcRenderer.send('update-agent-extension', { id, state: Boolean(state) });
+    },
     createTab: () => ipcRenderer.invoke('agent:create-tab'),
     switchTab: (tabId) => invokeTab('agent:switch-tab', tabId),
     closeTab: (tabId) => invokeTab('agent:close-tab', tabId),

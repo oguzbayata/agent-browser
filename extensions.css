@@ -268,6 +268,17 @@ body.is-nav-collapsed .ext-nav {
   gap: 12px;
 }
 
+.ext-group {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+  padding: 4px 2px 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .ext-card {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);

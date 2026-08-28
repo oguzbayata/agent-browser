@@ -84,6 +84,26 @@ const BOOLEAN_SETTINGS = new Set([
   'humanJitter',
   'deadManSwitch',
   'web3Shield',
+  'shadowDomPierce',
+  'markdownDom',
+  'uiCodeExtract',
+  'infiniteScroll',
+  'tableParser',
+  'xhrHunter',
+  'jsonFormFill',
+  'proxyRotate',
+  'webglInspector',
+  'mediaSourceReveal',
+  'n8nWebhook',
+  'lmStudioPort',
+  'memoryBlockSync',
+  'cursorIdeBridge',
+  'tabOrchestrator',
+  'headlessMode',
+  'inputSimulator',
+  'rateLimitGuard',
+  'sandboxIsolator',
+  'excommunicadoLock',
 ]);
 const AGENT_BRIDGE_HOST = '127.0.0.1';
 const AGENT_BRIDGE_PORT = 17331;
@@ -102,6 +122,26 @@ const EXTENSION_TOGGLE_IDS = Object.freeze({
   'human-jitter': 'humanJitter',
   'dead-man-switch': 'deadManSwitch',
   'web3-shield': 'web3Shield',
+  'shadow-dom-pierce': 'shadowDomPierce',
+  'markdown-dom': 'markdownDom',
+  'ui-code-extract': 'uiCodeExtract',
+  'infinite-scroll': 'infiniteScroll',
+  'table-parser': 'tableParser',
+  'xhr-hunter': 'xhrHunter',
+  'json-form-fill': 'jsonFormFill',
+  'proxy-rotate': 'proxyRotate',
+  'webgl-inspector': 'webglInspector',
+  'media-source': 'mediaSourceReveal',
+  'n8n-webhook': 'n8nWebhook',
+  'lm-studio-port': 'lmStudioPort',
+  'memory-block': 'memoryBlockSync',
+  'cursor-ide-bridge': 'cursorIdeBridge',
+  'tab-orchestrator': 'tabOrchestrator',
+  'headless-mode': 'headlessMode',
+  'input-simulator': 'inputSimulator',
+  'rate-limit-guard': 'rateLimitGuard',
+  'sandbox-isolator': 'sandboxIsolator',
+  'excommunicado-lock': 'excommunicadoLock',
 });
 const COMMON_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -260,6 +300,18 @@ let activeTabId = null;
 let nextTabId = 1;
 let isWipingSession = false;
 let privacyGuardsAttached = false;
+const sessionsWithGuards = new WeakSet();
+const extraAgentSessions = new Map();
+const xhrCaptureLog = [];
+const sessionMemoryBlocks = [];
+const sessionCodeSnippets = [];
+const agentFailCounts = new Map();
+const agentLockedTabs = new Set();
+const XHR_CAPTURE_LIMIT = 80;
+const N8N_WEBHOOK_URL = 'http://127.0.0.1:5678/webhook/agent-browser';
+const PROXY_POOL = Object.freeze([SOCKS5_PROXY]);
+let proxyRotateIndex = 0;
+let rateLimitPauseUntil = 0;
 let sidebarOpen = false;
 let settingsOpen = false;
 let bookmarksPanelOpen = false;
@@ -313,6 +365,26 @@ const privacySettings = {
   humanJitter: false,
   deadManSwitch: false,
   web3Shield: false,
+  shadowDomPierce: false,
+  markdownDom: false,
+  uiCodeExtract: false,
+  infiniteScroll: false,
+  tableParser: false,
+  xhrHunter: false,
+  jsonFormFill: false,
+  proxyRotate: false,
+  webglInspector: false,
+  mediaSourceReveal: false,
+  n8nWebhook: false,
+  lmStudioPort: false,
+  memoryBlockSync: false,
+  cursorIdeBridge: false,
+  tabOrchestrator: false,
+  headlessMode: false,
+  inputSimulator: false,
+  rateLimitGuard: false,
+  sandboxIsolator: false,
+  excommunicadoLock: false,
 };
 global.isDownloaderEnabled = false;
 let blockedRequestCount = 0;
@@ -627,10 +699,44 @@ async function applyGhostNetwork() {
   }
 }
 
-function attachPrivacyNetworkGuards(isolatedSession) {
-  if (privacyGuardsAttached) {
+function rememberXhrCapture(entry) {
+  xhrCaptureLog.push(entry);
+  if (xhrCaptureLog.length > XHR_CAPTURE_LIMIT) {
+    xhrCaptureLog.shift();
+  }
+}
+
+function applyNetworkCompletedHooks(details) {
+  const status = Number(details?.statusCode) || 0;
+  const url = String(details?.url || '');
+  if (privacySettings.xhrHunter && details?.resourceType && details.resourceType !== 'mainFrame') {
+    rememberXhrCapture({
+      tabId: tabIdFromDetails(details) || '',
+      url: url.slice(0, 500),
+      status,
+      method: details.method || '',
+      type: details.resourceType,
+      at: Date.now(),
+    });
+  }
+  if (!privacySettings.rateLimitGuard) {
     return;
   }
+  const challenge =
+    status === 429 ||
+    status === 503 ||
+    /\/cdn-cgi\/challenge|challenges\.cloudflare|\/recaptcha\//i.test(url);
+  if (challenge) {
+    rateLimitPauseUntil = Date.now() + 20000;
+    emitAgentLocalHook('rate-limit-pause', { url: url.slice(0, 180), status });
+  }
+}
+
+function attachPrivacyNetworkGuards(isolatedSession) {
+  if (sessionsWithGuards.has(isolatedSession)) {
+    return;
+  }
+  sessionsWithGuards.add(isolatedSession);
   privacyGuardsAttached = true;
 
   isolatedSession.setUserAgent(COMMON_USER_AGENT);
@@ -691,6 +797,10 @@ function attachPrivacyNetworkGuards(isolatedSession) {
     callback({
       responseHeaders: stripSetCookieHeaders(details.responseHeaders),
     });
+  });
+
+  isolatedSession.webRequest.onCompleted(NETWORK_FILTER, (details) => {
+    applyNetworkCompletedHooks(details);
   });
 }
 
@@ -2816,6 +2926,190 @@ function agentWeb3Shield() {
 const CANVAS_POISONER_SOURCE = `(${agentCanvasPoisoner.toString()})();`;
 const WEB3_SHIELD_SOURCE = `(${agentWeb3Shield.toString()})();`;
 
+function agentPageTools(flags) {
+  const on = flags || {};
+  if (on.shadowDomPierce && !window.__agentShadowDomPierce) {
+    window.__agentShadowDomPierce = true;
+    const original = Element.prototype.attachShadow;
+    Element.prototype.attachShadow = function attachShadowOpen(init) {
+      return original.call(this, Object.assign({}, init || {}, { mode: 'open' }));
+    };
+  }
+  if (on.uiCodeExtract) {
+    window.__agentExtractUi = function agentExtractUi() {
+      const sel = window.getSelection && window.getSelection();
+      const node = sel && sel.rangeCount ? sel.anchorNode : document.body;
+      const el = node && node.nodeType === 1 ? node : node && node.parentElement;
+      if (!el) {
+        return null;
+      }
+      return {
+        tag: el.tagName,
+        id: el.id || '',
+        className: String(el.className || ''),
+        html: String(el.outerHTML || '').slice(0, 20000),
+      };
+    };
+  }
+  if (on.infiniteScroll) {
+    window.__agentScrollTick = function agentScrollTick() {
+      window.scrollBy(0, Math.floor((window.innerHeight || 600) * 0.9));
+      return {
+        y: window.scrollY,
+        height: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0),
+      };
+    };
+  }
+  if (on.tableParser) {
+    window.__agentTables = function agentTables() {
+      return Array.from(document.querySelectorAll('table'))
+        .slice(0, 20)
+        .map((table) => ({
+          rows: Array.from(table.rows).map((row) => Array.from(row.cells).map((cell) => String(cell.innerText || '').trim())),
+        }));
+    };
+  }
+  if (on.jsonFormFill) {
+    window.__agentFillJson = function agentFillJson(data) {
+      if (!data || typeof data !== 'object') {
+        return { ok: false, filled: [] };
+      }
+      const filled = [];
+      for (const key of Object.keys(data)) {
+        const value = data[key];
+        const named = document.getElementsByName(key)[0];
+        const byId = document.getElementById(key);
+        const el = named || byId;
+        if (!el) {
+          continue;
+        }
+        el.focus();
+        if ('value' in el) {
+          el.value = String(value ?? '');
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (el.isContentEditable) {
+          el.textContent = String(value ?? '');
+        }
+        filled.push(key);
+      }
+      return { ok: true, filled };
+    };
+  }
+  if (on.xhrHunter && !window.__agentXhrHunter) {
+    window.__agentXhrHunter = true;
+    window.__agentNetLog = window.__agentNetLog || [];
+    const push = (item) => {
+      window.__agentNetLog.push(item);
+      if (window.__agentNetLog.length > 80) {
+        window.__agentNetLog.shift();
+      }
+    };
+    const origFetch = window.fetch;
+    if (typeof origFetch === 'function') {
+      window.fetch = async function agentFetchHook(...args) {
+        const res = await origFetch.apply(this, args);
+        try {
+          const clone = res.clone();
+          const ct = String(clone.headers.get('content-type') || '');
+          if (ct.includes('json')) {
+            const text = await clone.text();
+            push({
+              kind: 'fetch',
+              url: String(args[0] && args[0].url ? args[0].url : args[0]).slice(0, 400),
+              status: res.status,
+              body: String(text).slice(0, 4096),
+            });
+          }
+        } catch {
+          // Ignore opaque or aborted bodies.
+        }
+        return res;
+      };
+    }
+    const OrigXHR = window.XMLHttpRequest;
+    if (OrigXHR) {
+      const origOpen = OrigXHR.prototype.open;
+      const origSend = OrigXHR.prototype.send;
+      OrigXHR.prototype.open = function agentXhrOpen(method, url, ...rest) {
+        this.__agentUrl = String(url || '');
+        return origOpen.call(this, method, url, ...rest);
+      };
+      OrigXHR.prototype.send = function agentXhrSend(body) {
+        this.addEventListener('load', function onLoad() {
+          const ct = String(this.getResponseHeader('content-type') || '');
+          if (ct.includes('json')) {
+            push({
+              kind: 'xhr',
+              url: String(this.__agentUrl || '').slice(0, 400),
+              status: this.status,
+              body: String(this.responseText || '').slice(0, 4096),
+            });
+          }
+        });
+        return origSend.call(this, body);
+      };
+    }
+    const OrigSocket = window.WebSocket;
+    if (OrigSocket) {
+      window.WebSocket = function agentWebSocket(url, protocols) {
+        const socket = protocols !== undefined ? new OrigSocket(url, protocols) : new OrigSocket(url);
+        socket.addEventListener('message', (event) => {
+          push({
+            kind: 'ws',
+            url: String(url || '').slice(0, 400),
+            body: String(event && event.data != null ? event.data : '').slice(0, 1024),
+          });
+        });
+        return socket;
+      };
+      window.WebSocket.prototype = OrigSocket.prototype;
+    }
+  }
+  if (on.webglInspector) {
+    window.__agentWebglMeta = function agentWebglMeta() {
+      return Array.from(document.querySelectorAll('canvas'))
+        .slice(0, 12)
+        .map((canvas) => {
+          let renderer = '';
+          try {
+            const gl = canvas.getContext('webgl') || canvas.getContext('webgl2');
+            if (gl) {
+              renderer = String(gl.getParameter(gl.RENDERER) || '');
+            }
+          } catch {
+            renderer = '';
+          }
+          return { width: canvas.width, height: canvas.height, renderer };
+        });
+    };
+  }
+  if (on.mediaSourceReveal) {
+    window.__agentMediaSources = function agentMediaSources() {
+      return Array.from(document.querySelectorAll('video, audio, source'))
+        .slice(0, 40)
+        .map((el) => ({
+          tag: el.tagName,
+          src: el.currentSrc || el.src || el.getAttribute('src') || '',
+        }))
+        .filter((item) => item.src);
+    };
+  }
+}
+
+function pageToolFlags() {
+  return {
+    shadowDomPierce: Boolean(privacySettings.shadowDomPierce),
+    uiCodeExtract: Boolean(privacySettings.uiCodeExtract),
+    infiniteScroll: Boolean(privacySettings.infiniteScroll),
+    tableParser: Boolean(privacySettings.tableParser),
+    jsonFormFill: Boolean(privacySettings.jsonFormFill),
+    xhrHunter: Boolean(privacySettings.xhrHunter),
+    webglInspector: Boolean(privacySettings.webglInspector),
+    mediaSourceReveal: Boolean(privacySettings.mediaSourceReveal),
+  };
+}
+
 function isInternalGuestUrl(rawUrl) {
   return (
     isStartPage(rawUrl) ||
@@ -2845,6 +3139,7 @@ function injectSessionGuards(webContents) {
   if (privacySettings.web3Shield) {
     injectGuestScript(webContents, WEB3_SHIELD_SOURCE);
   }
+  injectGuestScript(webContents, `(${agentPageTools.toString()})(${JSON.stringify(pageToolFlags())});`);
 }
 
 function injectSessionGuardsIntoGuests() {
@@ -2897,16 +3192,168 @@ function startDeadManWatch() {
   }, 15000);
 }
 
-function applyExtensionSideEffect(key) {
-  if (key === 'canvasPoisoner' || key === 'web3Shield') {
-    injectSessionGuardsIntoGuests();
-  }
-  if (key === 'deadManSwitch') {
-    if (privacySettings.deadManSwitch) {
-      startDeadManWatch();
-    } else {
-      stopDeadManWatch();
+function emitAgentLocalHook(eventName, data) {
+  const payload = {
+    event: String(eventName || 'event'),
+    at: Date.now(),
+    ...(data && typeof data === 'object' ? data : {}),
+  };
+  if (privacySettings.memoryBlockSync || privacySettings.siyuanBridge) {
+    sessionMemoryBlocks.push(payload);
+    if (sessionMemoryBlocks.length > 40) {
+      sessionMemoryBlocks.shift();
     }
+  }
+  if (!privacySettings.n8nWebhook || !isLoopbackHttpUrl(N8N_WEBHOOK_URL)) {
+    return;
+  }
+  try {
+    const raw = JSON.stringify(payload);
+    const req = http.request(
+      N8N_WEBHOOK_URL,
+      { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(raw) } },
+      (res) => {
+        res.resume();
+      },
+    );
+    req.on('error', () => {});
+    req.end(raw);
+  } catch {
+    // Local hook is best-effort.
+  }
+}
+
+function guestPartitionFor(owner) {
+  if (!privacySettings.sandboxIsolator || !owner) {
+    return PARTITION;
+  }
+  const slug =
+    String(owner)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 24) || 'agent';
+  const name = `in-memory-session-${slug}`;
+  if (!name || name.startsWith('persist:')) {
+    return PARTITION;
+  }
+  return name;
+}
+
+function webPreferencesForGuest(owner) {
+  const partition = guestPartitionFor(owner);
+  if (partition === PARTITION) {
+    return guestWebPreferences;
+  }
+  const isolated = session.fromPartition(partition);
+  extraAgentSessions.set(partition, isolated);
+  attachPrivacyNetworkGuards(isolated);
+  if (privacySettings.ghostNetwork || privacySettings.proxyRotate) {
+    const rule = PROXY_POOL[proxyRotateIndex % PROXY_POOL.length];
+    isolated.setProxy({ proxyRules: rule }).catch(() => {});
+    if (privacySettings.proxyRotate) {
+      proxyRotateIndex += 1;
+    }
+  }
+  return { ...guestWebPreferences, partition };
+}
+
+function applyViewPerformanceMode() {
+  const guests = [...views.entries()].filter(([, entry]) => entry.kind === 'guest');
+  const hideInactive = Boolean(privacySettings.headlessMode);
+  const orchestrate = Boolean(privacySettings.tabOrchestrator) && guests.length > 10;
+  for (const [tabId, entry] of views) {
+    const webContents = entry.view?.webContents;
+    if (!webContents || webContents.isDestroyed()) {
+      continue;
+    }
+    const sleep = entry.kind === 'guest' && tabId !== activeTabId && (hideInactive || orchestrate);
+    try {
+      if (typeof webContents.setBackgroundThrottling === 'function') {
+        webContents.setBackgroundThrottling(sleep || Boolean(privacySettings.headlessMode && entry.kind === 'guest'));
+      }
+    } catch {
+      // Throttling is optional.
+    }
+    try {
+      if (typeof entry.view.setVisible === 'function') {
+        entry.view.setVisible(!sleep);
+      }
+    } catch {
+      // Visibility is optional.
+    }
+  }
+}
+
+function agentActionBlocked(tabId) {
+  if (privacySettings.rateLimitGuard && Date.now() < rateLimitPauseUntil) {
+    return { ok: false, error: 'rate-limit-pause', resumeAt: rateLimitPauseUntil };
+  }
+  if (privacySettings.excommunicadoLock && tabId && agentLockedTabs.has(tabId)) {
+    return { ok: false, error: 'excommunicado-lock' };
+  }
+  return null;
+}
+
+function noteAgentFailure(tabId) {
+  if (!privacySettings.excommunicadoLock || !tabId) {
+    return null;
+  }
+  const next = (agentFailCounts.get(tabId) || 0) + 1;
+  agentFailCounts.set(tabId, next);
+  if (next < 5) {
+    return null;
+  }
+  agentLockedTabs.add(tabId);
+  emitAgentLocalHook('agent-failed', { tabId, failures: next });
+  destroyTab(tabId, false);
+  return { ok: false, error: 'excommunicado-lock', tabId };
+}
+
+function noteAgentSuccess(tabId) {
+  if (tabId) {
+    agentFailCounts.delete(tabId);
+  }
+}
+
+function applyExtensionSideEffect(key) {
+  switch (key) {
+    case 'canvasPoisoner':
+    case 'web3Shield':
+    case 'shadowDomPierce':
+    case 'uiCodeExtract':
+    case 'infiniteScroll':
+    case 'tableParser':
+    case 'jsonFormFill':
+    case 'xhrHunter':
+    case 'webglInspector':
+    case 'mediaSourceReveal':
+      injectSessionGuardsIntoGuests();
+      break;
+    case 'deadManSwitch':
+      if (privacySettings.deadManSwitch) {
+        startDeadManWatch();
+      } else {
+        stopDeadManWatch();
+      }
+      break;
+    case 'headlessMode':
+    case 'tabOrchestrator':
+      applyViewPerformanceMode();
+      break;
+    case 'proxyRotate':
+    case 'sandboxIsolator':
+    case 'markdownDom':
+    case 'lmStudioPort':
+    case 'n8nWebhook':
+    case 'memoryBlockSync':
+    case 'cursorIdeBridge':
+    case 'inputSimulator':
+    case 'rateLimitGuard':
+    case 'excommunicadoLock':
+      break;
+    default:
+      break;
   }
 }
 
@@ -3030,6 +3477,7 @@ function switchToTab(tabId) {
   activeTabId = tabId;
   entry.view.setBounds(viewBounds());
   bringViewToFront(entry.view);
+  applyViewPerformanceMode();
   sendSecurityStats(tabId);
   broadcastBrowserState();
   return true;
@@ -3054,7 +3502,7 @@ function createGuestTab(initialUrl, options = {}) {
       ? downloadsWebPreferences
       : extensions
         ? extensionsWebPreferences
-        : guestWebPreferences,
+        : webPreferencesForGuest(owner),
   });
   view.setBackgroundColor('#070809');
   views.set(tabId, {
@@ -3071,6 +3519,8 @@ function createGuestTab(initialUrl, options = {}) {
   view.setBounds(viewBounds());
   if (activate) {
     switchToTab(tabId);
+  } else {
+    applyViewPerformanceMode();
   }
 
   const target = initialUrl || 'about:blank';
@@ -3137,6 +3587,8 @@ function destroyTab(tabId, replaceIfLast = true) {
   views.delete(tabId);
   tabSecurityStats.delete(tabId);
   tabFavicons.delete(tabId);
+  agentFailCounts.delete(tabId);
+  agentLockedTabs.delete(tabId);
 
   let nextId = null;
   if (views.size === 0 && replaceIfLast && mainWindow && !mainWindow.isDestroyed()) {
@@ -3275,6 +3727,26 @@ function triggerExcommunicado() {
     privacySettings.humanJitter = false;
     privacySettings.deadManSwitch = false;
     privacySettings.web3Shield = false;
+    privacySettings.shadowDomPierce = false;
+    privacySettings.markdownDom = false;
+    privacySettings.uiCodeExtract = false;
+    privacySettings.infiniteScroll = false;
+    privacySettings.tableParser = false;
+    privacySettings.xhrHunter = false;
+    privacySettings.jsonFormFill = false;
+    privacySettings.proxyRotate = false;
+    privacySettings.webglInspector = false;
+    privacySettings.mediaSourceReveal = false;
+    privacySettings.n8nWebhook = false;
+    privacySettings.lmStudioPort = false;
+    privacySettings.memoryBlockSync = false;
+    privacySettings.cursorIdeBridge = false;
+    privacySettings.tabOrchestrator = false;
+    privacySettings.headlessMode = false;
+    privacySettings.inputSimulator = false;
+    privacySettings.rateLimitGuard = false;
+    privacySettings.sandboxIsolator = false;
+    privacySettings.excommunicadoLock = false;
     stopDeadManWatch();
     global.isDownloaderEnabled = false;
     applyGhostNetwork().catch(() => {});
@@ -5182,6 +5654,26 @@ function snapshotSettings() {
     humanJitter: Boolean(privacySettings.humanJitter),
     deadManSwitch: Boolean(privacySettings.deadManSwitch),
     web3Shield: Boolean(privacySettings.web3Shield),
+    shadowDomPierce: Boolean(privacySettings.shadowDomPierce),
+    markdownDom: Boolean(privacySettings.markdownDom),
+    uiCodeExtract: Boolean(privacySettings.uiCodeExtract),
+    infiniteScroll: Boolean(privacySettings.infiniteScroll),
+    tableParser: Boolean(privacySettings.tableParser),
+    xhrHunter: Boolean(privacySettings.xhrHunter),
+    jsonFormFill: Boolean(privacySettings.jsonFormFill),
+    proxyRotate: Boolean(privacySettings.proxyRotate),
+    webglInspector: Boolean(privacySettings.webglInspector),
+    mediaSourceReveal: Boolean(privacySettings.mediaSourceReveal),
+    n8nWebhook: Boolean(privacySettings.n8nWebhook),
+    lmStudioPort: Boolean(privacySettings.lmStudioPort),
+    memoryBlockSync: Boolean(privacySettings.memoryBlockSync),
+    cursorIdeBridge: Boolean(privacySettings.cursorIdeBridge),
+    tabOrchestrator: Boolean(privacySettings.tabOrchestrator),
+    headlessMode: Boolean(privacySettings.headlessMode),
+    inputSimulator: Boolean(privacySettings.inputSimulator),
+    rateLimitGuard: Boolean(privacySettings.rateLimitGuard),
+    sandboxIsolator: Boolean(privacySettings.sandboxIsolator),
+    excommunicadoLock: Boolean(privacySettings.excommunicadoLock),
     proxyUrl: privacySettings.ghostNetwork ? SOCKS5_PROXY : '',
     blockedRequestCount,
     securityStats: snapshotSecurityStats(),
@@ -5279,25 +5771,36 @@ const agentBridgeHandlers = {
     return { ok: true, tab: serializeTab(tabId) };
   },
   text: async (tabId) => {
+    const blocked = agentActionBlocked(tabId);
+    if (blocked) {
+      return blocked;
+    }
     const guest = getTabWebContents(tabId);
     if (!guest) {
       return failTab('tab-not-found');
     }
-    const text = await guest.executeJavaScript(
-      `(function () {
+    const source = privacySettings.markdownDom
+      ? AGENT_MARKDOWN_SOURCE
+      : `(function () {
         try {
           return document.body && document.body.innerText ? document.body.innerText : '';
         } catch {
           return '';
         }
-      })()`,
-      true,
-    );
-    return {
-      ok: true,
-      tabId,
-      text: typeof text === 'string' ? text.slice(0, PAGE_TEXT_LIMIT) : '',
-    };
+      })()`;
+    let text = await guest.executeJavaScript(source, true);
+    text = typeof text === 'string' ? text.slice(0, PAGE_TEXT_LIMIT) : '';
+    if (privacySettings.lmStudioPort && text.length > 6000) {
+      try {
+        text = await requestChat('', [
+          { role: 'system', content: 'Özeti kısa tut. Yalnızca sayfa içeriğini özetle.' },
+          { role: 'user', content: text.slice(0, 12000) },
+        ]);
+      } catch {
+        // Keep the original extract if the local model is offline.
+      }
+    }
+    return { ok: true, tabId, text };
   },
   screenshot: async (tabId) => {
     const guest = getTabWebContents(tabId);
@@ -5308,6 +5811,10 @@ const agentBridgeHandlers = {
     return { ok: true, tabId, mime: 'image/png', image: image.toPNG().toString('base64') };
   },
   evaluate: async (tabId, body) => {
+    const blocked = agentActionBlocked(tabId);
+    if (blocked) {
+      return blocked;
+    }
     const guest = getTabWebContents(tabId);
     if (!guest) {
       return failTab('tab-not-found');
@@ -5316,16 +5823,25 @@ const agentBridgeHandlers = {
     if (!expression || expression.length > 32000) {
       return { ok: false, error: 'invalid-expression' };
     }
-    const result = await guest.executeJavaScript(expression, true);
-    let safeResult = null;
     try {
-      safeResult = JSON.parse(JSON.stringify(result ?? null));
-    } catch {
-      safeResult = String(result);
+      const result = await guest.executeJavaScript(expression, true);
+      let safeResult = null;
+      try {
+        safeResult = JSON.parse(JSON.stringify(result ?? null));
+      } catch {
+        safeResult = String(result);
+      }
+      noteAgentSuccess(tabId);
+      return { ok: true, tabId, result: safeResult };
+    } catch (error) {
+      return noteAgentFailure(tabId) || { ok: false, error: error instanceof Error ? error.message : 'evaluate-failed' };
     }
-    return { ok: true, tabId, result: safeResult };
   },
   click: async (tabId, body) => {
+    const blocked = agentActionBlocked(tabId);
+    if (blocked) {
+      return blocked;
+    }
     const guest = getTabWebContents(tabId);
     if (!guest) {
       return failTab('tab-not-found');
@@ -5334,7 +5850,7 @@ const agentBridgeHandlers = {
     if (!selector || selector.length > 512) {
       return { ok: false, error: 'invalid-selector' };
     }
-    if (privacySettings.humanJitter) {
+    if (privacySettings.humanJitter || privacySettings.inputSimulator) {
       const box = await guest.executeJavaScript(
         `(function () {
           const el = document.querySelector(${JSON.stringify(selector)});
@@ -5345,7 +5861,7 @@ const agentBridgeHandlers = {
         true,
       );
       if (!box) {
-        return { ok: false, error: 'not-found', tabId };
+        return noteAgentFailure(tabId) || { ok: false, error: 'not-found', tabId };
       }
       await new Promise((resolve) => {
         setTimeout(resolve, 50 + Math.floor(Math.random() * 101));
@@ -5355,6 +5871,7 @@ const agentBridgeHandlers = {
       guest.sendInputEvent({ type: 'mouseMove', x, y });
       guest.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
       guest.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+      noteAgentSuccess(tabId);
       return { ok: true, tabId };
     }
     const result = await guest.executeJavaScript(
@@ -5366,17 +5883,64 @@ const agentBridgeHandlers = {
       })()`,
       true,
     );
+    if (!result?.ok) {
+      return noteAgentFailure(tabId) || { ok: Boolean(result?.ok), tabId, ...(result || {}) };
+    }
+    noteAgentSuccess(tabId);
     return { ok: Boolean(result?.ok), tabId, ...(result || {}) };
   },
   type: async (tabId, body) => {
+    const blocked = agentActionBlocked(tabId);
+    if (blocked) {
+      return blocked;
+    }
     const guest = getTabWebContents(tabId);
     if (!guest) {
       return failTab('tab-not-found');
+    }
+    if (privacySettings.jsonFormFill && body?.fields && typeof body.fields === 'object') {
+      const result = await guest.executeJavaScript(
+        `(function () {
+          const fn = window.__agentFillJson;
+          if (typeof fn !== 'function') { return { ok: false, error: 'form-fill-off' }; }
+          return fn(${JSON.stringify(body.fields)});
+        })()`,
+        true,
+      );
+      if (result?.ok) {
+        noteAgentSuccess(tabId);
+      } else {
+        noteAgentFailure(tabId);
+      }
+      return { ok: Boolean(result?.ok), tabId, ...(result || {}) };
     }
     const text = typeof body?.text === 'string' ? body.text : '';
     const selector = typeof body?.selector === 'string' ? body.selector : '';
     if (!text || text.length > 8000) {
       return { ok: false, error: 'invalid-text' };
+    }
+    const focused = await guest.executeJavaScript(
+      `(function () {
+        const el = ${selector ? `document.querySelector(${JSON.stringify(selector)})` : 'document.activeElement'};
+        if (!el) { return { ok: false, error: 'not-found' }; }
+        el.focus();
+        if ('value' in el) { el.value = ''; }
+        return { ok: true };
+      })()`,
+      true,
+    );
+    if (!focused?.ok) {
+      return noteAgentFailure(tabId) || { ok: false, tabId, ...(focused || {}) };
+    }
+    if (privacySettings.inputSimulator || privacySettings.humanJitter) {
+      for (const char of text) {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 35 + Math.floor(Math.random() * 70));
+        });
+        guest.sendInputEvent({ type: 'char', keyCode: char });
+      }
+      noteAgentSuccess(tabId);
+      return { ok: true, tabId };
     }
     const result = await guest.executeJavaScript(
       `(function () {
@@ -5389,7 +5953,91 @@ const agentBridgeHandlers = {
       })()`,
       true,
     );
+    if (result?.ok) {
+      noteAgentSuccess(tabId);
+    } else {
+      noteAgentFailure(tabId);
+    }
     return { ok: Boolean(result?.ok), tabId, ...(result || {}) };
+  },
+  scroll: async (tabId) => {
+    const blocked = agentActionBlocked(tabId);
+    if (blocked) {
+      return blocked;
+    }
+    if (!privacySettings.infiniteScroll) {
+      return { ok: false, error: 'infinite-scroll-off' };
+    }
+    const guest = getTabWebContents(tabId);
+    if (!guest) {
+      return failTab('tab-not-found');
+    }
+    const result = await guest.executeJavaScript(
+      `(function () {
+        if (typeof window.__agentScrollTick !== 'function') { return { ok: false, error: 'not-injected' }; }
+        return Object.assign({ ok: true }, window.__agentScrollTick());
+      })()`,
+      true,
+    );
+    return { ok: Boolean(result?.ok), tabId, ...(result || {}) };
+  },
+  tables: async (tabId) => {
+    if (!privacySettings.tableParser) {
+      return { ok: false, error: 'table-parser-off' };
+    }
+    const guest = getTabWebContents(tabId);
+    if (!guest) {
+      return failTab('tab-not-found');
+    }
+    const tables = await guest.executeJavaScript(
+      `(function () { return typeof window.__agentTables === 'function' ? window.__agentTables() : []; })()`,
+      true,
+    );
+    return { ok: true, tabId, tables: Array.isArray(tables) ? tables : [] };
+  },
+  netlog: async (tabId) => {
+    if (!privacySettings.xhrHunter) {
+      return { ok: false, error: 'xhr-hunter-off' };
+    }
+    const guest = getTabWebContents(tabId);
+    const pageLog = guest
+      ? await guest.executeJavaScript(
+          `(function () { return Array.isArray(window.__agentNetLog) ? window.__agentNetLog.slice(-40) : []; })()`,
+          true,
+        ).catch(() => [])
+      : [];
+    return {
+      ok: true,
+      tabId,
+      requests: xhrCaptureLog.filter((item) => !tabId || item.tabId === tabId).slice(-40),
+      bodies: Array.isArray(pageLog) ? pageLog : [],
+    };
+  },
+  remember: async (tabId, body) => {
+    if (!privacySettings.memoryBlockSync && !privacySettings.siyuanBridge && !privacySettings.cursorIdeBridge) {
+      return { ok: false, error: 'memory-off' };
+    }
+    const text = typeof body?.text === 'string' ? body.text.slice(0, 8000) : '';
+    if (!text) {
+      return { ok: false, error: 'invalid-text' };
+    }
+    const entry = { text, tabId, at: Date.now() };
+    if (privacySettings.cursorIdeBridge) {
+      sessionCodeSnippets.push(entry);
+      if (sessionCodeSnippets.length > 40) {
+        sessionCodeSnippets.shift();
+      }
+    } else {
+      sessionMemoryBlocks.push(entry);
+      if (sessionMemoryBlocks.length > 40) {
+        sessionMemoryBlocks.shift();
+      }
+    }
+    emitAgentLocalHook('memory-block', { tabId, bytes: text.length });
+    return {
+      ok: true,
+      stored: privacySettings.cursorIdeBridge ? sessionCodeSnippets.length : sessionMemoryBlocks.length,
+    };
   },
 };
 
@@ -5494,17 +6142,34 @@ ipcMain.handle('agent:settings-set', async (event, payload) => {
   return { ok: true, settings: broadcastSettings() };
 });
 
+function applyAgentExtensionToggle(id, state) {
+  const key = EXTENSION_TOGGLE_IDS[id];
+  if (!key || !BOOLEAN_SETTINGS.has(key)) {
+    return { ok: false };
+  }
+  privacySettings[key] = Boolean(state);
+  applyExtensionSideEffect(key);
+  return { ok: true, settings: broadcastSettings() };
+}
+
+ipcMain.on('update-agent-extension', (event, payload) => {
+  if ((!isChromeSender(event) && !isExtensionsSender(event)) || !payload || typeof payload !== 'object') {
+    return;
+  }
+  if (typeof payload.id !== 'string') {
+    return;
+  }
+  applyAgentExtensionToggle(payload.id, payload.state);
+});
+
 ipcMain.handle('agent:toggle-extension', async (event, payload) => {
   if ((!isChromeSender(event) && !isExtensionsSender(event)) || !payload || typeof payload !== 'object') {
     return { ok: false };
   }
-  const key = EXTENSION_TOGGLE_IDS[payload.id];
-  if (!key || !BOOLEAN_SETTINGS.has(key)) {
+  if (typeof payload.id !== 'string') {
     return { ok: false };
   }
-  privacySettings[key] = Boolean(payload.state);
-  applyExtensionSideEffect(key);
-  return { ok: true, settings: broadcastSettings() };
+  return applyAgentExtensionToggle(payload.id, payload.state);
 });
 
 ipcMain.handle('agent:settings-panel', async (event, open) => {

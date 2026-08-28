@@ -21,7 +21,15 @@ contextBridge.exposeInMainWorld(
       if (typeof id !== 'string') {
         return Promise.resolve({ ok: false });
       }
-      return ipcRenderer.invoke('agent:toggle-extension', { id, state: Boolean(state) });
+      const payload = { id, state: Boolean(state) };
+      ipcRenderer.send('update-agent-extension', payload);
+      return ipcRenderer.invoke('agent:toggle-extension', payload);
+    },
+    updateAgentExtension: (id, state) => {
+      if (typeof id !== 'string') {
+        return;
+      }
+      ipcRenderer.send('update-agent-extension', { id, state: Boolean(state) });
     },
     onSettings: (callback) => subscribePayload('agent:settings', callback),
     getLocalIntel: () => ipcRenderer.invoke('agent:local-intel-get'),
