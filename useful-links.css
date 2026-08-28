@@ -1,17 +1,26 @@
 :root {
   --bg: #070809;
-  --text: #d5dce3;
+  --page: #0f1115;
+  --text: #e8eaed;
   --muted: #7a848f;
   --accent: #3dffc8;
-  --ink: #070809;
-  --card: rgba(10, 16, 18, 0.88);
-  --line: rgba(61, 255, 200, 0.18);
+  --card: #0f1115;
+  --line: #1a2027;
+  --scroll-track: #0a0c0f;
+  --scroll-thumb: #2a333c;
 }
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+html {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
 }
 
 html,
@@ -28,8 +37,26 @@ body {
   padding: 36px 28px 56px;
 }
 
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scroll-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a4652;
+}
+
 .intel {
-  max-width: 1080px;
+  max-width: 1240px;
   margin: 0 auto;
 }
 
@@ -75,14 +102,17 @@ h1 {
 
 .catalog {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
 }
 
 .card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   padding: 22px 20px 18px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--card);
   box-shadow: 0 0 18px rgba(61, 255, 200, 0.04);
   transition:
@@ -92,10 +122,10 @@ h1 {
 }
 
 .card:hover {
-  border-color: rgba(61, 255, 200, 0.55);
+  border-color: rgba(61, 255, 200, 0.45);
   box-shadow:
-    0 0 0 1px rgba(61, 255, 200, 0.18),
-    0 0 28px rgba(61, 255, 200, 0.22);
+    0 0 0 1px rgba(61, 255, 200, 0.14),
+    0 0 28px rgba(61, 255, 200, 0.18);
   transform: translateY(-2px);
 }
 
@@ -117,8 +147,13 @@ h1 {
 
 .card ul {
   margin: 0;
-  padding: 0;
+  padding: 0 4px 0 0;
+  max-height: 400px;
+  overflow-x: hidden;
+  overflow-y: auto;
   list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
 }
 
 .card li {
@@ -130,18 +165,40 @@ h1 {
 }
 
 .card a {
+  position: relative;
   display: block;
-  color: var(--accent);
+  padding-left: 0;
+  color: var(--text);
   font-size: 14px;
   font-weight: 650;
   text-decoration: none;
-  text-shadow: 0 0 10px rgba(61, 255, 200, 0.18);
+  word-break: break-word;
+  transition: 0.3s ease;
+}
+
+.card a::before {
+  content: ">";
+  display: inline-block;
+  width: 0;
+  margin-right: 0;
+  overflow: hidden;
+  color: var(--accent);
+  opacity: 0;
+  vertical-align: baseline;
+  transition: 0.3s ease;
 }
 
 .card a:hover,
 .card a:focus-visible {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  color: var(--accent);
+  outline: none;
+}
+
+.card a:hover::before,
+.card a:focus-visible::before {
+  width: 0.75em;
+  margin-right: 6px;
+  opacity: 1;
 }
 
 .card span {
