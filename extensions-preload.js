@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld(
   'electronAPI',
   Object.freeze({
     getSettings: () => ipcRenderer.invoke('agent:settings-get'),
+    onSettings: (callback) => subscribePayload('agent:settings', callback),
     toggleExtension: (id, state) => {
       if (typeof id !== 'string') {
         return Promise.resolve({ ok: false });
@@ -31,7 +32,18 @@ contextBridge.exposeInMainWorld(
       }
       ipcRenderer.send('update-agent-extension', { id, state: Boolean(state) });
     },
-    onSettings: (callback) => subscribePayload('agent:settings', callback),
+    setSetting: (key, value) => {
+      if (typeof key !== 'string') {
+        return Promise.resolve({ ok: false });
+      }
+      return ipcRenderer.invoke('agent:settings-set', { key, value });
+    },
+    askExtExpert: (message) => {
+      if (typeof message !== 'string') {
+        return Promise.resolve({ ok: false });
+      }
+      return ipcRenderer.invoke('agent:ext-expert', { message });
+    },
     getLocalIntel: () => ipcRenderer.invoke('agent:local-intel-get'),
     onLocalIntel: (callback) => subscribePayload('agent:local-intel', callback),
     toolsAction: (action) => {

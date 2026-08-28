@@ -559,6 +559,7 @@ function renderGrid() {
     grid.append(card);
   }
   syncAgentExtensions();
+  updateExpertMeta();
 }
 
 function setView(name) {
@@ -567,6 +568,43 @@ function setView(name) {
   document.getElementById('view-shortcuts')?.toggleAttribute('hidden', extensions);
   document.getElementById('nav-extensions')?.classList.toggle('is-active', extensions);
   document.getElementById('nav-shortcuts')?.classList.toggle('is-active', !extensions);
+}
+
+function updateExpertMeta() {
+  const meta = document.getElementById('ext-expert-meta');
+  if (!meta) {
+    return;
+  }
+  const models = Array.isArray(intel?.models) ? intel.models : [];
+  const selected = models.find((item) => item.id === intel?.selectedId) || models.find((item) => item.live && item.ready);
+  const modelLine = selected ? selected.name : 'model seçilmedi';
+  const memoryLine = settings?.memoryBridge?.providerName
+    ? `hafıza: ${settings.memoryBridge.providerName}${settings.siyuanBridge ? '' : ' · kapalı'}`
+    : 'hafıza köprüsü seçilmedi';
+  meta.textContent = `${modelLine} · ${memoryLine}`;
+}
+
+function appendExpertBubble(role, text) {
+  const chat = document.getElementById('ext-expert-chat');
+  if (!chat || !text) {
+    return;
+  }
+  const bubble = document.createElement('p');
+  bubble.className = `ext-expert-bubble is-${role}`;
+  bubble.textContent = text;
+  chat.appendChild(bubble);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function setExpertBusy(busy) {
+  const send = document.getElementById('ext-expert-send');
+  const prompt = document.getElementById('ext-expert-prompt');
+  if (send) {
+    send.disabled = Boolean(busy);
+  }
+  if (prompt) {
+    prompt.disabled = Boolean(busy);
+  }
 }
 
 function bindPage() {
@@ -587,9 +625,59 @@ function bindPage() {
     button.addEventListener('click', () => setView(button.dataset.view));
   });
 
+  document.getElementById('ext-expert-form')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const prompt = document.getElementById('ext-expert-prompt');
+    const message = String(prompt?.value || '').trim();
+    if (!message) {
+      return;
+    }
+    appendExpertBubble('user', message);
+    if (prompt) {
+      prompt.value = '';
+    }
+    setExpertBusy(true);
+    const request = api?.askExtExpert?.(message);
+    if (!request) {
+      appendExpertBubble('error', 'Eklenti uzmanı bağlı değil. Agent Browser içinde açın.');
+      setExpertBusy(false);
+      return;
+    }
+    request
+      .then((result) => {
+        if (result?.settings) {
+          settings = result.settings;
+          renderGrid();
+        }
+        if (result?.ok && result.reply) {
+          appendExpertBubble('agent', result.reply);
+        } else {
+          appendExpertBubble('error', result?.error || 'Eklenti uzmanı yanıt veremedi. Yerel model seçili mi?');
+        }
+      })
+      ?.catch(() => {
+        appendExpertBubble('error', 'Eklenti uzmanı yanıt veremedi.');
+      })
+      ?.finally(() => {
+        setExpertBusy(false);
+      });
+  });
+
+  document.getElementById('ext-expert-prompt')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      document.getElementById('ext-expert-form')?.requestSubmit();
+    }
+  });
+
   document.getElementById('open-useful-links')?.addEventListener('click', () => {
     api?.openUsefulLinks?.();
   });
+
+  appendExpertBubble(
+    'agent',
+    'Merhaba, ben Eklenti uzmanı. Hangi siteleri kullanacağını söyle; reklam, gizlilik, indirme veya kazıma için doğru araçları açıp kapatayım.',
+  );
 
   document.getElementById('ext-grid')?.addEventListener('click', (event) => {
     const actionBtn = event.target.closest('[data-action]');

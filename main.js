@@ -146,6 +146,41 @@ const EXTENSION_TOGGLE_IDS = Object.freeze({
   'sandbox-isolator': 'sandboxIsolator',
   'excommunicado-lock': 'excommunicadoLock',
 });
+const EXT_EXPERT_DANGEROUS_IDS = new Set(['dead-man-switch', 'excommunicado-lock']);
+const EXT_EXPERT_CATALOG = Object.freeze([
+  { id: 'shield', setting: 'blockTrackers', name: 'Kalkan' },
+  { id: 'ghost', setting: 'ghostNetwork', name: 'Hayalet Ağ' },
+  { id: 'guvenlik', setting: 'blockMedia', name: 'Güvenlik V1' },
+  { id: 'hunter', setting: 'mediaHunter', name: 'Evrensel Medya Avcısı' },
+  { id: 'cookies', setting: 'stripThirdPartyCookies', name: 'Çerez kesici' },
+  { id: 'dnt', setting: 'sendDnt', name: 'Do Not Track' },
+  { id: 'ua', setting: 'spoofUserAgent', name: 'Kimlik maskesi' },
+  { id: 'canvas-poisoner', setting: 'canvasPoisoner', name: 'Canvas & WebGL Zehirleyici' },
+  { id: 'siyuan-bridge', setting: 'siyuanBridge', name: 'Hafıza Köprüsü' },
+  { id: 'human-jitter', setting: 'humanJitter', name: 'Hayalet Fare' },
+  { id: 'dead-man-switch', setting: 'deadManSwitch', name: 'Protokol Anahtarı' },
+  { id: 'web3-shield', setting: 'web3Shield', name: 'Web3 Kripto Kalkanı' },
+  { id: 'shadow-dom-pierce', setting: 'shadowDomPierce', name: 'Shadow DOM Delici' },
+  { id: 'markdown-dom', setting: 'markdownDom', name: 'Markdown DOM Çevirici' },
+  { id: 'ui-code-extract', setting: 'uiCodeExtract', name: 'UI & Code Çıkarıcı' },
+  { id: 'infinite-scroll', setting: 'infiniteScroll', name: 'Sonsuz Kaydırma Otonomu' },
+  { id: 'table-parser', setting: 'tableParser', name: 'Tablo & Grid Ayrıştırıcı' },
+  { id: 'xhr-hunter', setting: 'xhrHunter', name: 'XHR & WebSocket Avcısı' },
+  { id: 'json-form-fill', setting: 'jsonFormFill', name: 'Otomatik JSON Form Doldurucu' },
+  { id: 'proxy-rotate', setting: 'proxyRotate', name: 'Dinamik Proxy Rotatörü' },
+  { id: 'webgl-inspector', setting: 'webglInspector', name: '3D/WebGL Varlık İnceleyici' },
+  { id: 'media-source', setting: 'mediaSourceReveal', name: 'Medya Kaynağı Açığa Çıkarıcı' },
+  { id: 'n8n-webhook', setting: 'n8nWebhook', name: 'n8n Webhook Tetikleyici' },
+  { id: 'lm-studio-port', setting: 'lmStudioPort', name: 'LM Studio Bağlantı Noktası' },
+  { id: 'memory-block', setting: 'memoryBlockSync', name: 'Hafıza Bloğu Aktarıcı' },
+  { id: 'cursor-ide-bridge', setting: 'cursorIdeBridge', name: 'Cursor IDE Kod Köprüsü' },
+  { id: 'tab-orchestrator', setting: 'tabOrchestrator', name: 'Çoklu Sekme Orkestratörü' },
+  { id: 'headless-mode', setting: 'headlessMode', name: 'Headless (Görünmez) Mod' },
+  { id: 'input-simulator', setting: 'inputSimulator', name: 'Fare & Klavye Simülatörü' },
+  { id: 'rate-limit-guard', setting: 'rateLimitGuard', name: 'Rate-Limit Atlatıcı' },
+  { id: 'sandbox-isolator', setting: 'sandboxIsolator', name: 'Sandbox Görev İzolatörü' },
+  { id: 'excommunicado-lock', setting: 'excommunicadoLock', name: 'Excommunicado Kiliti' },
+]);
 const COMMON_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
@@ -352,6 +387,7 @@ let toolsHostDismiss = null;
 const sessionLocalFiles = [];
 const sessionLocalDirs = [];
 let selectedLocalModel = null;
+const extExpertHistory = [];
 let localIntelWatchers = [];
 let localIntelTimer = null;
 let localIntelBusy = false;
@@ -3995,6 +4031,7 @@ function triggerExcommunicado() {
     privacySettings.rateLimitGuard = false;
     privacySettings.sandboxIsolator = false;
     privacySettings.excommunicadoLock = false;
+    extExpertHistory.length = 0;
     stopDeadManWatch();
     global.isDownloaderEnabled = false;
     applyGhostNetwork().catch(() => {});
@@ -6370,6 +6407,45 @@ ipcMain.handle('agent:settings-get', async (event) => {
   return { ok: true, settings: snapshotSettings() };
 });
 
+async function applyBooleanSetting(key, value) {
+  if (!BOOLEAN_SETTINGS.has(key)) {
+    return { ok: false };
+  }
+  if (key === 'mediaHunter') {
+    setMediaHunterEnabled(value);
+  } else {
+    privacySettings[key] = Boolean(value);
+  }
+  if (key === 'spoofUserAgent') {
+    applySpoofedUserAgent();
+  }
+  if (key === 'agentBridge') {
+    try {
+      await ensureAgentBridge(privacySettings.agentBridge);
+    } catch {
+      privacySettings.agentBridge = false;
+      return { ok: false, error: 'Ajan köprüsü dinlenemedi.' };
+    }
+  }
+  if (key === 'blockMedia') {
+    applySessionPermissions(getIsolatedSession());
+  }
+  applyExtensionSideEffect(key);
+  if (key === 'ghostNetwork') {
+    try {
+      await applyGhostNetwork();
+    } catch {
+      privacySettings.ghostNetwork = false;
+      await applyGhostNetwork().catch(() => {});
+      return {
+        ok: false,
+        error: 'SOCKS5 vekil uygulanamadı. 127.0.0.1:1080 dinleniyor mu?',
+      };
+    }
+  }
+  return { ok: true };
+}
+
 ipcMain.handle('agent:settings-set', async (event, payload) => {
   if ((!isChromeSender(event) && !isExtensionsSender(event)) || !payload || typeof payload !== 'object') {
     return { ok: false };
@@ -6377,38 +6453,9 @@ ipcMain.handle('agent:settings-set', async (event, payload) => {
 
   const key = payload.key;
   if (BOOLEAN_SETTINGS.has(key)) {
-    if (key === 'mediaHunter') {
-      setMediaHunterEnabled(payload.value);
-    } else {
-      privacySettings[key] = Boolean(payload.value);
-    }
-    if (key === 'spoofUserAgent') {
-      applySpoofedUserAgent();
-    }
-    if (key === 'agentBridge') {
-      try {
-        await ensureAgentBridge(privacySettings.agentBridge);
-      } catch {
-        privacySettings.agentBridge = false;
-        return { ok: false, error: 'Ajan köprüsü dinlenemedi.', settings: broadcastSettings() };
-      }
-    }
-    if (key === 'blockMedia') {
-      applySessionPermissions(getIsolatedSession());
-    }
-    applyExtensionSideEffect(key);
-    if (key === 'ghostNetwork') {
-      try {
-        await applyGhostNetwork();
-      } catch {
-        privacySettings.ghostNetwork = false;
-        await applyGhostNetwork().catch(() => {});
-        return {
-          ok: false,
-          error: 'SOCKS5 vekil uygulanamadı. 127.0.0.1:1080 dinleniyor mu?',
-          settings: broadcastSettings(),
-        };
-      }
+    const applied = await applyBooleanSetting(key, payload.value);
+    if (!applied.ok) {
+      return { ok: false, error: applied.error, settings: broadcastSettings() };
     }
   } else if (key === 'searchEngine' && Object.hasOwn(SEARCH_ENGINES, payload.value)) {
     privacySettings.searchEngine = payload.value;
@@ -6447,6 +6494,232 @@ ipcMain.handle('agent:toggle-extension', async (event, payload) => {
     return { ok: false };
   }
   return applyAgentExtensionToggle(payload.id, payload.state);
+});
+
+function resolveExpertCatalogItem(raw) {
+  const token = String(raw || '').trim();
+  if (!token) {
+    return null;
+  }
+  return (
+    EXT_EXPERT_CATALOG.find((item) => item.id === token || item.setting === token) || null
+  );
+}
+
+function extractExpertPlan(text) {
+  if (typeof text !== 'string' || !text.trim()) {
+    return null;
+  }
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const raw = fence ? fence[1] : text;
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start < 0 || end <= start) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw.slice(start, end + 1));
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+    const reply = typeof parsed.reply === 'string' ? parsed.reply.trim() : '';
+    const toggles = Array.isArray(parsed.toggles) ? parsed.toggles : [];
+    return { reply, toggles };
+  } catch {
+    return null;
+  }
+}
+
+function heuristicExpertToggles(message) {
+  const text = String(message).toLocaleLowerCase('tr');
+  const toggles = [];
+  const seen = new Set();
+  const wantsOff = /(kapat|kapa\b|devre\s*d[iı][sş][iı]|kapal[iı]|iptal et|durdur)/.test(text);
+  const add = (id, on) => {
+    if (seen.has(id) || toggles.length >= 20) {
+      return;
+    }
+    seen.add(id);
+    toggles.push({ id, on: Boolean(on) });
+  };
+
+  if (/(reklam|izleyici|kalkan|tracker|adblock)/.test(text)) {
+    add('shield', !wantsOff);
+  }
+  if (/(hayalet a[gğ]|socks|vekil|proxy|tor\b)/.test(text)) {
+    add('ghost', !wantsOff);
+  }
+  if (/(kamera|mikrofon|webcam|g[uü]venlik v1)/.test(text)) {
+    add('guvenlik', /(izin ver|a[cç]\b|etkin)/.test(text) && !wantsOff ? false : true);
+  }
+  if (/(video indir|medya avc|youtube|downloader)/.test(text)) {
+    add('hunter', !wantsOff);
+    add('media-source', !wantsOff);
+  }
+  if (/([cç]erez)/.test(text)) {
+    add('cookies', !wantsOff);
+  }
+  if (/(do not track|\bdnt\b)/.test(text)) {
+    add('dnt', !wantsOff);
+  }
+  if (/(kullan[iı]c[iı] ajan|kimlik mask|user[- ]?agent|parmak izi)/.test(text)) {
+    add('ua', !wantsOff);
+    add('canvas-poisoner', !wantsOff);
+  }
+  if (/(haf[iı]za k[oö]pr|siyuan|mem0|obsidian|langgraph)/.test(text)) {
+    add('siyuan-bridge', !wantsOff);
+  }
+  if (/(web3|c[uü]zdan|metamask|kripto kalkan)/.test(text)) {
+    add('web3-shield', !wantsOff);
+  }
+  if (/(kaz[iı]|markdown|shadow dom|tablo|xhr|websocket|sonsuz kayd[iı]r)/.test(text)) {
+    add('markdown-dom', !wantsOff);
+    add('shadow-dom-pierce', !wantsOff);
+    add('table-parser', !wantsOff);
+    add('xhr-hunter', !wantsOff);
+    add('infinite-scroll', !wantsOff);
+  }
+  if (/(form doldur|json form)/.test(text)) {
+    add('json-form-fill', !wantsOff);
+  }
+  if (/(headless|g[oö]r[uü]nmez mod)/.test(text)) {
+    add('headless-mode', !wantsOff);
+  }
+  if (/(rate[- ]?limit|cloudflare bekle|ajan[iı] duraklat)/.test(text)) {
+    add('rate-limit-guard', !wantsOff);
+  }
+  if (/(gizlilik|anonim|izliyor|parmak izi azalt)/.test(text) && toggles.length === 0) {
+    add('shield', true);
+    add('cookies', true);
+    add('dnt', true);
+    add('ua', true);
+    add('canvas-poisoner', true);
+  }
+  return toggles;
+}
+
+function expertAllowsDangerous(message, id) {
+  if (!EXT_EXPERT_DANGEROUS_IDS.has(id)) {
+    return true;
+  }
+  return /(excommunicado|panik|protokol anahtar|dead.?man)/i.test(String(message));
+}
+
+function normalizeExpertToggles(rawToggles, message) {
+  const toggles = [];
+  const seen = new Set();
+  for (const item of Array.isArray(rawToggles) ? rawToggles : []) {
+    if (!item || typeof item !== 'object' || toggles.length >= 20) {
+      break;
+    }
+    const catalog = resolveExpertCatalogItem(item.id || item.setting);
+    if (!catalog || seen.has(catalog.id) || !expertAllowsDangerous(message, catalog.id)) {
+      continue;
+    }
+    seen.add(catalog.id);
+    const on = item.on === true || item.on === 'true' || item.on === 1;
+    toggles.push({ id: catalog.id, setting: catalog.setting, name: catalog.name, on });
+  }
+  return toggles;
+}
+
+function expertSystemPrompt() {
+  const model = selectedLocalModel ? serializeLocalModel(selectedLocalModel) : null;
+  const memory = snapshotMemoryBridge();
+  const rows = EXT_EXPERT_CATALOG.map((item) => {
+    const on = Boolean(privacySettings[item.setting]);
+    return `${item.id}\t${item.name}\t${on ? 'açık' : 'kapalı'}`;
+  }).join('\n');
+  return [
+    'Sen Agent Browser içindeki Eklenti uzmanısın. Kullanıcıya hangi oturum araçlarının açık olması gerektiğini söyle ve yalnızca gerekli olanları aç/kapat.',
+    'Yanıtın tek bir JSON nesnesi olsun: {"reply":"kısa Türkçe açıklama","toggles":[{"id":"shield","on":true}]}',
+    'id alanı katalogdaki id olmalıdır. Sohbeti diske yazma. Excommunicado protokolünü tetikleme.',
+    'dead-man-switch ve excommunicado-lock yalnızca kullanıcı açıkça panik/kilit/protokol isterse değişsin.',
+    `Seçili model: ${model?.name || 'yok'}. Hafıza köprüsü: ${memory.providerName || 'yok'} (${privacySettings.siyuanBridge ? 'açık' : 'kapalı'}).`,
+    'Katalog (id, ad, durum):',
+    rows,
+  ].join('\n');
+}
+
+function pushExpertHistory(role, content) {
+  extExpertHistory.push({ role, content: String(content).slice(0, 2000) });
+  while (extExpertHistory.length > 8) {
+    extExpertHistory.shift();
+  }
+}
+
+ipcMain.handle('agent:ext-expert', async (event, payload) => {
+  if (!isExtensionsSender(event) || panicInProgress) {
+    return { ok: false };
+  }
+  const message = typeof payload?.message === 'string' ? payload.message.trim() : '';
+  if (!message || message.length > 2000) {
+    return { ok: false, error: 'Geçersiz mesaj.' };
+  }
+
+  let reply = '';
+  let usedModel = false;
+  let plan = null;
+  try {
+    const content = await requestChat('', [
+      { role: 'system', content: expertSystemPrompt() },
+      ...extExpertHistory,
+      { role: 'user', content: message },
+    ]);
+    usedModel = true;
+    plan = extractExpertPlan(content);
+    reply = plan?.reply || content.replace(/```[\s\S]*?```/g, '').trim();
+  } catch {
+    usedModel = false;
+    plan = null;
+    reply = '';
+  }
+
+  let toggles = normalizeExpertToggles(plan?.toggles, message);
+  if (!toggles.length && (!usedModel || !plan)) {
+    toggles = normalizeExpertToggles(heuristicExpertToggles(message), message);
+  }
+
+  const applied = [];
+  const notes = [];
+  for (const toggle of toggles) {
+    const result = await applyBooleanSetting(toggle.setting, toggle.on);
+    if (result.ok) {
+      applied.push(toggle);
+    } else if (result.error) {
+      notes.push(`${toggle.name}: ${result.error}`);
+    }
+  }
+
+  const settings = applied.length || notes.length ? broadcastSettings() : snapshotSettings();
+  if (!reply) {
+    if (applied.length) {
+      reply = applied
+        .map((item) => `${item.name} ${item.on ? 'açıldı' : 'kapatıldı'}`)
+        .join(', ');
+      if (!usedModel) {
+        reply += '. Yerel model yoktu; anahtar sözcüklere göre uyguladım.';
+      }
+    } else if (!usedModel) {
+      reply = reply || 'Yerel bir model seçin; şimdilik eklenti değişikliği yok.';
+    } else {
+      reply = 'Bu istek için eklenti değişikliği gerekmedi.';
+    }
+  }
+  if (notes.length) {
+    reply = `${reply}\n${notes.join('\n')}`;
+  }
+
+  pushExpertHistory('user', message);
+  pushExpertHistory('assistant', reply);
+  if (privacySettings.siyuanBridge) {
+    const appliedLine = applied.length
+      ? applied.map((item) => `${item.name}: ${item.on ? 'açık' : 'kapalı'}`).join(', ')
+      : 'yok';
+    postToMemoryBridge(`Eklenti uzmanı\nSoru: ${message}\nYanıt: ${reply}\nUygulanan: ${appliedLine}`);
+  }
+
+  return { ok: true, reply, applied: applied.map((item) => ({ id: item.id, on: item.on })), settings };
 });
 
 ipcMain.handle('agent:memory-bridge-get', async (event) => {

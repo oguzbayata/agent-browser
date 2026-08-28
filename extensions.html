@@ -38,6 +38,25 @@
           <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.4" y="5.2" width="15.2" height="10.4" rx="1.6"/><path d="M5 8.2h2.2M8.4 8.2h2.2M11.8 8.2H14M5 11.4h10"/></svg>
           <span>Klavye kısayolları</span>
         </button>
+
+        <aside class="ext-expert" aria-label="Eklenti uzmanı">
+          <header class="ext-expert-head">
+            <p class="ext-expert-kicker">Eklenti uzmanı</p>
+            <p class="ext-expert-meta" id="ext-expert-meta">model ve hafıza bekleniyor</p>
+          </header>
+          <div class="ext-expert-chat" id="ext-expert-chat" aria-live="polite"></div>
+          <form class="ext-expert-form" id="ext-expert-form" autocomplete="off">
+            <label class="sr-only" for="ext-expert-prompt">Eklenti uzmanına sor</label>
+            <textarea
+              id="ext-expert-prompt"
+              rows="3"
+              maxlength="2000"
+              placeholder="örn. reklamları kes, videoları indir…"
+            ></textarea>
+            <button type="submit" id="ext-expert-send">Gönder</button>
+          </form>
+        </aside>
+
         <div class="ext-nav-store">
           <img src="assets/agent-browser-logo.svg" width="28" height="28" alt="" />
           <p>

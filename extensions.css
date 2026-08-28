@@ -155,7 +155,7 @@ body {
 
 .ext-shell {
   display: grid;
-  grid-template-columns: 256px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   min-height: calc(100vh - 56px);
 }
 
@@ -173,9 +173,123 @@ body.is-nav-collapsed .ext-nav {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  height: calc(100vh - 56px);
+  min-height: calc(100vh - 56px);
+  overflow: hidden;
   padding: 12px 8px 16px;
   border-right: 1px solid var(--line);
   background: var(--bar);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.ext-expert {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 220px;
+  margin: 10px 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #0a0c0f;
+  overflow: hidden;
+}
+
+.ext-expert-head {
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ext-expert-kicker {
+  margin: 0;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ext-expert-meta {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ext-expert-chat {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 10px 6px;
+}
+
+.ext-expert-bubble {
+  max-width: 100%;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ext-expert-bubble.is-user {
+  margin-left: 18px;
+  background: #151b22;
+  color: var(--text);
+}
+
+.ext-expert-bubble.is-agent {
+  margin-right: 8px;
+  background: rgba(61, 255, 200, 0.08);
+  color: var(--text);
+}
+
+.ext-expert-bubble.is-error {
+  background: rgba(255, 90, 106, 0.12);
+  color: #ffb3bb;
+}
+
+.ext-expert-form {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.ext-expert-form textarea {
+  width: 100%;
+  min-height: 64px;
+  resize: none;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #070809;
+  color: var(--text);
+  font: 13px/1.35 "Segoe UI", system-ui, sans-serif;
+}
+
+.ext-expert-form button {
+  height: 32px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 13px/1 "Segoe UI", system-ui, sans-serif;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.ext-expert-form button:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .ext-nav-item {
@@ -215,7 +329,7 @@ body.is-nav-collapsed .ext-nav {
 .ext-nav-store {
   display: flex;
   gap: 10px;
-  margin-top: auto;
+  margin-top: 0;
   padding: 12px 10px 4px;
   color: var(--muted);
   font-size: 12px;
