@@ -2,7 +2,7 @@
   "name": "agent-browser",
   "version": "0.1.0",
   "private": true,
-  "description": "Privacy-focused Agent Browser",
+  "description": "Privacy-focused Electron browser: in-memory session, Shield, Ghost Network, and a loopback agent control plane",
   "main": "main.js",
   "scripts": {
     "start": "node start.js",
