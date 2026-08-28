@@ -631,6 +631,155 @@ function getIsolatedSession() {
   return session.fromPartition(PARTITION);
 }
 
+const FAVICON_MAX_BYTES = 96 * 1024;
+const faviconCache = new Map();
+const faviconInflight = new Map();
+const tabFavicons = new Map();
+
+function pageHost(rawUrl) {
+  try {
+    return new URL(rawUrl).hostname.replace(/^www\./i, '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function resolveHttpUrl(raw, base) {
+  try {
+    const parsed = base ? new URL(raw, base) : new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    return parsed.href;
+  } catch {
+    return '';
+  }
+}
+
+function iconHrefFromHtml(html, baseUrl) {
+  const chunk = String(html || '').slice(0, 120000);
+  const tags = chunk.match(/<link\b[^>]*>/gi) || [];
+  let fallback = '';
+  for (const tag of tags) {
+    if (!/\brel\s*=\s*["'][^"']*icon/i.test(tag)) {
+      continue;
+    }
+    const href = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i);
+    if (!href) {
+      continue;
+    }
+    const abs = resolveHttpUrl(href[1], baseUrl);
+    if (!abs) {
+      continue;
+    }
+    if (/apple-touch-icon/i.test(tag)) {
+      if (!fallback) {
+        fallback = abs;
+      }
+      continue;
+    }
+    return abs;
+  }
+  return fallback;
+}
+
+async function readFaviconResponse(response) {
+  if (!response || !response.ok) {
+    return '';
+  }
+  const mime = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (mime.startsWith('text/') || mime.includes('json') || mime.includes('javascript')) {
+    return '';
+  }
+  const buf = Buffer.from(await response.arrayBuffer());
+  if (!buf.length || buf.length > FAVICON_MAX_BYTES) {
+    return '';
+  }
+  const kind = mime.startsWith('image/') ? mime : 'image/x-icon';
+  return `data:${kind};base64,${buf.toString('base64')}`;
+}
+
+async function fetchFaviconDataUrl(pageUrl, hintUrl) {
+  const host = pageHost(pageUrl);
+  if (!host) {
+    return '';
+  }
+  if (faviconCache.has(host)) {
+    return faviconCache.get(host);
+  }
+  if (faviconInflight.has(host)) {
+    return faviconInflight.get(host);
+  }
+
+  const work = (async () => {
+    const ses = getIsolatedSession();
+    const origin = (() => {
+      try {
+        return new URL(pageUrl).origin;
+      } catch {
+        return '';
+      }
+    })();
+    const candidates = [];
+    const hint = resolveHttpUrl(hintUrl, pageUrl);
+    if (hint) {
+      candidates.push(hint);
+    }
+    if (origin) {
+      candidates.push(`${origin}/favicon.ico`, `${origin}/favicon.png`);
+    }
+
+    const seen = new Set();
+    const tryCandidate = async (candidate) => {
+      if (!candidate || seen.has(candidate)) {
+        return '';
+      }
+      seen.add(candidate);
+      const res = await ses.fetch(candidate, { method: 'GET', signal: AbortSignal.timeout(7000) });
+      return readFaviconResponse(res);
+    };
+
+    for (const candidate of candidates) {
+      try {
+        const dataUrl = await tryCandidate(candidate);
+        if (dataUrl) {
+          faviconCache.set(host, dataUrl);
+          return dataUrl;
+        }
+      } catch {
+        // Try the next well-known path or HTML discovery.
+      }
+    }
+
+    const safePage = sanitizeUrl(pageUrl);
+    if (safePage) {
+      try {
+        const pageRes = await ses.fetch(safePage, { method: 'GET', signal: AbortSignal.timeout(7000) });
+        if (pageRes.ok) {
+          const html = await pageRes.text();
+          const discovered = iconHrefFromHtml(html, pageRes.url || safePage);
+          const dataUrl = await tryCandidate(discovered);
+          if (dataUrl) {
+            faviconCache.set(host, dataUrl);
+            return dataUrl;
+          }
+        }
+      } catch {
+        // Leave the host uncached so a later add can retry.
+      }
+    }
+
+    return '';
+  })();
+
+  faviconInflight.set(host, work);
+  try {
+    return await work;
+  } finally {
+    faviconInflight.delete(host);
+  }
+}
+
 function getGuestWebContents() {
   const entry = activeTabId ? views.get(activeTabId) : null;
   return entry?.view.webContents ?? null;
@@ -760,6 +909,9 @@ function purgeSessionChromeState() {
   activeDownloadItems.clear();
   sessionDownloads.clear();
   sessionBookmarks.length = 0;
+  faviconCache.clear();
+  faviconInflight.clear();
+  tabFavicons.clear();
   sessionFolders.length = 0;
   sessionFolders.push({ id: DEFAULT_BOOKMARK_FOLDER_ID, title: 'Bookmarks bar', createdAt: 0 });
   bookmarksPanelOpen = false;
@@ -2567,6 +2719,14 @@ function attachTabListeners(tabId, webContents) {
       resetTabSecurityStats(tabId);
     }
   });
+  webContents.on('page-favicon-updated', (_event, favicons) => {
+    tabFavicons.set(
+      tabId,
+      (Array.isArray(favicons) ? favicons : [])
+        .map((item) => resolveHttpUrl(item))
+        .filter(Boolean),
+    );
+  });
   webContents.on('did-navigate', () => {
     emitTitle();
     emitTabUpdated(tabId);
@@ -2678,6 +2838,7 @@ function destroyTab(tabId, replaceIfLast = true) {
 
   views.delete(tabId);
   tabSecurityStats.delete(tabId);
+  tabFavicons.delete(tabId);
 
   let nextId = null;
   if (views.size === 0 && replaceIfLast && mainWindow && !mainWindow.isDestroyed()) {
@@ -3860,6 +4021,7 @@ ipcMain.handle('agent:bookmark-toggle', async (event) => {
       title: tabTitleOf(guest) || url,
       folderId: DEFAULT_BOOKMARK_FOLDER_ID,
       createdAt: Date.now(),
+      favicon: await fetchFaviconDataUrl(url, tabFavicons.get(activeTabId)?.[0] || ''),
     });
     nextBookmarkId += 1;
   }
@@ -3867,6 +4029,14 @@ ipcMain.handle('agent:bookmark-toggle', async (event) => {
   broadcastBookmarks();
   broadcastBrowserState();
   return { ok: true, bookmarked: isCurrentUrlBookmarked() };
+});
+
+ipcMain.handle('agent:favicon', async (event, rawUrl) => {
+  if (!isChromeSender(event) || typeof rawUrl !== 'string') {
+    return { ok: false, dataUrl: '' };
+  }
+  const dataUrl = await fetchFaviconDataUrl(rawUrl);
+  return { ok: Boolean(dataUrl), dataUrl };
 });
 
 ipcMain.handle('agent:bookmark-remove', async (event, bookmarkId) => {

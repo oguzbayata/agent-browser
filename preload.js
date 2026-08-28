@@ -76,6 +76,12 @@ contextBridge.exposeInMainWorld(
     toggleMute: (tabId) => invokeTab('agent:toggle-mute', tabId),
     togglePin: (tabId) => invokeTab('agent:toggle-pin', tabId),
     toggleBookmark: () => ipcRenderer.invoke('agent:bookmark-toggle'),
+    getFavicon: (url) => {
+      if (typeof url !== 'string') {
+        return Promise.resolve({ ok: false, dataUrl: '' });
+      }
+      return ipcRenderer.invoke('agent:favicon', url);
+    },
     removeBookmark: (bookmarkId) => {
       if (typeof bookmarkId !== 'string') {
         return Promise.resolve({ ok: false });

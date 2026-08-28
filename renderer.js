@@ -373,19 +373,63 @@ const BOOKMARK_MARK_COLORS = ['#e53935', '#43a047', '#1e88e5', '#8e24aa', '#fb8c
 const expandedBookmarkFolders = new Set(['bar']);
 let bookmarkSort = 'newest';
 
-function bookmarkMark(url) {
-  let host = String(url || '');
+function hostKey(url) {
   try {
-    host = new URL(url).hostname.replace(/^www\./, '');
+    return new URL(url).hostname.replace(/^www\./i, '').toLowerCase();
   } catch {
-    // Keep raw value.
+    return '';
   }
+}
+
+function bookmarkMark(url) {
+  const host = hostKey(url) || String(url || '');
   const letter = (host[0] || '?').toUpperCase();
   let sum = 0;
   for (const ch of host) {
     sum += ch.charCodeAt(0);
   }
   return { letter, color: BOOKMARK_MARK_COLORS[sum % BOOKMARK_MARK_COLORS.length] };
+}
+
+const faviconByHost = new Map();
+
+function mountFavicon(el, dataUrl) {
+  if (!el || !dataUrl) {
+    return;
+  }
+  el.textContent = '';
+  el.classList.add('has-icon');
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  img.alt = '';
+  img.draggable = false;
+  el.append(img);
+}
+
+function createSiteIcon(url, className, storedFavicon) {
+  const mark = bookmarkMark(url);
+  const el = document.createElement('span');
+  el.className = className;
+  el.textContent = mark.letter;
+  const host = hostKey(url);
+  const cached = storedFavicon || (host && faviconByHost.get(host)) || '';
+  if (cached) {
+    if (host) {
+      faviconByHost.set(host, cached);
+    }
+    mountFavicon(el, cached);
+    return el;
+  }
+  window.electronAPI?.getFavicon?.(url)?.then((result) => {
+    if (!result?.ok || !result.dataUrl) {
+      return;
+    }
+    if (host) {
+      faviconByHost.set(host, result.dataUrl);
+    }
+    mountFavicon(el, result.dataUrl);
+  });
+  return el;
 }
 
 function sortedBookmarks(items) {
@@ -458,11 +502,7 @@ function renderBookmarksPanel() {
     for (const item of inFolder) {
       const row = document.createElement('div');
       row.className = 'bp-item';
-      const mark = bookmarkMark(item.url);
-      const icon = document.createElement('span');
-      icon.className = 'bp-mark';
-      icon.style.background = mark.color;
-      icon.textContent = mark.letter;
+      const icon = createSiteIcon(item.url, 'bp-mark', item.favicon);
       const name = document.createElement('button');
       name.type = 'button';
       name.textContent = item.title || item.url;
@@ -945,11 +985,7 @@ function bindBookmarks() {
       open.className = 'yerim-open';
       open.dataset.url = item.url;
       open.setAttribute('aria-label', item.title);
-      const favicon = document.createElement('span');
-      favicon.className = `yerim-favicon yerim-favicon-${item.tone}`;
-      if (item.letter) {
-        favicon.textContent = item.letter;
-      }
+      const favicon = createSiteIcon(item.url, 'yerim-favicon', item.favicon);
       const title = document.createElement('span');
       title.className = 'yerim-title';
       title.textContent = item.title;
@@ -988,6 +1024,7 @@ function bindBookmarks() {
     for (const item of items) {
       const chip = document.createElement('div');
       chip.className = 'bookmark-chip';
+      const icon = createSiteIcon(item.url, 'yerim-favicon', item.favicon);
       const label = document.createElement('span');
       label.textContent = item.title || item.url;
       const remove = document.createElement('button');
@@ -995,7 +1032,7 @@ function bindBookmarks() {
       remove.className = 'yerim-remove';
       remove.setAttribute('aria-label', 'Yer imini kaldır');
       remove.textContent = '×';
-      chip.append(label, remove);
+      chip.append(icon, label, remove);
       chip.addEventListener('click', (event) => {
         if (event.target === remove) {
           return;
@@ -1126,6 +1163,7 @@ function bindPanic() {
     document.getElementById('bookmarks-list')?.replaceChildren();
     document.getElementById('yerimleri-kisayollar')?.replaceChildren();
     barShortcuts = [];
+    faviconByHost.clear();
     document.getElementById('downloads-list')?.replaceChildren();
     document.querySelector('.chrome')?.remove();
     document.querySelector('.workspace')?.remove();
