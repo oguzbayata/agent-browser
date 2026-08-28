@@ -60,6 +60,9 @@ function renderDownloads(payload) {
     meta.textContent = `${stateLabel(item.state)} · ${size}${
       item.state === 'progressing' ? ` · %${percent}` : ''
     }${speed}`;
+    if (item.error && item.state !== 'progressing') {
+      meta.textContent += ` · ${item.error}`;
+    }
     copy.append(name, meta);
 
     const cancel = document.createElement('button');

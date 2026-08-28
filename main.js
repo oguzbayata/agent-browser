@@ -11,6 +11,7 @@ const net = require('node:net');
 const { startAgentBridgeServer, stopAgentBridgeServer, getListenInfo } = require('./agent-bridge');
 const { collectIntel, knownModelRoots, isLoopbackHttpUrl, resolveLocalChatTarget } = require('./local-intel');
 const { AD_HIDE_CSS, shouldBlockUrl } = require('./tracker-block');
+const { findFfmpeg, findYtDlp, hunterPathEnv, isWindowsStoreStub } = require('./hunter-tools');
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('oguzbayata.agent-browser');
@@ -1233,13 +1234,20 @@ function isYoutubeWatchUrl(rawUrl) {
   return false;
 }
 
-function isDirectVideoSource(rawUrl) {
+function isDirectMediaFile(rawUrl) {
   if (typeof rawUrl !== 'string' || !rawUrl) {
     return false;
   }
   try {
     const parsed = new URL(rawUrl);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    const pathname = parsed.pathname.toLowerCase();
+    return (
+      /\.(mp4|webm|mkv|m4v|mov|ogv|m3u8|mpd)(\?|$)/i.test(pathname) ||
+      /\/videoplayback(?:\/|$)/i.test(pathname)
+    );
   } catch {
     return false;
   }
@@ -1304,11 +1312,19 @@ function killAllHunters() {
 }
 
 function ytDlpCandidates() {
-  const list = [{ cmd: 'yt-dlp', prefix: [] }];
+  const list = [];
+  const resolved = findYtDlp();
+  if (resolved) {
+    list.push({ cmd: resolved, prefix: [] });
+  }
+  list.push({ cmd: 'yt-dlp', prefix: [] });
   const pythons = cachedPython
     ? [cachedPython, ...pythonCandidates().filter((item) => item.cmd !== cachedPython.cmd)]
     : pythonCandidates();
   for (const py of pythons) {
+    if (isWindowsStoreStub(py.cmd)) {
+      continue;
+    }
     list.push({ cmd: py.cmd, prefix: [...py.prefix, '-m', 'yt_dlp'] });
   }
   return list;
@@ -1708,31 +1724,41 @@ function createHunterRecord(filename) {
 }
 
 function spawnYtDlpDownload(pageUrl, record, savePath) {
+  const ffmpegPath = findFfmpeg();
   const env = {
     ...process.env,
+    PATH: hunterPathEnv(ffmpegPath),
     PYTHONUTF8: '1',
     PYTHONIOENCODING: 'utf-8',
   };
   delete env.ELECTRON_RUN_AS_NODE;
-  const argsTail = [
-    '--no-playlist',
-    '--newline',
-    '--no-warnings',
-    '-f',
-    'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b',
-    '--merge-output-format',
-    'mp4',
-    '-o',
-    savePath,
-    '--user-agent',
-    COMMON_USER_AGENT,
-    pageUrl,
-  ];
-  if (privacySettings.ghostNetwork) {
-    argsTail.unshift('--proxy', SOCKS5_PROXY);
+
+  function buildArgs(simple) {
+    const args = [
+      '--no-playlist',
+      '--newline',
+      '--no-warnings',
+      '-o',
+      savePath,
+      '--user-agent',
+      COMMON_USER_AGENT,
+    ];
+    if (ffmpegPath) {
+      args.unshift('--ffmpeg-location', ffmpegPath);
+    }
+    if (privacySettings.ghostNetwork) {
+      args.unshift('--proxy', SOCKS5_PROXY);
+    }
+    if (simple) {
+      args.push('-f', 'b/best');
+    } else {
+      args.push('-f', 'bv*+ba/b', '--merge-output-format', 'mp4');
+    }
+    args.push(pageUrl);
+    return args;
   }
 
-  const tryCandidate = (index) => {
+  const tryCandidate = (index, simple) => {
     const candidates = ytDlpCandidates();
     if (index >= candidates.length) {
       return downloadWithYtdlCore(pageUrl, record, savePath);
@@ -1741,14 +1767,14 @@ function spawnYtDlpDownload(pageUrl, record, savePath) {
     return new Promise((resolve) => {
       let child;
       try {
-        child = spawn(candidate.cmd, [...candidate.prefix, ...argsTail], {
+        child = spawn(candidate.cmd, [...candidate.prefix, ...buildArgs(simple)], {
           cwd: app.getPath('downloads'),
           env,
           windowsHide: true,
           stdio: ['ignore', 'pipe', 'pipe'],
         });
       } catch {
-        resolve(tryCandidate(index + 1));
+        resolve(tryCandidate(index + 1, false));
         return;
       }
 
@@ -1780,10 +1806,10 @@ function spawnYtDlpDownload(pageUrl, record, savePath) {
         hunterJobs.delete(record.id);
         killHunterProcess(child);
         if (error && error.code === 'ENOENT') {
-          resolve(tryCandidate(index + 1));
+          resolve(tryCandidate(index + 1, false));
           return;
         }
-        currentFail(record, 'interrupted');
+        currentFail(record, 'interrupted', error?.message);
         resolve(false);
       });
       child.on('close', (code) => {
@@ -1799,35 +1825,84 @@ function spawnYtDlpDownload(pageUrl, record, savePath) {
           return;
         }
         if (code === 0) {
-          current.state = 'completed';
-          current.progress = 1;
-          current.speed = '';
-          current.filename = path.basename(savePath);
-          broadcastDownloads();
-          emitDiskWarning();
-          resolve(true);
+          const output = hunterOutputFile(savePath);
+          if (output) {
+            current.state = 'completed';
+            current.progress = 1;
+            current.speed = '';
+            current.error = '';
+            current.filename = path.basename(output);
+            current.received = fs.statSync(output).size;
+            current.total = current.received;
+            broadcastDownloads();
+            emitDiskWarning();
+            resolve(true);
+            return;
+          }
+        }
+        if (/No module named|not recognized|not found|ENOENT/i.test(stderr)) {
+          resolve(tryCandidate(index + 1, false));
           return;
         }
-        if (/No module named|not recognized|not found/i.test(stderr)) {
-          resolve(tryCandidate(index + 1));
+        if (!simple) {
+          resolve(tryCandidate(index, true));
           return;
         }
-        currentFail(record, 'interrupted');
+        currentFail(record, 'interrupted', hunterFailMessage(stderr));
         resolve(false);
       });
     });
   };
 
-  return tryCandidate(0);
+  return tryCandidate(0, false);
 }
 
-function currentFail(record, state) {
+function hunterOutputFile(savePath) {
+  if (fs.existsSync(savePath)) {
+    try {
+      if (fs.statSync(savePath).size > 0) {
+        return savePath;
+      }
+    } catch {
+      return '';
+    }
+  }
+  const dir = path.dirname(savePath);
+  const stem = path.basename(savePath, path.extname(savePath));
+  try {
+    const match = fs.readdirSync(dir).find((name) => {
+      if (name.endsWith('.part') || name.endsWith('.ytdl')) {
+        return false;
+      }
+      return name === path.basename(savePath) || name.startsWith(`${stem}.`);
+    });
+    if (!match) {
+      return '';
+    }
+    const full = path.join(dir, match);
+    return fs.statSync(full).size > 0 ? full : '';
+  } catch {
+    return '';
+  }
+}
+
+function hunterFailMessage(stderr) {
+  const text = String(stderr || '').trim();
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const useful = [...lines].reverse().find((line) => /error|ffmpeg|unavailable|denied|bot|sign in/i.test(line));
+  return (useful || lines[lines.length - 1] || 'Video indirilemedi').slice(0, 240);
+}
+
+function currentFail(record, state, message) {
   const current = sessionDownloads.get(record.id);
   if (!current || current.state === 'cancelled') {
     return;
   }
   current.state = state;
   current.speed = '';
+  if (message) {
+    current.error = String(message).slice(0, 240);
+  }
   broadcastDownloads();
 }
 
@@ -1836,7 +1911,7 @@ async function downloadWithYtdlCore(pageUrl, record, savePath) {
   try {
     ytdl = require('@distube/ytdl-core');
   } catch {
-    currentFail(record, 'interrupted');
+    currentFail(record, 'interrupted', 'YouTube yedek indirici yüklenemedi. yt-dlp kurulu olmalı.');
     return false;
   }
 
@@ -1851,7 +1926,7 @@ async function downloadWithYtdlCore(pageUrl, record, savePath) {
       resolve(ok);
     };
     try {
-      const stream = ytdl(pageUrl, { quality: 'highest', filter: 'audioandvideo' });
+      const stream = ytdl(pageUrl, { quality: 'highest' });
       hunterJobs.set(record.id, stream);
       stream.on('progress', (_chunk, downloaded, total) => {
         const current = sessionDownloads.get(record.id);
@@ -1863,8 +1938,8 @@ async function downloadWithYtdlCore(pageUrl, record, savePath) {
         current.progress = total > 0 ? downloaded / total : current.progress;
         broadcastDownloads();
       });
-      stream.on('error', () => {
-        currentFail(record, 'interrupted');
+      stream.on('error', (error) => {
+        currentFail(record, 'interrupted', error?.message || 'Video akışı kesildi.');
         finish(false);
       });
       const out = fs.createWriteStream(savePath);
@@ -1885,8 +1960,8 @@ async function downloadWithYtdlCore(pageUrl, record, savePath) {
         currentFail(record, 'interrupted');
         finish(false);
       });
-    } catch {
-      currentFail(record, 'interrupted');
+    } catch (error) {
+      currentFail(record, 'interrupted', error?.message || 'Video indirilemedi.');
       finish(false);
     }
   });
@@ -1898,21 +1973,23 @@ function startMediaHunterDownload(pageUrl, srcUrl) {
   }
   const page = typeof pageUrl === 'string' ? pageUrl : '';
   const src = typeof srcUrl === 'string' ? srcUrl : '';
-  if (isYoutubeWatchUrl(page) || !isDirectVideoSource(src)) {
-    const target = isYoutubeWatchUrl(page) ? page : src;
-    if (!isDirectVideoSource(target) && !isYoutubeWatchUrl(target)) {
-      return;
-    }
-    const savePath = uniqueSavePath(app.getPath('downloads'), 'agent-video.mp4');
-    const record = createHunterRecord(path.basename(savePath));
-    openDownloadsTab();
-    broadcastDownloads();
-    spawnYtDlpDownload(isYoutubeWatchUrl(page) ? page : target, record, savePath).catch(() => {
-      currentFail(record, 'interrupted');
-    });
+  const extractUrl = /^https?:/i.test(page) ? page : /^https?:/i.test(src) ? src : '';
+  if (!extractUrl) {
+    emitChromeToast('Video kaynağı bulunamadı.');
     return;
   }
-  startDirectMediaDownload(src);
+  if (isDirectMediaFile(extractUrl) && !isYoutubeWatchUrl(extractUrl) && !/^https?:/i.test(page)) {
+    startDirectMediaDownload(extractUrl);
+    return;
+  }
+
+  const savePath = uniqueSavePath(app.getPath('downloads'), 'agent-video.mp4');
+  const record = createHunterRecord(path.basename(savePath));
+  openDownloadsTab();
+  broadcastDownloads();
+  spawnYtDlpDownload(extractUrl, record, savePath).catch((error) => {
+    currentFail(record, 'interrupted', error?.message);
+  });
 }
 
 function serializeDownload(record) {
@@ -1930,6 +2007,7 @@ function serializeDownload(record) {
     state: record.state,
     progress,
     speed: typeof record.speed === 'string' ? record.speed : '',
+    error: typeof record.error === 'string' ? record.error : '',
     diskPersist: true,
   };
 }
