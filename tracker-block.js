@@ -229,6 +229,14 @@ const TRACKER_HOST_SUFFIXES = Object.freeze([
   'inner-active.mobi',
   'molocoads.com',
   'moloco.com',
+  'awin.com',
+  'cj.com',
+  'impactradius.net',
+  'nmo4.com',
+  'inneractive.mobi',
+  'vungle.com',
+  'vungle.io',
+  'ads.unity3d.com',
 ]);
 
 const TRACKER_PATH_RULES = Object.freeze([
@@ -260,6 +268,118 @@ const TRACKER_PATH_RULES = Object.freeze([
   },
 ]);
 
+function stripWww(hostname) {
+  return String(hostname || '').replace(/^www\./i, '').toLowerCase();
+}
+
+function isGoogleSearchHost(hostname) {
+  const host = stripWww(hostname);
+  return host === 'google.com' || host.endsWith('.google.com') || /^google\.[a-z]{2,8}(?:\.[a-z]{2})?$/.test(host);
+}
+
+function isYoutubeHost(hostname) {
+  const host = stripWww(hostname);
+  return host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtu.be' || host === 'youtube-nocookie.com';
+}
+
+function isAmazonHost(hostname) {
+  const host = stripWww(hostname);
+  return host === 'amazon.com' || /^amazon\.[a-z]{2,8}(?:\.[a-z]{2})?$/.test(host) || host.endsWith('.amazon.com');
+}
+
+function isFacebookHost(hostname) {
+  const host = stripWww(hostname);
+  return (
+    host === 'facebook.com' ||
+    host.endsWith('.facebook.com') ||
+    host === 'fb.com' ||
+    host === 'instagram.com' ||
+    host.endsWith('.instagram.com')
+  );
+}
+
+function isFirstPartyAdRequest(hostname, pathname, search) {
+  const host = stripWww(hostname);
+  const path = String(pathname || '').toLowerCase();
+  const query = String(search || '').toLowerCase();
+
+  if (isGoogleSearchHost(hostname)) {
+    return (
+      path.includes('/pagead') ||
+      path.startsWith('/aclk') ||
+      path.startsWith('/ads/') ||
+      path.startsWith('/adsense') ||
+      path.includes('/afs/ads')
+    );
+  }
+
+  if (isYoutubeHost(hostname)) {
+    return (
+      path.includes('/pagead') ||
+      path.includes('/ptracking') ||
+      path.includes('/get_midroll') ||
+      path.includes('/api/stats/ads') ||
+      path.includes('/ad_data') ||
+      path.includes('/player/ad') ||
+      path.includes('/youtubei/v1/player/ad')
+    );
+  }
+
+  if (isAmazonHost(hostname)) {
+    if (/^(fls-|unagi|aax\.|aan\.)/.test(host) || host.startsWith('unagi-') || host.startsWith('fls-')) {
+      return true;
+    }
+    return (
+      path.includes('/sspa') ||
+      path.includes('/aan/') ||
+      path.includes('/gp/sponsored') ||
+      path.includes('/gp/overlay') ||
+      path.includes('/gp/uedata') ||
+      path.includes('/gp/product/handlers/render-sponsored')
+    );
+  }
+
+  if (isFacebookHost(hostname)) {
+    return (
+      path === '/tr' ||
+      path.startsWith('/tr/') ||
+      path.startsWith('/an/') ||
+      path.startsWith('/ajax/bz') ||
+      path.includes('/ads/pixel') ||
+      path.includes('/ad_nile') ||
+      path.includes('/brandlift')
+    );
+  }
+
+  if (host === 'bing.com' || host.endsWith('.bing.com')) {
+    return path.includes('/aclick') || path.startsWith('/ads/') || path.includes('/fd/ls/lsp.aspx');
+  }
+
+  if (host === 'yahoo.com' || host.endsWith('.yahoo.com') || host === 'yimg.com' || host.endsWith('.yimg.com')) {
+    return (
+      path.includes('/gemini') ||
+      path.includes('/rq/darla') ||
+      path.startsWith('/ads/') ||
+      path.includes('/adsserv')
+    );
+  }
+
+  if (host === 'gstatic.com' || host.endsWith('.gstatic.com')) {
+    return path.includes('/pagead') || path.includes('/adsense') || path.includes('/afs/');
+  }
+
+  if (host === 'microsoft.com' || host.endsWith('.microsoft.com')) {
+    return path.includes('/advertising') || path.startsWith('/ads/');
+  }
+
+  if (host === 'unity.com' || host.endsWith('.unity.com') || host.endsWith('.unity3d.com')) {
+    return path.includes('/unityads') || host.startsWith('ads.') || host.includes('unityads');
+  }
+
+  void query;
+  return false;
+}
+
 const AD_HIDE_CSS =
   'iframe[src*="exoclick"],iframe[src*="exosrv"],iframe[src*="trafficjunky"],iframe[src*="juicyads"],' +
   'iframe[src*="jads.co"],iframe[src*="trafficfactory"],iframe[src*="doublepimp"],iframe[src*="adtng"],' +
@@ -270,6 +390,13 @@ const AD_HIDE_CSS =
   'iframe[src*="outbrain"],iframe[src*="criteo"],iframe[src*="mgid"],iframe[src*="revcontent"],' +
   'iframe[src*="propellerads"],iframe[src*="media.net"],iframe[src*="teads"],iframe[src*="ezoic"],' +
   'iframe[src*="carbonads"],iframe[src*="buysellads"],iframe[src*="mediavine"],iframe[src*="adthrive"],' +
+  'iframe[id^="google_ads"],iframe[src*="pagead"],iframe[src*="adservice.google"],' +
+  'ins.adsbygoogle,.adsbygoogle,[id^="google_ads"],[id^="div-gpt-ad"],[id^="ezoic-pub-ad"],' +
+  '.trc_rbox,#taboola-below-article-thumbnails,[id*="taboola"],.OUTBRAIN,[class*="outbrain-"],' +
+  'ytd-ad-slot-renderer,ytd-display-ad-renderer,ytd-promoted-sparkles-web-renderer,' +
+  'ytd-in-feed-ad-layout-renderer,ytd-promoted-video-renderer,.ytp-ad-module,.video-ads,' +
+  '.ytp-ad-player-overlay,.ytp-ad-overlay-container,[class*="adthrive"],.mv-ad,.ez-ad,' +
+  '#carbonads,.carbon-ads,[data-ad-slot],[data-google-query-id],' +
   '.adsbytrafficjunky,[class*="adsbytrafficjunky"],.removeAdsHeader,.remove-ads-header,' +
   '.mgp_ad,.mgp_preroll,.mgp_overlayAd,.mgp_promo,.mgp_seekAd,' +
   '#player-ads,#ad-right,#ad-left,.adRight,.adLeft,' +
@@ -295,6 +422,10 @@ function shouldBlockUrl(rawUrl) {
 
   const hostname = parsed.hostname.toLowerCase();
   if (TRACKER_HOST_SUFFIXES.some((suffix) => hostnameMatchesSuffix(hostname, suffix))) {
+    return true;
+  }
+
+  if (isFirstPartyAdRequest(hostname, parsed.pathname, parsed.search)) {
     return true;
   }
 

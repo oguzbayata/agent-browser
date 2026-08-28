@@ -66,6 +66,17 @@ const BLOCK = {
   'Digital Turbine': 'https://canvas.digitalturbine.com/tag.js',
   'Moloco': 'https://sdkapi.molocoads.com/v1/bid',
   'adult-trafficjunky': 'https://ads.trafficjunky.net/ad/banner.js',
+  'Google first-party AdSense': 'https://www.google.com/pagead/ads',
+  'Google Ads click': 'https://www.google.com/aclk?sa=l',
+  'YouTube midroll': 'https://www.youtube.com/api/stats/ads',
+  'YouTube pagead': 'https://www.youtube.com/pagead/adview',
+  'Facebook pixel': 'https://www.facebook.com/tr',
+  'Amazon sponsored': 'https://www.amazon.com/sspa/click',
+  'Amazon pixel': 'https://fls-na.amazon.com/1/batch/1/OP',
+  'Bing ads click': 'https://www.bing.com/aclick?ld=test',
+  'Yahoo native path': 'https://s.yimg.com/rq/darla/modern.js',
+  'Awin network': 'https://www.awin.com/publisher',
+  'CJ network': 'https://www.cj.com/publisher',
 };
 
 const ALLOW = [
@@ -74,6 +85,7 @@ const ALLOW = [
   'https://www.xvideos.com/video123/title',
   'https://www.xhamster.com/videos/example',
   'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  'https://www.google.com/search?q=test',
   'https://duckduckgo.com/?q=test',
   'https://github.com/oguzbayata/agent-browser',
   'https://www.amazon.com/dp/B000000000',
