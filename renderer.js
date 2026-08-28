@@ -619,12 +619,18 @@ function sessionApiKey() {
 }
 
 function localRuntimeReady(intel) {
-  const selectedId = intel?.selectedId;
-  if (!selectedId) {
-    return false;
+  const models = Array.isArray(intel?.models) ? intel.models : [];
+  if (models.some((item) => item.live && item.ready && (item.kind === 'ollama' || item.kind === 'openai-compat'))) {
+    return true;
   }
-  const model = (intel.models || []).find((item) => item.id === selectedId);
-  return Boolean(model && model.ready && (model.kind === 'ollama' || model.kind === 'openai-compat'));
+  const selectedId = intel?.selectedId;
+  const model = selectedId ? models.find((item) => item.id === selectedId) : null;
+  if (model && model.ready && (model.kind === 'ollama' || model.kind === 'openai-compat')) {
+    return true;
+  }
+  return (Array.isArray(intel?.agents) ? intel.agents : []).some(
+    (agent) => agent.status === 'running' && agent.id !== 'agent-bridge',
+  );
 }
 
 function renderLocalIntel(intel) {

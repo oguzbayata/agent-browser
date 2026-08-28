@@ -9,7 +9,7 @@ const { pathToFileURL } = require('node:url');
 const http = require('node:http');
 const net = require('node:net');
 const { startAgentBridgeServer, stopAgentBridgeServer, getListenInfo } = require('./agent-bridge');
-const { collectIntel, knownModelRoots, isLoopbackHttpUrl } = require('./local-intel');
+const { collectIntel, knownModelRoots, isLoopbackHttpUrl, resolveLocalChatTarget } = require('./local-intel');
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('oguzbayata.agent-browser');
@@ -387,6 +387,8 @@ let toolsHostDismiss = null;
 const sessionLocalFiles = [];
 const sessionLocalDirs = [];
 let selectedLocalModel = null;
+let lastIntelModels = [];
+let lastIntelAgents = [];
 const extExpertHistory = [];
 let localIntelWatchers = [];
 let localIntelTimer = null;
@@ -1278,6 +1280,8 @@ function purgeSessionChromeState() {
   sessionLocalFiles.length = 0;
   sessionLocalDirs.length = 0;
   selectedLocalModel = null;
+  lastIntelModels = [];
+  lastIntelAgents = [];
   sendToChrome('agent:downloads', { items: [], open: false });
   sendToChrome('agent:local-intel', { models: [], agents: [], selectedId: null, scannedAt: 0 });
   broadcastBookmarks();
@@ -5645,13 +5649,15 @@ async function buildLocalIntelSnapshot() {
     extraFiles: sessionLocalFiles.slice(),
     listenInfo: privacySettings.agentBridge ? getListenInfo() : null,
   });
+  lastIntelModels = intel.models.map((item) => serializeLocalModel(item)).filter(Boolean);
+  lastIntelAgents = Array.isArray(intel.agents) ? intel.agents : [];
   if (selectedLocalModel) {
     const match = intel.models.find((item) => item.id === selectedLocalModel.id);
     selectedLocalModel = match || { ...selectedLocalModel, live: false, ready: selectedLocalModel.kind !== 'file' ? false : selectedLocalModel.ready };
   }
   return {
-    models: intel.models.map((item) => serializeLocalModel(item)).filter(Boolean),
-    agents: intel.agents,
+    models: lastIntelModels,
+    agents: lastIntelAgents,
     selectedId: selectedLocalModel?.id || null,
     scannedAt: intel.scannedAt,
   };
@@ -5761,17 +5767,19 @@ async function requestLocalOpenAiChat(model, messages) {
 }
 
 async function requestChat(apiKey, messages) {
+  if (!lastIntelModels.length) {
+    await pushLocalIntel();
+  }
   const selected = selectedLocalModel && serializeLocalModel(selectedLocalModel);
-  if (selected?.kind === 'ollama' && selected.ready && selected.chatUrl) {
-    return requestOllamaChat(selected, messages);
+  const shouldUseLocal = Boolean(selected) || !apiKey;
+  const target = shouldUseLocal
+    ? resolveLocalChatTarget(selected, lastIntelModels, lastIntelAgents)
+    : null;
+  if (target?.kind === 'ollama' && target.chatUrl) {
+    return requestOllamaChat(target, messages);
   }
-  if (selected?.kind === 'openai-compat' && selected.ready && selected.chatUrl) {
-    return requestLocalOpenAiChat(selected, messages);
-  }
-  if (selected?.kind === 'file') {
-    throw new Error(
-      'Bu model dosyası seçildi ama çalışan bir yerel sunucu yok. Ollama, LM Studio veya benzeri bir çalışma zamanını başlatıp modeli yükleyin.',
-    );
+  if (target?.kind === 'openai-compat' && target.chatUrl) {
+    return requestLocalOpenAiChat(target, messages);
   }
   if (!apiKey) {
     throw new Error('Yerel bir model seçin veya oturum API anahtarı girin.');
@@ -6657,9 +6665,11 @@ ipcMain.handle('agent:ext-expert', async (event, payload) => {
     return { ok: false, error: 'Geçersiz mesaj.' };
   }
 
+  try {
   let reply = '';
   let usedModel = false;
   let plan = null;
+  let modelError = '';
   try {
     const content = await requestChat('', [
       { role: 'system', content: expertSystemPrompt() },
@@ -6669,10 +6679,11 @@ ipcMain.handle('agent:ext-expert', async (event, payload) => {
     usedModel = true;
     plan = extractExpertPlan(content);
     reply = plan?.reply || content.replace(/```[\s\S]*?```/g, '').trim();
-  } catch {
+  } catch (error) {
     usedModel = false;
     plan = null;
     reply = '';
+    modelError = error instanceof Error ? error.message : 'Yerel model yanıt vermedi.';
   }
 
   let toggles = normalizeExpertToggles(plan?.toggles, message);
@@ -6701,7 +6712,7 @@ ipcMain.handle('agent:ext-expert', async (event, payload) => {
         reply += '. Yerel model yoktu; anahtar sözcüklere göre uyguladım.';
       }
     } else if (!usedModel) {
-      reply = reply || 'Yerel bir model seçin; şimdilik eklenti değişikliği yok.';
+      reply = modelError || 'Yerel bir model seçin; şimdilik eklenti değişikliği yok.';
     } else {
       reply = 'Bu istek için eklenti değişikliği gerekmedi.';
     }
@@ -6720,6 +6731,13 @@ ipcMain.handle('agent:ext-expert', async (event, payload) => {
   }
 
   return { ok: true, reply, applied: applied.map((item) => ({ id: item.id, on: item.on })), settings };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Eklenti uzmanı yanıt veremedi.',
+      settings: snapshotSettings(),
+    };
+  }
 });
 
 ipcMain.handle('agent:memory-bridge-get', async (event) => {

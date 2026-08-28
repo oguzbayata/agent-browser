@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const PROBE_MS = 700;
+const PROBE_MS = 2500;
 const WALK_MAX_FILES = 280;
 const WALK_MAX_DEPTH = 6;
 const FILE_EXTS = new Set(['.gguf', '.ggml', '.bin', '.onnx', '.safetensors', '.pt', '.pth']);
@@ -236,6 +236,88 @@ function formatBytes(size) {
 
 function modelId(kind, key) {
   return `${kind}:${key}`.slice(0, 480);
+}
+
+function normalizeModelKey(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/\.(gguf|ggml|bin|onnx|safetensors|pt|pth)$/i, '')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function liveChatModels(models) {
+  return (Array.isArray(models) ? models : []).filter(
+    (item) =>
+      item &&
+      item.live &&
+      item.ready &&
+      item.chatUrl &&
+      (item.kind === 'ollama' || item.kind === 'openai-compat'),
+  );
+}
+
+function fallbackRuntimeFromAgents(selected, agents) {
+  const list = Array.isArray(agents) ? agents : [];
+  for (const runtime of RUNTIME_PROBES) {
+    const running = list.some(
+      (agent) =>
+        agent &&
+        agent.status === 'running' &&
+        (agent.id === runtime.id || agent.name === runtime.name),
+    );
+    if (!running) {
+      continue;
+    }
+    return {
+      id: modelId(runtime.kind, runtime.id),
+      name: selected?.name || 'local-model',
+      source: runtime.name,
+      runtime: runtime.id,
+      kind: runtime.kind,
+      ready: true,
+      live: true,
+      port: runtime.port,
+      chatUrl: `http://127.0.0.1:${runtime.port}${runtime.chatPath}`,
+    };
+  }
+  return null;
+}
+
+function resolveLocalChatTarget(selected, models, agents) {
+  const live = liveChatModels(models);
+  if (
+    selected &&
+    (selected.kind === 'ollama' || selected.kind === 'openai-compat') &&
+    selected.ready &&
+    selected.chatUrl
+  ) {
+    return selected;
+  }
+  if (selected?.name) {
+    const key = normalizeModelKey(selected.name);
+    const named = live.find((item) => {
+      const other = normalizeModelKey(item.name);
+      return Boolean(key) && (other === key || other.includes(key) || key.includes(other));
+    });
+    if (named) {
+      return named;
+    }
+    const family = live.find((item) => {
+      const other = normalizeModelKey(item.name);
+      return key.length >= 6 && other.length >= 6 && (key.slice(0, 8) === other.slice(0, 8));
+    });
+    if (family) {
+      return family;
+    }
+    const studio = live.find((item) => item.runtime === 'lmstudio' || item.source === 'LM Studio');
+    if (studio && selected.kind === 'file') {
+      return studio;
+    }
+  }
+  if (live.length) {
+    return live[0];
+  }
+  return fallbackRuntimeFromAgents(selected, agents);
 }
 
 function displayFromPath(filePath) {
@@ -684,5 +766,7 @@ module.exports = {
   collectIntel,
   knownModelRoots,
   isLoopbackHttpUrl,
+  resolveLocalChatTarget,
+  normalizeModelKey,
   RUNTIME_PROBES,
 };
