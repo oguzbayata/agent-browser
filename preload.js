@@ -104,6 +104,7 @@ contextBridge.exposeInMainWorld(
     },
     setDownloadsOpen: (open) => ipcRenderer.invoke('agent:downloads-panel', Boolean(open)),
     openDownloadsTab: () => ipcRenderer.invoke('agent:downloads-open'),
+    openExtensionsTab: () => ipcRenderer.invoke('agent:extensions-open'),
     setMenuOpen: (open, anchor) =>
       ipcRenderer.invoke('agent:menu-panel', {
         open: Boolean(open),

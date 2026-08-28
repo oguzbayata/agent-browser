@@ -1364,57 +1364,12 @@ function bindTools() {
     return;
   }
 
-  let toolsVisible = false;
-  let ignoreToggleUntil = 0;
-
-  function toolsAnchor() {
-    const box = toggle.getBoundingClientRect();
-    return {
-      left: box.left,
-      top: box.top,
-      right: box.right,
-      bottom: box.bottom,
-      width: box.width,
-      height: box.height,
-    };
-  }
-
-  function setToolsVisible(open) {
-    toolsVisible = open;
-    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) {
-      hideUtilityPops();
-      document.getElementById('settings-toggle')?.setAttribute('aria-expanded', 'false');
-      document.getElementById('shield-toggle')?.setAttribute('aria-expanded', 'false');
-      document.getElementById('site-toggle')?.setAttribute('aria-expanded', 'false');
-      document.body.classList.remove('menu-open');
-      api?.setMenuOpen?.(false);
-      api?.setShieldOpen?.(false);
-      api?.setSiteOpen?.(false);
-      ignoreToggleUntil = Date.now() + 280;
-    }
-    api?.setToolsOpen?.(open, open ? toolsAnchor() : null);
-  }
-
   toggle.addEventListener('click', (event) => {
     event.stopPropagation();
-    if (Date.now() < ignoreToggleUntil) {
-      return;
-    }
-    setToolsVisible(!toolsVisible);
+    api?.setToolsOpen?.(false);
+    api?.openExtensionsTab?.();
   });
 
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && toolsVisible) {
-      setToolsVisible(false);
-    }
-  });
-
-  api?.onToolsClosed?.(() => {
-    toolsVisible = false;
-    ignoreToggleUntil = Date.now() + 280;
-    toggle.setAttribute('aria-expanded', 'false');
-  });
   api?.onToolsCommand?.((payload) => {
     const action = payload?.action;
     if (action === 'shield') {
@@ -1424,9 +1379,9 @@ function bindTools() {
     } else if (action === 'settings') {
       setSettingsPanelOpen(true);
     } else if (action === 'models') {
-      const toggle = document.getElementById('ai-toggle');
-      if (toggle && toggle.getAttribute('aria-expanded') !== 'true') {
-        toggle.click();
+      const modelsToggle = document.getElementById('ai-toggle');
+      if (modelsToggle && modelsToggle.getAttribute('aria-expanded') !== 'true') {
+        modelsToggle.click();
       }
     }
   });

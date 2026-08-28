@@ -54,6 +54,9 @@ const DOWNLOADS_FILE_URL = pathToFileURL(DOWNLOADS_PATH).href;
 const DOWNLOADS_PRELOAD_PATH = path.join(__dirname, 'downloads-preload.js');
 const USEFUL_LINKS_PATH = path.join(__dirname, 'useful-links.html');
 const USEFUL_LINKS_FILE_URL = pathToFileURL(USEFUL_LINKS_PATH).href;
+const EXTENSIONS_PATH = path.join(__dirname, 'extensions.html');
+const EXTENSIONS_FILE_URL = pathToFileURL(EXTENSIONS_PATH).href;
+const EXTENSIONS_PRELOAD_PATH = path.join(__dirname, 'extensions-preload.js');
 const SCRAPER_PATH = path.join(__dirname, 'engine', 'scraper.py');
 const AGENT_SEARCH_PREFIX = 'agent-search:';
 const PYTHON_MISSING_MESSAGE = 'Yerel İstihbarat Ajanı başlatılamadı: Python bulunamadı';
@@ -75,6 +78,7 @@ const BOOLEAN_SETTINGS = new Set([
   'agentBridge',
   'ghostNetwork',
   'mediaHunter',
+  'blockMedia',
 ]);
 const AGENT_BRIDGE_HOST = '127.0.0.1';
 const AGENT_BRIDGE_PORT = 17331;
@@ -87,6 +91,7 @@ const AJAN_ERR = '\x1b[31m[AJAN]\x1b[0m';
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 const NETWORK_FILTER = Object.freeze({ urls: ['http://*/*', 'https://*/*'] });
 const GHOST_DENIED_PERMISSIONS = new Set(['media', 'geolocation', 'display-capture']);
+const MEDIA_DENIED_PERMISSIONS = new Set(['media', 'display-capture', 'speaker-selection']);
 const COMMON_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
@@ -214,6 +219,11 @@ const downloadsWebPreferences = Object.freeze({
   preload: DOWNLOADS_PRELOAD_PATH,
 });
 
+const extensionsWebPreferences = Object.freeze({
+  ...sharedSessionPrefs,
+  preload: EXTENSIONS_PRELOAD_PATH,
+});
+
 let mainWindow = null;
 const views = new Map();
 const scraperChildren = new Set();
@@ -284,6 +294,7 @@ const privacySettings = {
   agentBridge: false,
   ghostNetwork: false,
   mediaHunter: false,
+  blockMedia: true,
 };
 global.isDownloaderEnabled = false;
 let blockedRequestCount = 0;
@@ -526,13 +537,36 @@ function applyWebRtcPolicyToAll() {
   }
 }
 
+function mediaPermissionBlocked(permission) {
+  if (privacySettings.blockMedia && MEDIA_DENIED_PERMISSIONS.has(permission)) {
+    return true;
+  }
+  if (privacySettings.ghostNetwork && GHOST_DENIED_PERMISSIONS.has(permission)) {
+    return true;
+  }
+  return false;
+}
+
+function applyDisplayMediaBlock(isolatedSession) {
+  if (!isolatedSession || typeof isolatedSession.setDisplayMediaRequestHandler !== 'function') {
+    return;
+  }
+  if (privacySettings.blockMedia) {
+    isolatedSession.setDisplayMediaRequestHandler((_request, callback) => {
+      callback({});
+    });
+    return;
+  }
+  isolatedSession.setDisplayMediaRequestHandler(null);
+}
+
 function applySessionPermissions(isolatedSession) {
   isolatedSession.setPermissionRequestHandler((_contents, permission, callback) => {
     if (permission === 'storage-access' || permission === 'top-level-storage-access') {
       callback(false);
       return;
     }
-    if (privacySettings.ghostNetwork && GHOST_DENIED_PERMISSIONS.has(permission)) {
+    if (mediaPermissionBlocked(permission)) {
       callback(false);
       return;
     }
@@ -543,11 +577,13 @@ function applySessionPermissions(isolatedSession) {
     if (permission === 'storage-access' || permission === 'top-level-storage-access') {
       return false;
     }
-    if (privacySettings.ghostNetwork && GHOST_DENIED_PERMISSIONS.has(permission)) {
+    if (mediaPermissionBlocked(permission)) {
       return false;
     }
     return true;
   });
+
+  applyDisplayMediaBlock(isolatedSession);
 }
 
 async function applyGhostNetwork() {
@@ -850,6 +886,15 @@ function sendToChrome(channel, payload) {
   }
 }
 
+function sendToKind(kind, channel, payload) {
+  for (const entry of views.values()) {
+    const webContents = entry.view?.webContents;
+    if (entry.kind === kind && webContents && !webContents.isDestroyed()) {
+      webContents.send(channel, payload);
+    }
+  }
+}
+
 function emitTabUpdated(tabId) {
   const tab = serializeTab(tabId);
   if (tab) {
@@ -863,7 +908,7 @@ function currentGuestUrl() {
     return '';
   }
   const url = guest.getURL();
-  if (isStartPage(url) || isSearchFile(url) || isDownloadsFile(url) || isUsefulLinksFile(url)) {
+  if (isStartPage(url) || isSearchFile(url) || isDownloadsFile(url) || isUsefulLinksFile(url) || isExtensionsFile(url)) {
     return '';
   }
   return url;
@@ -2167,6 +2212,27 @@ function isUsefulLinksFile(rawUrl) {
   return Boolean(filePath) && filePath.toLowerCase() === path.normalize(USEFUL_LINKS_PATH).toLowerCase();
 }
 
+function isExtensionsFile(rawUrl) {
+  if (!rawUrl) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.pathname.toLowerCase().endsWith('/extensions.html') || parsed.href.split('?')[0] === EXTENSIONS_FILE_URL) {
+      const filePath = fileUrlToPath(parsed.href);
+      if (filePath && filePath.toLowerCase() === path.normalize(EXTENSIONS_PATH).toLowerCase()) {
+        return true;
+      }
+    }
+  } catch {
+    // Compare by filesystem path below.
+  }
+
+  const filePath = fileUrlToPath(rawUrl);
+  return Boolean(filePath) && filePath.toLowerCase() === path.normalize(EXTENSIONS_PATH).toLowerCase();
+}
+
 function searchQueryFromUrl(rawUrl) {
   try {
     return String(new URL(rawUrl).searchParams.get('q') || '').trim().slice(0, 500);
@@ -2203,6 +2269,9 @@ function displayGuestUrl(rawUrl) {
   if (isUsefulLinksFile(rawUrl)) {
     return '';
   }
+  if (isExtensionsFile(rawUrl)) {
+    return '';
+  }
   return rawUrl;
 }
 
@@ -2228,7 +2297,7 @@ function isStartPage(rawUrl) {
 }
 
 function isAllowedGuestUrl(rawUrl) {
-  return rawUrl === 'about:blank' || isNewTabFile(rawUrl) || isSearchFile(rawUrl) || isDownloadsFile(rawUrl) || isUsefulLinksFile(rawUrl) || Boolean(sanitizeUrl(rawUrl));
+  return rawUrl === 'about:blank' || isNewTabFile(rawUrl) || isSearchFile(rawUrl) || isDownloadsFile(rawUrl) || isUsefulLinksFile(rawUrl) || isExtensionsFile(rawUrl) || Boolean(sanitizeUrl(rawUrl));
 }
 
 function loadStartPage(webContents) {
@@ -2260,8 +2329,37 @@ function loadUsefulLinksPage(webContents) {
   return webContents.loadFile(USEFUL_LINKS_PATH);
 }
 
+function loadExtensionsPage(webContents) {
+  if (!webContents || webContents.isDestroyed()) {
+    return Promise.resolve();
+  }
+  return webContents.loadFile(EXTENSIONS_PATH);
+}
+
 function openUsefulLinksTab() {
   return createGuestTab(USEFUL_LINKS_FILE_URL);
+}
+
+function findExtensionsTabId() {
+  for (const [tabId, entry] of views.entries()) {
+    const webContents = entry.view?.webContents;
+    if (entry.kind === 'extensions' && webContents && !webContents.isDestroyed()) {
+      return tabId;
+    }
+  }
+  return null;
+}
+
+function openExtensionsTab() {
+  const existing = findExtensionsTabId();
+  if (existing) {
+    switchToTab(existing);
+    pushLocalIntel();
+    return existing;
+  }
+  const tabId = createGuestTab(EXTENSIONS_FILE_URL, { extensions: true });
+  pushLocalIntel();
+  return tabId;
 }
 
 function findDownloadsTabId() {
@@ -2468,6 +2566,9 @@ function tabTitleOf(webContents) {
   if (isUsefulLinksFile(url)) {
     return 'Faydalı Linkler';
   }
+  if (isExtensionsFile(url)) {
+    return 'Eklentiler';
+  }
 
   const title = webContents.getTitle();
   if (title && title !== 'about:blank' && title !== 'Yeni Sekme') {
@@ -2652,7 +2753,7 @@ function injectVideoAdSkipper(webContents) {
   if (!webContents || webContents.isDestroyed()) {
     return;
   }
-  if (isStartPage(webContents.getURL()) || isSearchFile(webContents.getURL()) || isDownloadsFile(webContents.getURL()) || isUsefulLinksFile(webContents.getURL())) {
+  if (isStartPage(webContents.getURL()) || isSearchFile(webContents.getURL()) || isDownloadsFile(webContents.getURL()) || isUsefulLinksFile(webContents.getURL()) || isExtensionsFile(webContents.getURL())) {
     return;
   }
   webContents.executeJavaScript(VIDEO_AD_SKIPPER_SOURCE, true).catch(() => {});
@@ -2683,7 +2784,13 @@ function attachTabListeners(tabId, webContents) {
       }
       return;
     }
-    if (isDownloadsFile(url) || !isAllowedGuestUrl(url)) {
+    if (entry?.kind === 'extensions') {
+      if (!isExtensionsFile(url)) {
+        event.preventDefault();
+      }
+      return;
+    }
+    if (isDownloadsFile(url) || isExtensionsFile(url) || !isAllowedGuestUrl(url)) {
       event.preventDefault();
     }
   });
@@ -2705,7 +2812,9 @@ function attachTabListeners(tabId, webContents) {
         ? 'İndirmeler'
         : isUsefulLinksFile(webContents.getURL())
           ? 'Faydalı Linkler'
-          : isStartPage(webContents.getURL())
+          : isExtensionsFile(webContents.getURL())
+            ? 'Eklentiler'
+            : isStartPage(webContents.getURL())
             ? 'Yeni Sekme'
             : 'Yükleniyor...',
     });
@@ -2788,11 +2897,23 @@ function createGuestTab(initialUrl, options = {}) {
 
   const downloads = options.downloads === true || isDownloadsFile(initialUrl);
   const usefulLinks = isUsefulLinksFile(initialUrl);
+  const extensions = options.extensions === true || isExtensionsFile(initialUrl);
   const view = new WebContentsView({
-    webPreferences: downloads ? downloadsWebPreferences : guestWebPreferences,
+    webPreferences: downloads
+      ? downloadsWebPreferences
+      : extensions
+        ? extensionsWebPreferences
+        : guestWebPreferences,
   });
   view.setBackgroundColor('#070809');
-  views.set(tabId, { id: tabId, view, owner, pinned: false, window: host, kind: downloads ? 'downloads' : 'guest' });
+  views.set(tabId, {
+    id: tabId,
+    view,
+    owner,
+    pinned: false,
+    window: host,
+    kind: downloads ? 'downloads' : extensions ? 'extensions' : 'guest',
+  });
   tabSecurityStats.set(tabId, emptySecurityStats());
   attachTabListeners(tabId, view.webContents);
   host.contentView.addChildView(view);
@@ -2807,6 +2928,8 @@ function createGuestTab(initialUrl, options = {}) {
     loadDownloadsPage(view.webContents);
   } else if (usefulLinks) {
     loadUsefulLinksPage(view.webContents);
+  } else if (extensions) {
+    loadExtensionsPage(view.webContents);
   } else if (searchQuery) {
     loadSearchPage(view.webContents, searchQuery);
   } else if (target !== 'about:blank') {
@@ -2822,7 +2945,15 @@ function createGuestTab(initialUrl, options = {}) {
 
   sendToChrome('agent:tab-created', {
     tabId,
-    title: downloads ? 'İndirmeler' : usefulLinks ? 'Faydalı Linkler' : target === 'about:blank' ? 'Yeni Sekme' : 'Yükleniyor...',
+    title: downloads
+      ? 'İndirmeler'
+      : usefulLinks
+        ? 'Faydalı Linkler'
+        : extensions
+          ? 'Eklentiler'
+          : target === 'about:blank'
+            ? 'Yeni Sekme'
+            : 'Yükleniyor...',
     url: target,
     active: activate,
     pinned: false,
@@ -2987,6 +3118,7 @@ function triggerExcommunicado() {
     privacySettings.agentBridge = false;
     privacySettings.ghostNetwork = false;
     privacySettings.mediaHunter = false;
+    privacySettings.blockMedia = true;
     global.isDownloaderEnabled = false;
     applyGhostNetwork().catch(() => {});
   } catch {
@@ -3096,6 +3228,24 @@ function isDownloadsSender(event) {
     }
   }
   return isDownloadsFile(contents.getURL());
+}
+
+function isExtensionsSender(event) {
+  const contents = event?.sender;
+  if (!contents || contents.isDestroyed()) {
+    return false;
+  }
+  for (const entry of views.values()) {
+    if (
+      entry.kind === 'extensions' &&
+      entry.view?.webContents &&
+      !entry.view.webContents.isDestroyed() &&
+      entry.view.webContents === contents
+    ) {
+      return true;
+    }
+  }
+  return isExtensionsFile(contents.getURL());
 }
 
 function notifyChromeMenuClosed() {
@@ -3872,7 +4022,12 @@ ipcMain.handle('agent:navigate', async (event, rawUrl) => {
   }
 
   const searchQuery = parseAgentSearchTarget(rawUrl);
-  if (isDownloadsFile(guest.getURL()) || views.get(activeTabId)?.kind === 'downloads') {
+  if (
+    isDownloadsFile(guest.getURL()) ||
+    isExtensionsFile(guest.getURL()) ||
+    views.get(activeTabId)?.kind === 'downloads' ||
+    views.get(activeTabId)?.kind === 'extensions'
+  ) {
     if (searchQuery) {
       const tabId = createGuestTab(`${AGENT_SEARCH_PREFIX}${encodeURIComponent(searchQuery)}`);
       return { ok: Boolean(tabId), url: searchQuery };
@@ -4171,6 +4326,15 @@ ipcMain.handle('agent:downloads-open', async (event) => {
   return { ok: Boolean(tabId), tabId };
 });
 
+ipcMain.handle('agent:extensions-open', async (event) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+  hideToolsMenu({ notify: false });
+  const tabId = openExtensionsTab();
+  return { ok: Boolean(tabId), tabId };
+});
+
 ipcMain.handle('agent:downloads-get', async (event) => {
   if (!isChromeSender(event) && !isDownloadsSender(event)) {
     return { ok: false, items: [] };
@@ -4250,7 +4414,7 @@ ipcMain.handle('agent:tools-panel', async (event, payload) => {
 });
 
 ipcMain.handle('agent:tools-action', async (event, action) => {
-  if (!isChromeSender(event) || typeof action !== 'string') {
+  if ((!isChromeSender(event) && !isExtensionsSender(event)) || typeof action !== 'string') {
     return { ok: false };
   }
   hideToolsMenu();
@@ -4567,6 +4731,7 @@ async function pushLocalIntel() {
       localIntelPending = false;
       snapshot = await buildLocalIntelSnapshot();
       sendToChrome('agent:local-intel', snapshot);
+      sendToKind('extensions', 'agent:local-intel', snapshot);
     } while (localIntelPending);
     return snapshot;
   } catch {
@@ -4757,6 +4922,14 @@ ipcMain.handle('agent:bookmarks-panel', async (event, open) => {
   return { ok: true, open: bookmarksPanelOpen };
 });
 
+ipcMain.handle('agent:local-intel-get', async (event) => {
+  if (!isChromeSender(event) && !isExtensionsSender(event)) {
+    return { ok: false };
+  }
+  const snapshot = await pushLocalIntel();
+  return { ok: true, intel: snapshot };
+});
+
 ipcMain.handle('agent:local-intel-watch', async (event, open) => {
   if (!isChromeSender(event)) {
     return { ok: false };
@@ -4846,6 +5019,7 @@ function snapshotSettings() {
     agentBridgeToken: privacySettings.agentBridge ? agentBridgeToken : '',
     ghostNetwork: privacySettings.ghostNetwork,
     mediaHunter: Boolean(privacySettings.mediaHunter),
+    blockMedia: privacySettings.blockMedia !== false,
     proxyUrl: privacySettings.ghostNetwork ? SOCKS5_PROXY : '',
     blockedRequestCount,
     securityStats: snapshotSecurityStats(),
@@ -4855,6 +5029,7 @@ function snapshotSettings() {
 function broadcastSettings() {
   const settings = snapshotSettings();
   sendToChrome('agent:settings', settings);
+  sendToKind('extensions', 'agent:settings', settings);
   return settings;
 }
 
@@ -4924,7 +5099,7 @@ const agentBridgeHandlers = {
     if (!url) {
       return { ok: false, error: 'invalid-url' };
     }
-    if (entry?.kind === 'downloads') {
+    if (entry?.kind === 'downloads' || entry?.kind === 'extensions') {
       const nextId = createGuestTab(url, { owner: entry.owner });
       return nextId ? { ok: true, tab: serializeTab(nextId) } : failTab('cannot-create-tab');
     }
@@ -5079,14 +5254,14 @@ ipcMain.handle('agent:security-stats', async (event) => {
 });
 
 ipcMain.handle('agent:settings-get', async (event) => {
-  if (!isChromeSender(event)) {
+  if (!isChromeSender(event) && !isExtensionsSender(event)) {
     return { ok: false };
   }
   return { ok: true, settings: snapshotSettings() };
 });
 
 ipcMain.handle('agent:settings-set', async (event, payload) => {
-  if (!isChromeSender(event) || !payload || typeof payload !== 'object') {
+  if ((!isChromeSender(event) && !isExtensionsSender(event)) || !payload || typeof payload !== 'object') {
     return { ok: false };
   }
 
@@ -5107,6 +5282,9 @@ ipcMain.handle('agent:settings-set', async (event, payload) => {
         privacySettings.agentBridge = false;
         return { ok: false, error: 'Ajan köprüsü dinlenemedi.', settings: broadcastSettings() };
       }
+    }
+    if (key === 'blockMedia') {
+      applySessionPermissions(getIsolatedSession());
     }
     if (key === 'ghostNetwork') {
       try {
@@ -5182,7 +5360,7 @@ ipcMain.on('open-useful-links', (event) => {
     return;
   }
   const senderUrl = event.sender?.getURL?.() || '';
-  if (!isChromeSender(event) && !isNewTabFile(senderUrl) && !isStartPage(senderUrl)) {
+  if (!isChromeSender(event) && !isNewTabFile(senderUrl) && !isStartPage(senderUrl) && !isExtensionsSender(event)) {
     return;
   }
   openUsefulLinksTab();

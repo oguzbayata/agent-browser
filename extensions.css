@@ -1,0 +1,384 @@
+:root {
+  --bg: #070809;
+  --bar: #0c0f12;
+  --card: #12161b;
+  --line: #1f262d;
+  --text: #e8eaed;
+  --muted: #8b949e;
+  --accent: #3dffc8;
+  --accent-ink: #04110c;
+  --danger: #ff5a6a;
+  --switch: #5f6368;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+body {
+  min-height: 100vh;
+}
+
+.ext-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 16px 0 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bar);
+}
+
+.ext-menu,
+.ext-switch {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ext-menu {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+}
+
+.ext-menu:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ext-menu svg,
+.ext-nav-item svg,
+.ext-search svg,
+.ext-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ext-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.ext-top h1 {
+  margin: 0 8px 0 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.ext-search {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  max-width: 520px;
+  height: 40px;
+  margin: 0 auto;
+  padding: 0 14px;
+  border-radius: 20px;
+  background: #1a2027;
+  color: var(--muted);
+}
+
+.ext-search input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  margin-left: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: 14px/1.2 "Segoe UI", system-ui, sans-serif;
+  outline: none;
+}
+
+.ext-dev {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ext-switch {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--switch);
+}
+
+.ext-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+.ext-switch[aria-checked="true"] {
+  background: var(--accent);
+}
+
+.ext-switch[aria-checked="true"]::after {
+  background: var(--accent-ink);
+  transform: translateX(16px);
+}
+
+.ext-shell {
+  display: grid;
+  grid-template-columns: 256px minmax(0, 1fr);
+  min-height: calc(100vh - 56px);
+}
+
+body.is-nav-collapsed .ext-shell {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+body.is-nav-collapsed .ext-nav {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+}
+
+.ext-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 8px 16px;
+  border-right: 1px solid var(--line);
+  background: var(--bar);
+}
+
+.ext-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text);
+  font: 14px/1.2 "Segoe UI", system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ext-nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ext-nav-item.is-active {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+
+.ext-nav-store {
+  display: flex;
+  gap: 10px;
+  margin-top: auto;
+  padding: 12px 10px 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ext-nav-store img {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.ext-nav-store p {
+  margin: 0;
+}
+
+.ext-nav-store button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ext-main {
+  padding: 20px 28px 48px;
+}
+
+.ext-main h2 {
+  margin: 8px 0 16px;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.ext-empty {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.ext-empty[hidden],
+.ext-view[hidden] {
+  display: none;
+}
+
+.ext-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 12px;
+}
+
+.ext-card {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px 14px;
+  min-height: 132px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.ext-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: #0a0c0f;
+  color: var(--accent);
+}
+
+.ext-copy {
+  min-width: 0;
+}
+
+.ext-copy h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.ext-copy p,
+.ext-id {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.ext-id {
+  margin-top: 6px;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+}
+
+body:not(.is-dev) .ext-id {
+  display: none;
+}
+
+.ext-actions {
+  display: flex;
+  align-items: center;
+  grid-column: 1 / -1;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.ext-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #3c444d;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--accent);
+  font: 13px/1 "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.ext-btn:hover {
+  background: rgba(61, 255, 200, 0.08);
+}
+
+.ext-btn.is-danger {
+  color: var(--danger);
+  border-color: rgba(255, 90, 106, 0.45);
+}
+
+.ext-actions .ext-switch {
+  margin-left: auto;
+}
+
+.ext-keys {
+  max-width: 640px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ext-keys li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ext-keys span {
+  flex: 1;
+  font-size: 14px;
+}
+
+kbd {
+  min-width: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0f1318;
+  color: var(--text);
+  font: 12px/1 "Segoe UI", system-ui, sans-serif;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .ext-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ext-search {
+    max-width: none;
+  }
+}
