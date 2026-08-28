@@ -2749,14 +2749,14 @@ function runScraperProcess(command, args, env) {
       const timeoutError = new Error('scraper-timeout');
       timeoutError.code = 'scraper-timeout';
       finish(timeoutError);
-    }, 25000);
+    }, 90000);
 
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk) => {
       stdout += chunk;
-      if (stdout.length > 1_000_000) {
-        stdout = stdout.slice(0, 1_000_000);
+      if (stdout.length > 4_000_000) {
+        stdout = stdout.slice(0, 4_000_000);
       }
     });
     child.stderr.on('data', (chunk) => {
@@ -5144,7 +5144,7 @@ ipcMain.handle('agent:bookmark-toggle', async (event) => {
 });
 
 ipcMain.handle('agent:favicon', async (event, rawUrl) => {
-  if (!isChromeSender(event) || typeof rawUrl !== 'string') {
+  if ((!isChromeSender(event) && !isSearchSender(event)) || typeof rawUrl !== 'string') {
     return { ok: false, dataUrl: '' };
   }
   const dataUrl = await fetchFaviconDataUrl(rawUrl);

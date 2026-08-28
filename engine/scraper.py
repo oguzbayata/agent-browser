@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import time
 from html import unescape
 from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
 
@@ -15,9 +16,11 @@ USER_AGENT = os.environ.get(
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
 )
-TIMEOUT_SEC = 12
-MAX_RESULTS = 12
+TIMEOUT_SEC = 8
+MAX_RESULTS = 1000
+MAX_PAGES = 100
 MAX_QUERY = 500
+SEARCH_BUDGET_SEC = 70
 
 SEARX_NODES = (
     "https://searx.tiekoetter.com",
@@ -79,9 +82,9 @@ def is_junk_url(url: str) -> bool:
     return False
 
 
-def unique_results(items):
-    seen = set()
-    out = []
+def unique_results(items, acc=None):
+    out = list(acc or [])
+    seen = {item["url"] for item in out}
     for item in items:
         url = (item.get("url") or "").strip()
         title = clean_text(item.get("title") or "")
@@ -237,14 +240,17 @@ def looks_blocked(html: str) -> bool:
     return "select all squares" in sample or "unfortunately, bots use duckduckgo" in sample
 
 
-def search_duckduckgo(query: str):
+def search_duckduckgo(query: str, deadline: float):
     encoded = quote_plus(query)
-    attempts = (
+    acc = []
+    first_attempts = (
         ("POST", "https://html.duckduckgo.com/html/", {"q": query, "b": "", "kl": "wt-wt"}),
         ("GET", f"https://html.duckduckgo.com/html/?q={encoded}", None),
         ("GET", f"https://lite.duckduckgo.com/lite/?q={encoded}", None),
     )
-    for method, url, data in attempts:
+    for method, url, data in first_attempts:
+        if time.monotonic() >= deadline:
+            return acc
         try:
             status, body, _ctype = fetch(url, method=method, data=data)
         except Exception as err:
@@ -253,48 +259,84 @@ def search_duckduckgo(query: str):
         if status >= 400 or not body or looks_blocked(body):
             eprint(f"ddg-blocked:{status}")
             continue
-        results = parse_ddg_html(body, url)
-        if results:
-            return results
-    return []
+        acc = unique_results(parse_ddg_html(body, url), acc)
+        if acc:
+            break
+    if not acc:
+        return []
+
+    for start in range(30, MAX_PAGES * 10, 30):
+        if len(acc) >= MAX_RESULTS or time.monotonic() >= deadline:
+            break
+        page_url = f"https://html.duckduckgo.com/html/?q={encoded}&s={start}"
+        try:
+            status, body, _ctype = fetch(page_url)
+        except Exception as err:
+            eprint(f"ddg-page-failed:{start}:{err}")
+            break
+        if status >= 400 or not body or looks_blocked(body):
+            break
+        next_acc = unique_results(parse_ddg_html(body, page_url), acc)
+        if len(next_acc) == len(acc):
+            break
+        acc = next_acc
+    return acc
 
 
-def search_searx(query: str):
+def searx_rows(data):
+    items = []
+    for row in data.get("results") or []:
+        items.append(
+            {
+                "title": row.get("title") or "",
+                "url": row.get("url") or row.get("pretty_url") or "",
+                "snippet": row.get("content") or row.get("snippet") or "",
+            }
+        )
+    return items
+
+
+def search_searx(query: str, deadline: float, acc=None):
     encoded = quote_plus(query)
+    out = list(acc or [])
     for node in SEARX_NODES:
-        json_url = f"{node}/search?q={encoded}&format=json&language=all"
-        try:
-            status, body, ctype = fetch(json_url)
-            if status < 400 and body and (
-                "json" in (ctype or "").lower() or body.lstrip().startswith("{")
-            ):
-                data = json.loads(body)
-                items = []
-                for row in data.get("results") or []:
-                    items.append(
-                        {
-                            "title": row.get("title") or "",
-                            "url": row.get("url") or row.get("pretty_url") or "",
-                            "snippet": row.get("content") or row.get("snippet") or "",
-                        }
-                    )
-                results = unique_results(items)
-                if results:
-                    return results
-        except Exception as err:
-            eprint(f"searx-json-failed:{node}:{err}")
+        if len(out) >= MAX_RESULTS or time.monotonic() >= deadline:
+            return out
+        json_ok = False
+        stale = 0
+        for pageno in range(1, MAX_PAGES + 1):
+            if len(out) >= MAX_RESULTS or time.monotonic() >= deadline:
+                return out
+            json_url = f"{node}/search?q={encoded}&format=json&language=all&pageno={pageno}"
+            try:
+                status, body, ctype = fetch(json_url)
+                if status < 400 and body and (
+                    "json" in (ctype or "").lower() or body.lstrip().startswith("{")
+                ):
+                    data = json.loads(body)
+                    json_ok = True
+                    next_out = unique_results(searx_rows(data), out)
+                    if len(next_out) > len(out):
+                        stale = 0
+                        out = next_out
+                        continue
+                    stale += 1
+                    if stale >= 2:
+                        break
+                    continue
+            except Exception as err:
+                eprint(f"searx-json-failed:{node}:{pageno}:{err}")
 
-        html_url = f"{node}/search?q={encoded}"
-        try:
-            status, body, _ctype = fetch(html_url)
-            if status >= 400 or not body:
-                continue
-            results = parse_searx_html(body, node)
-            if results:
-                return results
-        except Exception as err:
-            eprint(f"searx-html-failed:{node}:{err}")
-    return []
+            if pageno == 1 and not json_ok:
+                html_url = f"{node}/search?q={encoded}"
+                try:
+                    status, body, _ctype = fetch(html_url)
+                    if status < 400 and body:
+                        out = unique_results(parse_searx_html(body, node), out)
+                except Exception as err:
+                    eprint(f"searx-html-failed:{node}:{err}")
+            break
+    return out
 
 
 def main() -> int:
@@ -304,9 +346,10 @@ def main() -> int:
         return 1
     query = query[:MAX_QUERY]
 
-    results = search_duckduckgo(query)
-    if not results:
-        results = search_searx(query)
+    deadline = time.monotonic() + SEARCH_BUDGET_SEC
+    results = search_duckduckgo(query, deadline)
+    if len(results) < MAX_RESULTS:
+        results = search_searx(query, deadline, results)
     emit(results)
     return 0 if results else 2
 

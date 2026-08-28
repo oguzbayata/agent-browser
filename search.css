@@ -88,11 +88,76 @@ h1 {
   animation: rise 420ms ease forwards;
 }
 
-.result a {
+.result-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.result-favicon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #1a2220;
   color: var(--accent);
-  text-decoration: none;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.result-favicon.has-icon {
+  background: #fff;
+}
+
+.result-favicon img {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.result-lock {
+  display: grid;
+  place-items: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+.result-lock svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.result-lock[data-scheme="https"] {
+  color: var(--accent);
+}
+
+.result-lock[data-scheme="http"] {
+  color: var(--danger);
+}
+
+.result a {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accent);
   font-size: 17px;
   font-weight: 650;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-shadow: 0 0 10px rgba(61, 255, 200, 0.25);
 }
 
@@ -115,6 +180,44 @@ h1 {
   color: var(--text);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin: 28px 0 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.pager button {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(8, 12, 14, 0.88);
+  color: var(--accent);
+  font: 12px/1 "Segoe UI", system-ui, sans-serif;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.pager button:hover:not(:disabled):not(.is-current) {
+  border-color: var(--accent);
+}
+
+.pager button.is-current {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #04110c;
+}
+
+.pager button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 @keyframes rise {

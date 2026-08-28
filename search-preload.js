@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld(
       }
       return ipcRenderer.invoke('agent:local-search', query);
     },
+    getFavicon: (url) => {
+      if (typeof url !== 'string') {
+        return Promise.resolve({ ok: false, dataUrl: '' });
+      }
+      return ipcRenderer.invoke('agent:favicon', url);
+    },
     openUsefulLinks: () => {
       ipcRenderer.send('open-useful-links');
     },
