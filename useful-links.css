@@ -6,8 +6,6 @@
   --accent: #3dffc8;
   --card: #0f1115;
   --line: #1a2027;
-  --scroll-track: #0a0c0f;
-  --scroll-thumb: #2a333c;
 }
 
 *,
@@ -19,8 +17,6 @@
 html {
   overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
 }
 
 html,
@@ -35,24 +31,6 @@ body {
 
 body {
   padding: 36px 28px 56px;
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--scroll-track);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--scroll-thumb);
-  border-radius: 8px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #3a4652;
 }
 
 .intel {
@@ -152,8 +130,6 @@ h1 {
   overflow-x: hidden;
   overflow-y: auto;
   list-style: none;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
 }
 
 .card li {

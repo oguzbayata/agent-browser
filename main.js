@@ -29,6 +29,11 @@ function appIconPath() {
  * An empty string would fall back to Electron's default (persistent) session.
  */
 const PARTITION = 'in-memory-session';
+const HIDE_SCROLLBAR_CSS =
+  '*{scrollbar-width:none !important;-ms-overflow-style:none !important}' +
+  '*::-webkit-scrollbar,*::-webkit-scrollbar-button,*::-webkit-scrollbar-thumb,' +
+  '*::-webkit-scrollbar-track,*::-webkit-scrollbar-track-piece,*::-webkit-scrollbar-corner,' +
+  '*::-webkit-scrollbar-resizer{display:none !important;width:0 !important;height:0 !important;background:transparent !important}';
 const WINDOW_WIDTH = 1280;
 const WINDOW_HEIGHT = 720;
 const TAB_STRIP_HEIGHT = 36;
@@ -119,6 +124,7 @@ const AJAN_ERR = '\x1b[31m[AJAN]\x1b[0m';
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 const NETWORK_FILTER = Object.freeze({ urls: ['http://*/*', 'https://*/*'] });
 const GHOST_DENIED_PERMISSIONS = new Set(['media', 'geolocation', 'display-capture']);
+const MEDIA_DENIED_PERMISSIONS = new Set(['media', 'display-capture', 'speaker-selection']);
 const EXTENSION_TOGGLE_IDS = Object.freeze({
   'canvas-poisoner': 'canvasPoisoner',
   'siyuan-bridge': 'siyuanBridge',
@@ -280,6 +286,7 @@ if (PARTITION.startsWith('persist:') || PARTITION.length === 0) {
 }
 
 app.commandLine.appendSwitch('test-third-party-cookie-phaseout');
+app.commandLine.appendSwitch('hide-scrollbars');
 
 const sharedSessionPrefs = Object.freeze({
   partition: PARTITION,
@@ -3298,7 +3305,25 @@ function injectVideoAdSkipper(webContents) {
   injectGuestScript(webContents, VIDEO_AD_SKIPPER_SOURCE);
 }
 
+function hideScrollbars(webContents) {
+  if (!webContents || webContents.isDestroyed()) {
+    return;
+  }
+  webContents.insertCSS(HIDE_SCROLLBAR_CSS).catch(() => {});
+}
+
+function watchHiddenScrollbars(webContents) {
+  if (!webContents || webContents.isDestroyed()) {
+    return;
+  }
+  const apply = () => hideScrollbars(webContents);
+  webContents.on('dom-ready', apply);
+  webContents.on('did-finish-load', apply);
+  webContents.on('did-frame-finish-load', apply);
+}
+
 function injectSessionGuards(webContents) {
+  hideScrollbars(webContents);
   injectVideoAdSkipper(webContents);
   if (privacySettings.canvasPoisoner) {
     injectGuestScript(webContents, CANVAS_POISONER_SOURCE);
@@ -3672,6 +3697,7 @@ function attachTabListeners(tabId, webContents) {
   });
   webContents.on('dom-ready', () => injectSessionGuards(webContents));
   webContents.on('did-finish-load', () => injectSessionGuards(webContents));
+  webContents.on('did-frame-finish-load', () => hideScrollbars(webContents));
 
   const emitTitle = () => {
     sendToChrome('agent:tab-title-updated', {
@@ -4239,6 +4265,7 @@ function ensureOverflowMenuView() {
   });
   overflowMenuView.setBackgroundColor('#292a2d');
   overflowMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  watchHiddenScrollbars(overflowMenuView.webContents);
   overflowMenuView.webContents.on('blur', () => {
     setTimeout(() => {
       if (
@@ -4376,6 +4403,7 @@ function ensureShieldMenuView() {
   });
   shieldMenuView.setBackgroundColor('#292a2d');
   shieldMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  watchHiddenScrollbars(shieldMenuView.webContents);
   shieldMenuView.webContents.on('blur', () => {
     setTimeout(() => {
       if (
@@ -4513,6 +4541,7 @@ function ensureSiteMenuView() {
   });
   siteMenuView.setBackgroundColor('#292a2d');
   siteMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  watchHiddenScrollbars(siteMenuView.webContents);
   siteMenuView.webContents.on('blur', () => {
     setTimeout(() => {
       if (
@@ -4654,6 +4683,7 @@ function ensureToolsMenuView() {
   });
   toolsMenuView.setBackgroundColor('#292a2d');
   toolsMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  watchHiddenScrollbars(toolsMenuView.webContents);
   toolsMenuView.webContents.on('blur', () => {
     setTimeout(() => {
       if (
@@ -6934,6 +6964,7 @@ function createAgentWindow() {
     }
   });
   win.webContents.on('before-input-event', handleAppShortcut);
+  watchHiddenScrollbars(win.webContents);
   attachChromeContextMenu(win.webContents);
   win.setMenuBarVisibility(false);
   win.setAutoHideMenuBar(true);
