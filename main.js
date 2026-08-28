@@ -10,6 +10,7 @@ const http = require('node:http');
 const net = require('node:net');
 const { startAgentBridgeServer, stopAgentBridgeServer, getListenInfo } = require('./agent-bridge');
 const { collectIntel, knownModelRoots, isLoopbackHttpUrl, resolveLocalChatTarget } = require('./local-intel');
+const { AD_HIDE_CSS, shouldBlockUrl } = require('./tracker-block');
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('oguzbayata.agent-browser');
@@ -189,97 +190,6 @@ const EXT_EXPERT_CATALOG = Object.freeze([
 ]);
 const COMMON_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-
-const TRACKER_HOST_SUFFIXES = Object.freeze([
-  'google-analytics.com',
-  'googletagmanager.com',
-  'googlesyndication.com',
-  'googleadservices.com',
-  'doubleclick.net',
-  '2mdn.net',
-  'connect.facebook.net',
-  'facebook.net',
-  'pixel.facebook.com',
-  'ads-twitter.com',
-  'analytics.twitter.com',
-  'static.ads-twitter.com',
-  'hotjar.com',
-  'hotjar.io',
-  'scorecardresearch.com',
-  'quantserve.com',
-  'criteo.com',
-  'taboola.com',
-  'outbrain.com',
-  'amazon-adsystem.com',
-  'adnxs.com',
-  'rubiconproject.com',
-  'pubmatic.com',
-  'casalemedia.com',
-  'moatads.com',
-  'adsrvr.org',
-  'advertising.com',
-  'clarity.ms',
-  'bat.bing.com',
-  'ads.linkedin.com',
-  'snap.licdn.com',
-  'segment.io',
-  'segment.com',
-  'mixpanel.com',
-  'amplitude.com',
-  'ads.twitter.com',
-  'pagead2.googlesyndication.com',
-  'adservice.google.com',
-  'adservice.google.com.tr',
-  'partner.googleadservices.com',
-  'adtrafficquality.google',
-  'fundingchoicesmessages.google.com',
-  'analytics.google.com',
-  'securepubads.g.doubleclick.net',
-  'tpc.googlesyndication.com',
-  'ad.doubleclick.net',
-  'cm.g.doubleclick.net',
-  'pagead.l.doubleclick.net',
-  'stats.g.doubleclick.net',
-  's0.2mdn.net',
-  'sc-static.net',
-  'tr.snapchat.com',
-  'ads.yahoo.com',
-  'advertising.yahoo.com',
-  'ads.pinterest.com',
-  'log.pinterest.com',
-  'ads.reddit.com',
-  'alb.reddit.com',
-  'adform.net',
-  'adsafeprotected.com',
-  'openx.net',
-  'openx.com',
-  'smartadserver.com',
-  'indexww.com',
-  'contextweb.com',
-  'bidswitch.net',
-  'rlcdn.com',
-  'bluekai.com',
-  'krxd.net',
-  'exelator.com',
-  'mathtag.com',
-  'media.net',
-  'yieldmo.com',
-  'sharethrough.com',
-  '3lift.com',
-  'googletagservices.com',
-  'ads.youtube.com',
-  'ad.youtube.com',
-  'serving-sys.com',
-  'creativecdn.com',
-  'liadm.com',
-  'adsymptotic.com',
-  'branch.io',
-  'app-measurement.com',
-]);
-
-const TRACKER_PATH_RULES = Object.freeze([
-  { hostSuffix: 'facebook.com', pathTest: (pathname) => pathname === '/tr' || pathname.startsWith('/tr/') },
-]);
 
 if (PARTITION.startsWith('persist:') || PARTITION.length === 0) {
   throw new Error('Agent Browser must use a non-persistent in-memory partition.');
@@ -618,32 +528,6 @@ function httpsUpgradeUrl(rawUrl) {
   }
   parsed.protocol = 'https:';
   return parsed.href;
-}
-
-function hostnameMatchesSuffix(hostname, suffix) {
-  return hostname === suffix || hostname.endsWith(`.${suffix}`);
-}
-
-function shouldBlockUrl(rawUrl) {
-  let parsed;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    return false;
-  }
-
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return false;
-  }
-
-  const hostname = parsed.hostname.toLowerCase();
-  if (TRACKER_HOST_SUFFIXES.some((suffix) => hostnameMatchesSuffix(hostname, suffix))) {
-    return true;
-  }
-
-  return TRACKER_PATH_RULES.some(
-    (rule) => hostnameMatchesSuffix(hostname, rule.hostSuffix) && rule.pathTest(parsed.pathname),
-  );
 }
 
 function tryOrigin(rawUrl) {
@@ -2892,6 +2776,12 @@ function agentVideoAdSkipper() {
     '.ytp-ad-overlay-close-button',
     '.videoAdUiSkipButton',
     '.ima-skip-button',
+    '.mgp_skipAd',
+    '.mgp_skipButton',
+    '[class*="skipAd"]',
+    '[class*="skip-ad"]',
+    '[aria-label="Skip Ad"]',
+    '[aria-label="Skip Ads"]',
   ];
   const BANNER_HIDE = [
     '.ytp-ad-overlay-image',
@@ -2900,10 +2790,15 @@ function agentVideoAdSkipper() {
     '.ytp-ad-overlay-slot',
     '.ytp-ad-image-overlay',
     '.ytp-ad-player-overlay',
+    '.mgp_ad',
+    '.mgp_preroll',
+    '.mgp_overlayAd',
+    '.mgp_promo',
   ];
-  const PLAYER_SELECTORS = ['#movie_player', '.html5-video-player', '.video-js', 'video'];
-  const AD_CLASS = /\b(ad-showing|ad-interrupting|ytp-ad-player-overlay|videoAdUi|ima-ad-container)\b/i;
+  const PLAYER_SELECTORS = ['#movie_player', '.html5-video-player', '.video-js', '#player', '.mgp_container', 'video'];
+  const AD_CLASS = /\b(ad-showing|ad-interrupting|ytp-ad-player-overlay|videoAdUi|ima-ad-container|mgp_ad)\b/i;
   const AD_NEAR = /\b(ads?|advert|sponsor(?:ed)?|preroll|midroll)\b/i;
+  const SKIP_LABEL = /skip\s+ad|reklam[ıi]\s*(atla|geç)/i;
   const watched = new WeakSet();
 
   const hideCss = document.createElement('style');
@@ -2919,6 +2814,15 @@ function agentVideoAdSkipper() {
         }
       });
     }
+    scope.querySelectorAll('button, a, [role="button"]').forEach((node) => {
+      if (!(node instanceof HTMLElement)) {
+        return;
+      }
+      const label = `${node.innerText || ''} ${node.getAttribute('aria-label') || ''}`.replace(/\s+/g, ' ').trim();
+      if (SKIP_LABEL.test(label) && label.length < 48) {
+        node.click();
+      }
+    });
   }
 
   function skipVideo(video) {
@@ -3305,6 +3209,13 @@ function injectVideoAdSkipper(webContents) {
   injectGuestScript(webContents, VIDEO_AD_SKIPPER_SOURCE);
 }
 
+function hidePageAds(webContents) {
+  if (!webContents || webContents.isDestroyed() || !privacySettings.blockTrackers) {
+    return;
+  }
+  webContents.insertCSS(AD_HIDE_CSS).catch(() => {});
+}
+
 function hideScrollbars(webContents) {
   if (!webContents || webContents.isDestroyed()) {
     return;
@@ -3324,6 +3235,7 @@ function watchHiddenScrollbars(webContents) {
 
 function injectSessionGuards(webContents) {
   hideScrollbars(webContents);
+  hidePageAds(webContents);
   injectVideoAdSkipper(webContents);
   if (privacySettings.canvasPoisoner) {
     injectGuestScript(webContents, CANVAS_POISONER_SOURCE);
@@ -3697,7 +3609,10 @@ function attachTabListeners(tabId, webContents) {
   });
   webContents.on('dom-ready', () => injectSessionGuards(webContents));
   webContents.on('did-finish-load', () => injectSessionGuards(webContents));
-  webContents.on('did-frame-finish-load', () => hideScrollbars(webContents));
+  webContents.on('did-frame-finish-load', () => {
+    hideScrollbars(webContents);
+    hidePageAds(webContents);
+  });
 
   const emitTitle = () => {
     sendToChrome('agent:tab-title-updated', {

@@ -7,7 +7,7 @@ const TOOLS = Object.freeze([
     id: 'shield',
     setting: 'blockTrackers',
     name: 'Kalkan',
-    description: 'Reklam ve izleyici isteklerini keser. Yalnızca bu RAM oturumunda durur.',
+    description: 'Reklam ve izleyici isteklerini keser; yetişkin sitelerindeki overlay ve yan reklamlar dahil. Yalnızca bu RAM oturumunda durur.',
     action: 'shield',
     icon: 'shield',
   },

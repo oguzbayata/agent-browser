@@ -1,0 +1,204 @@
+'use strict';
+
+const TRACKER_HOST_SUFFIXES = Object.freeze([
+  'google-analytics.com',
+  'googletagmanager.com',
+  'googlesyndication.com',
+  'googleadservices.com',
+  'doubleclick.net',
+  '2mdn.net',
+  'connect.facebook.net',
+  'facebook.net',
+  'pixel.facebook.com',
+  'ads-twitter.com',
+  'analytics.twitter.com',
+  'static.ads-twitter.com',
+  'hotjar.com',
+  'hotjar.io',
+  'scorecardresearch.com',
+  'quantserve.com',
+  'criteo.com',
+  'taboola.com',
+  'outbrain.com',
+  'amazon-adsystem.com',
+  'adnxs.com',
+  'rubiconproject.com',
+  'pubmatic.com',
+  'casalemedia.com',
+  'moatads.com',
+  'adsrvr.org',
+  'advertising.com',
+  'clarity.ms',
+  'bat.bing.com',
+  'ads.linkedin.com',
+  'snap.licdn.com',
+  'segment.io',
+  'segment.com',
+  'mixpanel.com',
+  'amplitude.com',
+  'ads.twitter.com',
+  'pagead2.googlesyndication.com',
+  'adservice.google.com',
+  'adservice.google.com.tr',
+  'partner.googleadservices.com',
+  'adtrafficquality.google',
+  'fundingchoicesmessages.google.com',
+  'analytics.google.com',
+  'securepubads.g.doubleclick.net',
+  'tpc.googlesyndication.com',
+  'ad.doubleclick.net',
+  'cm.g.doubleclick.net',
+  'pagead.l.doubleclick.net',
+  'stats.g.doubleclick.net',
+  's0.2mdn.net',
+  'sc-static.net',
+  'tr.snapchat.com',
+  'ads.yahoo.com',
+  'advertising.yahoo.com',
+  'ads.pinterest.com',
+  'log.pinterest.com',
+  'ads.reddit.com',
+  'alb.reddit.com',
+  'adform.net',
+  'adsafeprotected.com',
+  'openx.net',
+  'openx.com',
+  'smartadserver.com',
+  'indexww.com',
+  'contextweb.com',
+  'bidswitch.net',
+  'rlcdn.com',
+  'bluekai.com',
+  'krxd.net',
+  'exelator.com',
+  'mathtag.com',
+  'media.net',
+  'yieldmo.com',
+  'sharethrough.com',
+  '3lift.com',
+  'googletagservices.com',
+  'ads.youtube.com',
+  'ad.youtube.com',
+  'serving-sys.com',
+  'creativecdn.com',
+  'liadm.com',
+  'adsymptotic.com',
+  'branch.io',
+  'app-measurement.com',
+  'trafficjunky.net',
+  'trafficjunky.com',
+  'hubtraffic.com',
+  'adtng.com',
+  'contentabc.com',
+  'exoclick.com',
+  'exosrv.com',
+  'exdynsrv.com',
+  'magsrv.com',
+  'wpadmngr.com',
+  'juicyads.com',
+  'juicyads.net',
+  'jads.co',
+  'trafficfactory.biz',
+  'trafficfactory.com',
+  'doublepimp.com',
+  'doublepimpssl.com',
+  'dpinteractive.com',
+  'twinrdsrv.com',
+  'plugrush.com',
+  'eroadvertising.com',
+  'exoticads.com',
+  'hilltopads.com',
+  'hilltopads.net',
+  'clickadu.com',
+  'popads.net',
+  'popcash.net',
+  'propellerads.com',
+  'tsyndicate.com',
+  'adsterra.com',
+  'adsterra.net',
+  'freakads.com',
+  'tubeadnetwork.com',
+  'tubeadv.com',
+  'sexad.net',
+  'awempire.com',
+  'mtree.com',
+  'alaska.xhamster.com',
+  'brick.xhamster.com',
+  'marine.xhamster.com',
+  'port7.xhamster.com',
+  'rambo.xhamster.com',
+  'rockpoint.xhamster.com',
+]);
+
+const TRACKER_PATH_RULES = Object.freeze([
+  { hostSuffix: 'facebook.com', pathTest: (pathname) => pathname === '/tr' || pathname.startsWith('/tr/') },
+  { hostSuffix: 'pornhub.com', pathTest: (pathname) => pathname.includes('/_xa/ads') },
+  { hostSuffix: 'pornhub.org', pathTest: (pathname) => pathname.includes('/_xa/ads') },
+  { hostSuffix: 'pornhubpremium.com', pathTest: (pathname) => pathname.includes('/_xa/ads') },
+  { hostSuffix: 'redtube.com', pathTest: (pathname) => pathname.includes('/_xa/ads') },
+  { hostSuffix: 'youporn.com', pathTest: (pathname) => pathname.includes('/_xa/ads') },
+  { hostSuffix: 'tube8.com', pathTest: (pathname) => pathname.includes('/_xa/ads') },
+  { hostSuffix: 'xvideos.com', pathTest: (pathname) => pathname.includes('/zoneload/') },
+  { hostSuffix: 'xnxx.com', pathTest: (pathname) => pathname.includes('/zoneload/') },
+  { hostSuffix: 'xnxx.tv', pathTest: (pathname) => pathname.includes('/zoneload/') },
+  {
+    hostSuffix: 'xhamster.com',
+    pathTest: (pathname, search) => pathname.includes('/vast') || String(search || '').includes('vast'),
+  },
+  {
+    hostSuffix: 'xhamster2.com',
+    pathTest: (pathname, search) => pathname.includes('/vast') || String(search || '').includes('vast'),
+  },
+  {
+    hostSuffix: 'xhamster3.com',
+    pathTest: (pathname, search) => pathname.includes('/vast') || String(search || '').includes('vast'),
+  },
+]);
+
+const AD_HIDE_CSS =
+  'iframe[src*="exoclick"],iframe[src*="exosrv"],iframe[src*="trafficjunky"],iframe[src*="juicyads"],' +
+  'iframe[src*="jads.co"],iframe[src*="trafficfactory"],iframe[src*="doublepimp"],iframe[src*="adtng"],' +
+  'iframe[src*="contentabc"],iframe[src*="hubtraffic"],iframe[src*="tsyndicate"],iframe[src*="plugrush"],' +
+  'iframe[src*="eroadvertising"],iframe[src*="hilltopads"],iframe[src*="clickadu"],iframe[src*="magsrv"],' +
+  'iframe[src*="popads"],iframe[src*="popcash"],iframe[src*="adsterra"],' +
+  '.adsbytrafficjunky,[class*="adsbytrafficjunky"],.removeAdsHeader,.remove-ads-header,' +
+  '.mgp_ad,.mgp_preroll,.mgp_overlayAd,.mgp_promo,.mgp_seekAd,' +
+  '#player-ads,#ad-right,#ad-left,.adRight,.adLeft,' +
+  'a[href*="trafficjunky"],a[href*="adtng.com"],a[href*="exoclick"],a[href*="juicyads"]' +
+  '{display:none!important;visibility:hidden!important;pointer-events:none!important;' +
+  'width:0!important;height:0!important;max-height:0!important;overflow:hidden!important}';
+
+function hostnameMatchesSuffix(hostname, suffix) {
+  return hostname === suffix || hostname.endsWith(`.${suffix}`);
+}
+
+function shouldBlockUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return false;
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (TRACKER_HOST_SUFFIXES.some((suffix) => hostnameMatchesSuffix(hostname, suffix))) {
+    return true;
+  }
+
+  return TRACKER_PATH_RULES.some(
+    (rule) =>
+      hostnameMatchesSuffix(hostname, rule.hostSuffix) && rule.pathTest(parsed.pathname, parsed.search),
+  );
+}
+
+module.exports = {
+  AD_HIDE_CSS,
+  TRACKER_HOST_SUFFIXES,
+  TRACKER_PATH_RULES,
+  hostnameMatchesSuffix,
+  shouldBlockUrl,
+};

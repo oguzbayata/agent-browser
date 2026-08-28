@@ -6,7 +6,8 @@
   "main": "main.js",
   "scripts": {
     "start": "node start.js",
-    "electron": "electron ."
+    "electron": "electron .",
+    "test": "node test-tracker-block.js"
   },
   "devDependencies": {
     "electron": "^37.2.6"
