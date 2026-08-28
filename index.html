@@ -40,14 +40,20 @@
             <form class="omni-form" id="omni-form" action="#" autocomplete="off">
               <label class="sr-only" for="url-bar">Adres veya arama</label>
               <div id="adres-cubugu-konteynir">
-                <img
-                  class="omni-logo"
-                  src="assets/agent-browser-logo.svg"
-                  width="22"
-                  height="22"
-                  alt=""
-                  draggable="false"
-                />
+                <span id="omni-scheme" class="omni-scheme" data-scheme="idle" title="Agent Browser">
+                  <img
+                    class="omni-logo"
+                    src="assets/agent-browser-logo.svg"
+                    width="22"
+                    height="22"
+                    alt=""
+                    draggable="false"
+                  />
+                  <svg class="omni-lock" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M5.2 7.1V5.2a2.8 2.8 0 0 1 5.6 0v1.9" />
+                    <rect x="3.6" y="7.1" width="8.8" height="6.3" rx="1.4" />
+                  </svg>
+                </span>
                 <input
                   id="url-bar"
                   class="omni-input"

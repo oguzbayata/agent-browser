@@ -174,6 +174,27 @@ function bindOmniboxEditing(input) {
   });
 }
 
+function schemeFromUrl(raw) {
+  const value = String(raw || '').trim();
+  if (/^https:\/\//i.test(value)) {
+    return 'https';
+  }
+  if (/^http:\/\//i.test(value)) {
+    return 'http';
+  }
+  return 'idle';
+}
+
+function setOmniScheme(raw) {
+  const mark = document.getElementById('omni-scheme');
+  if (!mark) {
+    return;
+  }
+  const scheme = schemeFromUrl(raw);
+  mark.dataset.scheme = scheme;
+  mark.title = scheme === 'https' ? 'HTTPS' : scheme === 'http' ? 'HTTP' : 'Agent Browser';
+}
+
 function bindChrome() {
   const api = window.electronAPI;
   const form = document.getElementById('omni-form');
@@ -202,7 +223,10 @@ function bindChrome() {
     input.blur();
   });
 
-  input.addEventListener('input', () => maybePrefixUrl(input));
+  input.addEventListener('input', () => {
+    maybePrefixUrl(input);
+    setOmniScheme(input.value);
+  });
   bindOmniboxEditing(input);
 
   backBtn.addEventListener('click', () => api?.goBack?.());
@@ -233,6 +257,7 @@ function bindChrome() {
     const displayUrl = !url || url === 'about:blank' || url.startsWith('file:') ? '' : url;
     currentPageUrl = displayUrl;
     setBookmarksBarVisible(typeof state?.bookmarksBar === 'boolean' ? state.bookmarksBar : !displayUrl);
+    setOmniScheme(document.activeElement === input ? input.value : displayUrl);
     if (document.activeElement === input) {
       return;
     }
