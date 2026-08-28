@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr" class="overflow-surface">
+<html lang="en" class="overflow-surface">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="hide-scrollbars.css" />
   </head>
   <body class="overflow-surface">
-    <div id="agent-main-menu" class="dropdown-menu" role="menu" aria-label="Ayarlar menüsü">
+    <div id="agent-main-menu" class="dropdown-menu" role="menu" aria-label="Settings menu">
       <button type="button" class="menu-default" id="menu-default-browser" data-action="default-browser">
         <img src="assets/agent-browser-logo.svg" width="20" height="20" alt="" />
         <span>Set Agent Browser as your default browser</span>
@@ -36,7 +36,7 @@
       <button type="button" class="menu-profile" data-action="profile" role="menuitem">
         <span class="menu-avatar" aria-hidden="true">S</span>
         <span class="menu-profile-copy">
-          <strong>Sanatçı (Agent)</strong>
+          <strong>Session (Agent)</strong>
         </span>
         <em class="menu-signed">Signed in</em>
         <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
@@ -131,12 +131,12 @@
         <svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.4 11 8 6 12.6"/></svg>
       </button>
       <hr />
-      <p class="menu-caption">Agent Ayarları</p>
+      <p class="menu-caption">Agent Settings</p>
       <label class="menu-item menu-toggle menu-toggle-neon">
         <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.4" y="5.2" width="13.2" height="9.6" rx="1.6"/><path d="M8.2 8.2 12.4 10l-4.2 1.8z"/></svg>
         <span>
-          Evrensel Medya Avcısı (Video Downloader)
-          <small>Sağ tıkla video indir</small>
+          Universal Media Hunter (Video Downloader)
+          <small>Right-click to download video</small>
         </span>
         <input id="toggle-mediaHunter" type="checkbox" data-setting="mediaHunter" />
         <i class="menu-switch" aria-hidden="true"></i>

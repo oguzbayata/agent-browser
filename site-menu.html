@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr" class="overflow-surface">
+<html lang="en" class="overflow-surface">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -7,16 +7,16 @@
       content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'none'; connect-src 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Site bilgisi</title>
+    <title>Site info</title>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="hide-scrollbars.css" />
   </head>
   <body class="overflow-surface">
-    <div id="agent-site-menu" class="dropdown-menu" role="menu" aria-label="Site bilgisi">
+    <div id="agent-site-menu" class="dropdown-menu" role="menu" aria-label="Site info">
       <div class="menu-heading">
         <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6.4"/><path d="M3.6 10h12.8M10 3.6c2 2 3 4.2 3 6.4s-1 4.4-3 6.4C8 14.4 7 12.2 7 10s1-4.4 3-6.4Z"/></svg>
         <span class="menu-profile-copy">
-          <strong>Site bilgisi</strong>
+          <strong>Site info</strong>
         </span>
         <em class="menu-signed" id="site-scheme-badge">ram</em>
       </div>
@@ -24,18 +24,18 @@
       <div class="menu-item menu-stat menu-host" role="menuitem">
         <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="9" width="10" height="7.2" rx="1.4"/><path d="M7.2 9V7.2a2.8 2.8 0 0 1 5.6 0V9"/></svg>
         <span>
-          <strong id="site-host">sayfa yok</strong>
-          <small id="site-scheme">Adres çubuğundan bir hedef açın.</small>
+          <strong id="site-host">no page</strong>
+          <small id="site-scheme">Open a target from the address bar.</small>
         </span>
       </div>
       <hr />
       <button type="button" class="menu-item" data-action="copy" role="menuitem" id="site-copy">
         <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="7.2" y="7.2" width="8.4" height="8.4" rx="1.4"/><path d="M12.6 7.2V5.4A1.4 1.4 0 0 0 11.2 4H5.4A1.4 1.4 0 0 0 4 5.4v5.8A1.4 1.4 0 0 0 5.4 12.6H7.2"/></svg>
-        <span id="site-copy-label">Adresi kopyala</span>
+        <span id="site-copy-label">Copy address</span>
       </button>
       <button type="button" class="menu-item" data-action="reload" role="menuitem">
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.2 10a6.2 6.2 0 1 1-1.8-4.4"/><path d="M16.2 4.4v3.4h-3.4"/></svg>
-        <span>Yenile</span>
+        <span>Reload</span>
       </button>
     </div>
     <script src="site-menu.js"></script>

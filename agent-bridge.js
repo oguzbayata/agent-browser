@@ -8,7 +8,7 @@ const CATALOG = Object.freeze({
   name: 'Agent Browser Control Plane',
   multiAgent: true,
   bind: '127.0.0.1',
-  hint: 'Her ajan kendi sekmesini açsın (POST /v1/tabs). X-Agent-Id ile işi etiketleyin. Sekmeyi öne almak için activate: true gönderin.',
+  hint: 'Have each agent open its own tab (POST /v1/tabs). Tag the job with X-Agent-Id. Send activate: true to bring a tab forward.',
   endpoints: [
     'GET /v1',
     'GET /v1/health',

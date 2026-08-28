@@ -6,40 +6,40 @@ const TOOLS = Object.freeze([
   {
     id: 'shield',
     setting: 'blockTrackers',
-    name: 'Kalkan',
-    description: 'Google, Meta, Amazon ve diğer büyük reklam ağlarını keser; yetişkin sitelerindeki overlay reklamlar dahil. Yalnızca bu RAM oturumunda durur.',
+    name: 'Shield',
+    description: 'Cuts Google, Meta, Amazon, and other major ad networks, including overlay ads on adult sites. Lives only in this RAM session.',
     action: 'shield',
     icon: 'shield',
   },
   {
     id: 'ghost',
     setting: 'ghostNetwork',
-    name: 'Hayalet Ağ',
-    description: 'Trafiği SOCKS5 vekile alır; kamera, konum ve ekran paylaşımı kesilir.',
+    name: 'Ghost Network',
+    description: 'Routes traffic through a SOCKS5 proxy and cuts camera, location, and screen sharing.',
     action: 'ghost',
     icon: 'ghost',
   },
   {
     id: 'guvenlik',
     setting: 'blockMedia',
-    name: 'Güvenlik V1',
-    description: 'Bilgisayarın mikrofonu ve kamerasını (video, fotoğraf ve diğer medya) otomatik olarak kapatır.',
+    name: 'Security V1',
+    description: 'Automatically turns off the computer microphone and camera (video, photos, and other media).',
     action: 'settings',
     icon: 'guvenlik',
   },
   {
     id: 'hunter',
     setting: 'mediaHunter',
-    name: 'Evrensel Medya Avcısı (Video Downloader)',
-    description: 'Sağ tık menüsünden HTML5 ve YouTube videolarını indir.',
+    name: 'Universal Media Hunter (Video Downloader)',
+    description: 'Download HTML5 and YouTube videos from the context menu.',
     action: 'downloads',
     icon: 'hunter',
   },
   {
     id: 'cookies',
     setting: 'stripThirdPartyCookies',
-    name: 'Çerez kesici',
-    description: 'Üçüncü taraf çerezlerini düşürür; oturum diske yazılmaz.',
+    name: 'Cookie cutter',
+    description: 'Drops third-party cookies; the session is not written to disk.',
     action: 'settings',
     icon: 'cookies',
   },
@@ -47,23 +47,23 @@ const TOOLS = Object.freeze([
     id: 'dnt',
     setting: 'sendDnt',
     name: 'Do Not Track',
-    description: 'Giden isteklere DNT başlığı ekler.',
+    description: 'Adds a DNT header to outgoing requests.',
     action: 'settings',
     icon: 'dnt',
   },
   {
     id: 'ua',
     setting: 'spoofUserAgent',
-    name: 'Kimlik maskesi',
-    description: 'Ortak bir Chrome kullanıcı ajanı göndererek parmak izini azaltır.',
+    name: 'Identity mask',
+    description: 'Sends a common Chrome user agent to reduce fingerprinting.',
     action: 'settings',
     icon: 'ua',
   },
   {
     id: 'models',
     setting: null,
-    name: 'Yerel modeller',
-    description: 'Oturuma bağlı dil modeli ve ajan. Kalıcı uzantı değildir.',
+    name: 'Local models',
+    description: 'Session-bound language model and agent. Not a persistent extension.',
     action: 'models',
     icon: 'models',
   },
@@ -71,8 +71,8 @@ const TOOLS = Object.freeze([
     id: 'canvas-poisoner',
     setting: 'canvasPoisoner',
     extId: 'canvas-poisoner',
-    name: 'Canvas & WebGL Zehirleyici',
-    description: 'Piksel çizimlerine mikro parazit ekleyerek donanım parmak izini bozar.',
+    name: 'Canvas & WebGL Poisoner',
+    description: 'Adds micro-noise to pixel drawings to break hardware fingerprinting.',
     action: 'settings',
     icon: 'canvas',
   },
@@ -80,8 +80,8 @@ const TOOLS = Object.freeze([
     id: 'siyuan-bridge',
     setting: 'siyuanBridge',
     extId: 'siyuan-bridge',
-    name: 'Hafıza Köprüsü',
-    description: 'Ayrıntılar’dan Mem0, Zep, LangGraph, SiYuan, LlamaIndex, Motorhead, MemGPT veya Obsidian seçin.',
+    name: 'Memory Bridge',
+    description: 'Choose Mem0, Zep, LangGraph, SiYuan, LlamaIndex, Motorhead, MemGPT, or Obsidian from Details.',
     action: 'memory-bridge',
     icon: 'siyuan',
   },
@@ -89,8 +89,8 @@ const TOOLS = Object.freeze([
     id: 'human-jitter',
     setting: 'humanJitter',
     extId: 'human-jitter',
-    name: 'Hayalet Fare (Human Jitter)',
-    description: 'Otonom tıklamalara insansı rastgelelik ve kaydırma gecikmeleri ekler.',
+    name: 'Ghost Mouse (Human Jitter)',
+    description: 'Adds human-like randomness and scroll delays to autonomous clicks.',
     action: 'settings',
     icon: 'jitter',
   },
@@ -98,8 +98,8 @@ const TOOLS = Object.freeze([
     id: 'dead-man-switch',
     setting: 'deadManSwitch',
     extId: 'dead-man-switch',
-    name: 'Protokol Anahtarı',
-    description: 'Ağ geçidi değişince Excommunicado protokolünü otonom tetikler.',
+    name: 'Protocol Switch',
+    description: 'Autonomously triggers the Excommunicado protocol when the gateway changes.',
     action: 'settings',
     icon: 'deadman',
     alert: true,
@@ -108,8 +108,8 @@ const TOOLS = Object.freeze([
     id: 'web3-shield',
     setting: 'web3Shield',
     extId: 'web3-shield',
-    name: 'Web3 Kripto Kalkanı',
-    description: 'DApp bağlantılarını izole eder, yetkisiz cüzdan erişimi yoklamalarını engeller.',
+    name: 'Web3 Crypto Shield',
+    description: 'Isolates DApp connections and blocks unauthorized wallet probes.',
     action: 'settings',
     icon: 'web3',
   },
@@ -118,8 +118,8 @@ const TOOLS = Object.freeze([
     setting: 'shadowDomPierce',
     extId: 'shadow-dom-pierce',
     category: 'scrape',
-    name: 'Shadow DOM Delici',
-    description: 'Ajanlar için kapalı web bileşenlerini (shadow-root) açık hale getirir.',
+    name: 'Shadow DOM Piercer',
+    description: 'Opens closed web components (shadow-root) for agents.',
     action: 'settings',
     icon: 'drill',
   },
@@ -128,8 +128,8 @@ const TOOLS = Object.freeze([
     setting: 'markdownDom',
     extId: 'markdown-dom',
     category: 'scrape',
-    name: 'Markdown DOM Çevirici',
-    description: 'Karmaşık HTML kodunu ajanların kolay okuyabileceği temiz Markdown formatına çevirir.',
+    name: 'Markdown DOM Translator',
+    description: 'Turns complex HTML into clean Markdown that agents can read easily.',
     action: 'settings',
     icon: 'text',
   },
@@ -138,8 +138,8 @@ const TOOLS = Object.freeze([
     setting: 'uiCodeExtract',
     extId: 'ui-code-extract',
     category: 'scrape',
-    name: 'UI & Code Çıkarıcı',
-    description: 'Seçili sayfa bölümlerinin React, HTML ve Tailwind sınıflarını analiz edip ajanlara kod bloğu olarak sunar.',
+    name: 'UI & Code Extractor',
+    description: 'Analyzes selected page sections’ React, HTML, and Tailwind classes and hands agents a code block.',
     action: 'settings',
     icon: 'code',
   },
@@ -148,8 +148,8 @@ const TOOLS = Object.freeze([
     setting: 'infiniteScroll',
     extId: 'infinite-scroll',
     category: 'scrape',
-    name: 'Sonsuz Kaydırma Otonomu',
-    description: 'Twitter/Reddit gibi sayfalarda ajanlar için aşağı kaydırma (infinite scroll) işlemini otomatik yapar.',
+    name: 'Infinite Scroll Autonomy',
+    description: 'Automatically scrolls down infinite-scroll pages such as Twitter/Reddit for agents.',
     action: 'settings',
     icon: 'arrows',
   },
@@ -158,8 +158,8 @@ const TOOLS = Object.freeze([
     setting: 'tableParser',
     extId: 'table-parser',
     category: 'scrape',
-    name: 'Tablo & Grid Ayrıştırıcı',
-    description: 'Karmaşık veri tablolarını anında saf JSON dizilerine çevirir.',
+    name: 'Table & Grid Parser',
+    description: 'Turns complex data tables into plain JSON arrays instantly.',
     action: 'settings',
     icon: 'table',
   },
@@ -168,8 +168,8 @@ const TOOLS = Object.freeze([
     setting: 'xhrHunter',
     extId: 'xhr-hunter',
     category: 'network',
-    name: 'XHR & WebSocket Avcısı',
-    description: 'Sayfanın arayüzünü beklemeden, arka plandaki canlı API (borsa, kripto, vb.) yanıtlarını doğrudan yakalar.',
+    name: 'XHR & WebSocket Hunter',
+    description: 'Captures live background API responses (markets, crypto, and similar) without waiting on the page UI.',
     action: 'settings',
     icon: 'wave',
   },
@@ -178,8 +178,8 @@ const TOOLS = Object.freeze([
     setting: 'jsonFormFill',
     extId: 'json-form-fill',
     category: 'network',
-    name: 'Otomatik JSON Form Doldurucu',
-    description: 'Ajanların gönderdiği ham JSON verilerini sayfadaki karmaşık input alanlarına kusursuz haritalar (mapping).',
+    name: 'Automatic JSON Form Filler',
+    description: 'Maps raw JSON from agents onto complex page input fields.',
     action: 'settings',
     icon: 'form',
   },
@@ -188,8 +188,8 @@ const TOOLS = Object.freeze([
     setting: 'proxyRotate',
     extId: 'proxy-rotate',
     category: 'network',
-    name: 'Dinamik Proxy Rotatörü',
-    description: 'Ajan her yeni sekme açtığında vekil tünelini, oturumda tanımlı SOCKS listesi üzerinden değiştirir.',
+    name: 'Dynamic Proxy Rotator',
+    description: 'Rotates the proxy tunnel from the session SOCKS list whenever an agent opens a new tab.',
     action: 'settings',
     icon: 'globe',
   },
@@ -198,8 +198,8 @@ const TOOLS = Object.freeze([
     setting: 'webglInspector',
     extId: 'webgl-inspector',
     category: 'network',
-    name: '3D/WebGL Varlık İnceleyici',
-    description: 'Sayfadaki render edilen canvas ve 3D objelerin meta verilerini ajanlar için ayrıştırır.',
+    name: '3D/WebGL Asset Inspector',
+    description: 'Parses metadata from rendered canvas and 3D objects for agents.',
     action: 'settings',
     icon: 'cube',
   },
@@ -208,8 +208,8 @@ const TOOLS = Object.freeze([
     setting: 'mediaSourceReveal',
     extId: 'media-source',
     category: 'network',
-    name: 'Medya Kaynağı Açığa Çıkarıcı',
-    description: 'Gömülü veya Blob olarak gizlenmiş video/ses dosyalarının asıl kaynak linklerini bulur.',
+    name: 'Media Source Revealer',
+    description: 'Finds the real source URLs of video/audio files hidden as embeds or Blobs.',
     action: 'settings',
     icon: 'eye',
   },
@@ -218,8 +218,8 @@ const TOOLS = Object.freeze([
     setting: 'n8nWebhook',
     extId: 'n8n-webhook',
     category: 'local',
-    name: 'n8n Webhook Tetikleyici',
-    description: 'Sayfada belirlenen olaylar gerçekleştiğinde (örn: fiyat değişimi) yerel n8n workflow’larına HTTP post atar.',
+    name: 'n8n Webhook Trigger',
+    description: 'POSTs to local n8n workflows when selected page events fire (for example a price change).',
     action: 'settings',
     icon: 'node',
   },
@@ -228,8 +228,8 @@ const TOOLS = Object.freeze([
     setting: 'lmStudioPort',
     extId: 'lm-studio-port',
     category: 'local',
-    name: 'LM Studio Bağlantı Noktası',
-    description: 'Büyük metinleri ajana göndermeden önce localhost’taki yerel LLM modeline özetletip trafiği hafifletir.',
+    name: 'LM Studio Port',
+    description: 'Summarizes large texts on a local LLM at localhost before sending them to the agent, cutting traffic.',
     action: 'settings',
     icon: 'chip',
   },
@@ -238,8 +238,8 @@ const TOOLS = Object.freeze([
     setting: 'memoryBlockSync',
     extId: 'memory-block',
     category: 'local',
-    name: 'Hafıza Bloğu Aktarıcı',
-    description: 'Kritik bulguları doğrudan SiYuan gibi yerel blok tabanlı hafıza sistemlerine senkronize eder.',
+    name: 'Memory Block Sync',
+    description: 'Syncs critical findings directly into local block-based memory systems such as SiYuan.',
     action: 'settings',
     icon: 'book',
   },
@@ -248,8 +248,8 @@ const TOOLS = Object.freeze([
     setting: 'cursorIdeBridge',
     extId: 'cursor-ide-bridge',
     category: 'local',
-    name: 'Cursor IDE Kod Köprüsü',
-    description: 'Kazınan teknik dokümanları veya kod snippet’lerini doğrudan yerel çalışma ortamına iletir.',
+    name: 'Cursor IDE Code Bridge',
+    description: 'Forwards scraped technical docs or code snippets into the local workspace.',
     action: 'settings',
     icon: 'terminal',
   },
@@ -258,8 +258,8 @@ const TOOLS = Object.freeze([
     setting: 'tabOrchestrator',
     extId: 'tab-orchestrator',
     category: 'control',
-    name: 'Çoklu Sekme Orkestratörü',
-    description: 'Ajanların paralel çalışması için 10+ sekmeyi bellek sızıntısı olmadan yönetir ve uyutur.',
+    name: 'Multi-Tab Orchestrator',
+    description: 'Manages and sleeps 10+ tabs for parallel agents without leaking memory.',
     action: 'settings',
     icon: 'layers',
   },
@@ -268,8 +268,8 @@ const TOOLS = Object.freeze([
     setting: 'headlessMode',
     extId: 'headless-mode',
     category: 'control',
-    name: 'Headless (Görünmez) Mod',
-    description: 'Ajanlar çalışırken BrowserView render işlemlerini durdurarak CPU/GPU kullanımını azaltır.',
+    name: 'Headless (Invisible) Mode',
+    description: 'Stops BrowserView rendering while agents run to cut CPU/GPU use.',
     action: 'settings',
     icon: 'ghost2',
   },
@@ -278,8 +278,8 @@ const TOOLS = Object.freeze([
     setting: 'inputSimulator',
     extId: 'input-simulator',
     category: 'control',
-    name: 'Fare & Klavye Simülatörü',
-    description: 'CDP üzerinden gelen eylemleri gerçek donanım girdisi gibi (insansı gecikmelerle) uygular.',
+    name: 'Mouse & Keyboard Simulator',
+    description: 'Applies CDP actions as if they were real hardware input, with human-like delays.',
     action: 'settings',
     icon: 'keyboard',
   },
@@ -288,8 +288,8 @@ const TOOLS = Object.freeze([
     setting: 'rateLimitGuard',
     extId: 'rate-limit-guard',
     category: 'control',
-    name: 'Rate-Limit Atlatıcı',
-    description: 'Cloudflare veya reCAPTCHA v3 bekleme sürelerini algılayıp ajan eylemlerini otonom olarak duraklatır.',
+    name: 'Rate-Limit Guard',
+    description: 'Detects Cloudflare or reCAPTCHA v3 wait times and autonomously pauses agent actions.',
     action: 'settings',
     icon: 'guard',
   },
@@ -298,8 +298,8 @@ const TOOLS = Object.freeze([
     setting: 'sandboxIsolator',
     extId: 'sandbox-isolator',
     category: 'control',
-    name: 'Sandbox Görev İzolatörü',
-    description: 'Her ajanın görevini farklı bir in-memory-session bölümünde (partition) çalıştırarak çapraz veri kirliliğini sıfırlar.',
+    name: 'Sandbox Task Isolator',
+    description: 'Runs each agent task in a different in-memory-session partition so cross-task data does not leak.',
     action: 'settings',
     icon: 'box',
   },
@@ -308,8 +308,8 @@ const TOOLS = Object.freeze([
     setting: 'excommunicadoLock',
     extId: 'excommunicado-lock',
     category: 'control',
-    name: 'Excommunicado Kiliti',
-    description: 'Ajanlar hata döngüsüne girerse ilgili sekmeyi imha edip master sisteme Başarısız sinyali gönderir.',
+    name: 'Excommunicado Lock',
+    description: 'If agents enter an error loop, destroys that tab and sends a Failed signal to the master system.',
     action: 'settings',
     icon: 'lock',
     alert: true,
@@ -317,10 +317,10 @@ const TOOLS = Object.freeze([
 ]);
 
 const CATEGORY_LABELS = Object.freeze({
-  scrape: 'Veri kazıma ve DOM manipülasyonu',
-  network: 'Ağ ve veri yakalama',
-  local: 'Yerel sistem entegrasyonları',
-  control: 'Ajan kontrol ve güvenlik',
+  scrape: 'Data scraping and DOM manipulation',
+  network: 'Network and data capture',
+  local: 'Local system integrations',
+  control: 'Agent control and security',
 });
 
 const ICONS = {
@@ -419,9 +419,9 @@ function iconSvg(name) {
 function memoryBridgeDescription() {
   const name = settings?.memoryBridge?.providerName;
   if (name) {
-    return `${name} bu oturuma bağlı. Ayrıntılar’dan köprü değiştirin.`;
+    return `${name} is bound to this session. Change the bridge from Details.`;
   }
-  return 'Ayrıntılar’dan Mem0, Zep, LangGraph, SiYuan, LlamaIndex, Motorhead, MemGPT veya Obsidian seçin.';
+  return 'Choose Mem0, Zep, LangGraph, SiYuan, LlamaIndex, Motorhead, MemGPT, or Obsidian from Details.';
 }
 
 function modelDescription() {
@@ -430,15 +430,15 @@ function modelDescription() {
   const selected = models.find((item) => item.id === intel?.selectedId) || models.find((item) => item.live && item.ready);
   const running = agents.filter((item) => item.status === 'running');
   if (selected && running.length) {
-    return `${selected.name} bağlı · ${running.map((item) => item.name).join(', ')}`;
+    return `${selected.name} bound · ${running.map((item) => item.name).join(', ')}`;
   }
   if (selected) {
-    return `${selected.name} bu oturuma bağlı.`;
+    return `${selected.name} is bound to this session.`;
   }
   if (running.length) {
     return running.map((item) => item.name).join(', ');
   }
-  return 'Oturuma bağlı dil modeli ve ajan. Kalıcı uzantı değildir.';
+  return 'Session-bound language model and agent. Not a persistent extension.';
 }
 
 function visibleTools(query) {
@@ -473,7 +473,7 @@ function updateExtensionCounts(visible) {
   const total = installedCount();
   const heading = document.getElementById('ext-heading');
   if (heading) {
-    heading.textContent = visible === total ? `Tüm eklentiler (${total})` : `Tüm eklentiler (${visible} / ${total})`;
+    heading.textContent = visible === total ? `All extensions (${total})` : `All extensions (${visible} / ${total})`;
   }
   const navCount = document.getElementById('ext-nav-count');
   if (navCount) {
@@ -515,13 +515,13 @@ function renderGrid() {
     const copy = document.createElement('div');
     copy.className = 'ext-copy';
     const title = document.createElement('h3');
-    title.textContent = tool.id === 'models' ? (intel?.selectedId ? 'Yerel modeller' : tool.name) : tool.name;
+    title.textContent = tool.id === 'models' ? (intel?.selectedId ? 'Local models' : tool.name) : tool.name;
     const desc = document.createElement('p');
     desc.textContent =
       tool.id === 'models' ? modelDescription() : tool.id === 'siyuan-bridge' ? memoryBridgeDescription() : tool.description;
     const idLine = document.createElement('p');
     idLine.className = 'ext-id';
-    idLine.textContent = `oturum/${tool.id}`;
+    idLine.textContent = `session/${tool.id}`;
     copy.append(title, desc, idLine);
 
     const actions = document.createElement('div');
@@ -531,13 +531,13 @@ function renderGrid() {
     details.type = 'button';
     details.className = 'ext-btn';
     details.dataset.action = tool.action;
-    details.textContent = 'Ayrıntılar';
+    details.textContent = 'Details';
 
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'ext-btn is-danger';
     remove.dataset.remove = tool.id;
-    remove.textContent = 'Kaldır';
+    remove.textContent = 'Remove';
 
     actions.append(details, remove);
 
@@ -548,7 +548,7 @@ function renderGrid() {
       toggle.dataset.setting = tool.setting;
       toggle.setAttribute('role', 'switch');
       toggle.setAttribute('aria-checked', toolEnabled(tool) ? 'true' : 'false');
-      toggle.setAttribute('aria-label', `${tool.name} açık/kapalı`);
+      toggle.setAttribute('aria-label', `${tool.name} on/off`);
       if (tool.extId) {
         toggle.dataset.ext = tool.extId;
       }
@@ -577,10 +577,10 @@ function updateExpertMeta() {
   }
   const models = Array.isArray(intel?.models) ? intel.models : [];
   const selected = models.find((item) => item.id === intel?.selectedId) || models.find((item) => item.live && item.ready);
-  const modelLine = selected ? selected.name : 'model seçilmedi';
+  const modelLine = selected ? selected.name : 'no model selected';
   const memoryLine = settings?.memoryBridge?.providerName
-    ? `hafıza: ${settings.memoryBridge.providerName}${settings.siyuanBridge ? '' : ' · kapalı'}`
-    : 'hafıza köprüsü seçilmedi';
+    ? `memory: ${settings.memoryBridge.providerName}${settings.siyuanBridge ? '' : ' · off'}`
+    : 'no memory bridge selected';
   meta.textContent = `${modelLine} · ${memoryLine}`;
 }
 
@@ -639,7 +639,7 @@ function bindPage() {
     setExpertBusy(true);
     const request = api?.askExtExpert?.(message);
     if (!request) {
-      appendExpertBubble('error', 'Eklenti uzmanı bağlı değil. Agent Browser içinde açın.');
+      appendExpertBubble('error', 'The extension expert is not bound. Open this inside Agent Browser.');
       setExpertBusy(false);
       return;
     }
@@ -652,11 +652,11 @@ function bindPage() {
         if (result?.ok && result.reply) {
           appendExpertBubble('agent', result.reply);
         } else {
-          appendExpertBubble('error', result?.error || 'Eklenti uzmanı yanıt veremedi. Yerel model seçili mi?');
+          appendExpertBubble('error', result?.error || 'The extension expert could not reply. Is a local model selected?');
         }
       })
       ?.catch(() => {
-        appendExpertBubble('error', 'Eklenti uzmanı yanıt veremedi.');
+        appendExpertBubble('error', 'The extension expert could not reply.');
       })
       ?.finally(() => {
         setExpertBusy(false);
@@ -676,7 +676,7 @@ function bindPage() {
 
   appendExpertBubble(
     'agent',
-    'Merhaba, ben Eklenti uzmanı. Hangi siteleri kullanacağını söyle; reklam, gizlilik, indirme veya kazıma için doğru araçları açıp kapatayım.',
+    'Hi, I am the Extension expert. Tell me which sites you use and I will turn the right tools on or off for ads, privacy, downloads, or scraping.',
   );
 
   document.getElementById('ext-grid')?.addEventListener('click', (event) => {

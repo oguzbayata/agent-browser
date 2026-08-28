@@ -3,14 +3,14 @@
 const api = window.electronAPI;
 
 const FALLBACK_CATALOG = Object.freeze([
-  { id: 'mem0', name: 'Mem0', hint: 'Mem0 bellek API', defaultUrl: 'http://127.0.0.1:8888/v1/memories', kind: 'http' },
-  { id: 'zep', name: 'Zep', hint: 'Zep bellek sunucusu', defaultUrl: 'http://127.0.0.1:8000/api/v2/memory', kind: 'http' },
+  { id: 'mem0', name: 'Mem0', hint: 'Mem0 memory API', defaultUrl: 'http://127.0.0.1:8888/v1/memories', kind: 'http' },
+  { id: 'zep', name: 'Zep', hint: 'Zep memory server', defaultUrl: 'http://127.0.0.1:8000/api/v2/memory', kind: 'http' },
   { id: 'langgraph', name: 'LangGraph / LangChain Memory', hint: 'LangGraph Studio / checkpoint', defaultUrl: 'http://127.0.0.1:2024/memory', kind: 'http' },
   { id: 'siyuan', name: 'SiYuan', hint: 'SiYuan kernel API', defaultUrl: 'http://127.0.0.1:6806/api/block/insertBlock', kind: 'http' },
-  { id: 'llamaindex', name: 'LlamaIndex Memory Modules', hint: 'LlamaIndex bellek servisi', defaultUrl: 'http://127.0.0.1:8001/memory', kind: 'http' },
-  { id: 'motorhead', name: 'Motorhead', hint: 'Motorhead oturum belleği', defaultUrl: 'http://127.0.0.1:8080/sessions', kind: 'http' },
+  { id: 'llamaindex', name: 'LlamaIndex Memory Modules', hint: 'LlamaIndex memory service', defaultUrl: 'http://127.0.0.1:8001/memory', kind: 'http' },
+  { id: 'motorhead', name: 'Motorhead', hint: 'Motorhead session memory', defaultUrl: 'http://127.0.0.1:8080/sessions', kind: 'http' },
   { id: 'memgpt', name: 'MemGPT', hint: 'Letta / MemGPT', defaultUrl: 'http://127.0.0.1:8283/v1/agents/memory', kind: 'http' },
-  { id: 'obsidian', name: 'Obsidian', hint: 'Yerel kasa klasörü', defaultUrl: '', kind: 'folder' },
+  { id: 'obsidian', name: 'Obsidian', hint: 'Local vault folder', defaultUrl: '', kind: 'folder' },
 ]);
 
 let state = {
@@ -62,8 +62,8 @@ function render() {
   }
 
   if (status) {
-    const on = state.enabled ? 'açık' : 'kapalı';
-    status.textContent = spec ? `${spec.name} seçili · köprü ${on}` : 'köprü seçilmedi';
+    const on = state.enabled ? 'on' : 'off';
+    status.textContent = spec ? `${spec.name} selected · bridge ${on}` : 'no bridge selected';
   }
   if (endpointRow) {
     endpointRow.hidden = folder;
@@ -78,10 +78,10 @@ function render() {
     endpoint.value = state.endpoint || spec?.defaultUrl || '';
   }
   if (token && document.activeElement !== token && !token.value) {
-    token.placeholder = state.hasToken ? 'kayıtlı oturum anahtarı var · değiştirmek için yazın' : 'yalnızca bu oturum · diske yazılmaz';
+    token.placeholder = state.hasToken ? 'a session key is stored · type to replace it' : 'this session only · not written to disk';
   }
   if (vaultPath) {
-    vaultPath.textContent = state.vaultPath || 'klasör seçilmedi';
+    vaultPath.textContent = state.vaultPath || 'no folder selected';
   }
 }
 

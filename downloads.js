@@ -3,10 +3,10 @@
 const api = window.electronAPI;
 
 const STATE_LABELS = {
-  progressing: 'İndiriliyor',
-  paused: 'Duraklatıldı',
-  completed: 'Tamamlandı',
-  cancelled: 'İptal edildi',
+  progressing: 'Downloading',
+  paused: 'Paused',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
   interrupted: 'Kesildi',
 };
 
@@ -67,8 +67,8 @@ function renderDownloads(payload) {
 
     const cancel = document.createElement('button');
     cancel.type = 'button';
-    cancel.textContent = 'İptal';
-    cancel.setAttribute('aria-label', 'İndirmeyi iptal et');
+    cancel.textContent = 'Cancel';
+    cancel.setAttribute('aria-label', 'Cancel download');
     cancel.disabled = item.state !== 'progressing';
     cancel.addEventListener('click', () => api?.cancelDownload?.(item.id));
 
@@ -94,7 +94,7 @@ api?.onDiskWarning?.((payload) => {
   }
   banner.textContent =
     payload?.message ||
-    'Uyarı: Bu dosya yerel diskinize kaydedildi. Excommunicado protokolü bu dosyayı silmeyebilir.';
+    'Warning: This file was saved to your local disk. The Excommunicado protocol may not delete it.';
   banner.hidden = false;
 });
 api?.onToast?.((payload) => {

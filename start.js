@@ -18,7 +18,7 @@ function resolveElectronBinary() {
       return fallback;
     }
     throw new Error(
-      'Electron ikilisi bulunamadı. Proje klasöründe `npm install` çalıştırın.',
+      'Electron binary was not found. Run `npm install` in the project folder.',
     );
   }
 }

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -14,20 +14,20 @@
   <body>
     <header class="chrome">
       <div class="chrome-main">
-        <div class="tab-strip" aria-label="Sekmeler">
+        <div class="tab-strip" aria-label="Tabs">
           <div class="tab-list" id="tab-list" role="tablist"></div>
-          <button class="tab-new" id="new-tab" type="button" aria-label="Yeni sekme">+</button>
+          <button class="tab-new" id="new-tab" type="button" aria-label="New tab">+</button>
         </div>
         <div id="agent-browser-ust-cubuk">
           <div id="navigasyon-cubugu">
             <div id="nav-sol">
-              <button class="chrome-icon" id="back-btn" type="button" aria-label="Geri" title="Geri (Alt+←)" disabled>
+              <button class="chrome-icon" id="back-btn" type="button" aria-label="Back" title="Back (Alt+←)" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 2.8 4.9 8l5.3 5.2" /></svg>
               </button>
-              <button class="chrome-icon" id="forward-btn" type="button" aria-label="İleri" title="İleri (Alt+→)" disabled>
+              <button class="chrome-icon" id="forward-btn" type="button" aria-label="Forward" title="Forward (Alt+→)" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.8 2.8 11.1 8l-5.3 5.2" /></svg>
               </button>
-              <button class="chrome-icon" id="reload-btn" type="button" aria-label="Yenile" title="Yenile">
+              <button class="chrome-icon" id="reload-btn" type="button" aria-label="Reload" title="Reload">
                 <svg class="icon-reload" viewBox="0 0 16 16" aria-hidden="true">
                   <path d="M13 8A5 5 0 1 1 8 3h1.2" />
                   <path d="M7.2 1.2 9.6 3.4 7.3 5.7" />
@@ -39,7 +39,7 @@
             </div>
 
             <form class="omni-form" id="omni-form" action="#" autocomplete="off">
-              <label class="sr-only" for="url-bar">Adres veya arama</label>
+              <label class="sr-only" for="url-bar">Address or search</label>
               <div id="adres-cubugu-konteynir">
                 <span id="omni-scheme" class="omni-scheme" data-scheme="idle" title="Agent Browser">
                   <img
@@ -63,9 +63,9 @@
                   autocomplete="off"
                   autocapitalize="off"
                   inputmode="url"
-                  placeholder="Adres veya arama"
+                  placeholder="Address or search"
                 />
-                <button class="omni-icon" id="bookmark-star" type="button" aria-label="Yer imi" aria-pressed="false" title="Yer imi (oturum)">
+                <button class="omni-icon" id="bookmark-star" type="button" aria-label="Bookmark" aria-pressed="false" title="Bookmark (session)">
                   <svg class="icon-star" viewBox="0 0 16 16" aria-hidden="true">
                     <path d="M8 1.8 9.7 6h4.4L11 8.8 12.6 13 8 10.4 3.4 13 5 8.8 1.9 6h4.4Z" />
                   </svg>
@@ -76,44 +76,44 @@
             <div id="nav-sag">
               <div class="ext-pill">
                 <div class="shield-wrap">
-                  <button class="chrome-icon is-armed" id="shield-toggle" type="button" aria-label="Kalkan" aria-expanded="false" aria-haspopup="true" title="Kalkan">
+                  <button class="chrome-icon is-armed" id="shield-toggle" type="button" aria-label="Shield" aria-expanded="false" aria-haspopup="true" title="Shield">
                     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6 13.2 4v3.7c0 3.4-2.1 5.7-5.2 6.7C4.9 13.4 2.8 11.1 2.8 7.7V4Z" /></svg>
                   </button>
                 </div>
                 <div class="toolbar-wrap">
-                  <button class="chrome-icon chrome-icon-globe" id="site-toggle" type="button" aria-label="Site bilgisi" aria-expanded="false" aria-haspopup="true" title="Site bilgisi">
+                  <button class="chrome-icon chrome-icon-globe" id="site-toggle" type="button" aria-label="Site info" aria-expanded="false" aria-haspopup="true" title="Site info">
                     <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.2"/><path d="M2.8 8h10.4M8 2.8c1.6 1.6 2.4 3.4 2.4 5.2S9.6 12.6 8 13.2C6.4 12.6 5.6 10.8 5.6 8S6.4 3.4 8 2.8Z"/></svg>
                   </button>
                 </div>
-                <button class="chrome-icon chrome-icon-ghost" id="ghost-toggle" type="button" aria-label="Hayalet Ağ" aria-pressed="false" title="Hayalet Ağ">
+                <button class="chrome-icon chrome-icon-ghost" id="ghost-toggle" type="button" aria-label="Ghost Network" aria-pressed="false" title="Ghost Network">
                   <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2c-2.6 0-4.6 1.9-4.6 4.6v6.4l1.5-1 1.5 1 1.6-1 1.6 1 1.5-1 1.5 1V6.8C12.6 4.1 10.6 2.2 8 2.2Z"/><circle cx="6.2" cy="7.1" r="0.7" fill="currentColor" stroke="none"/><circle cx="9.8" cy="7.1" r="0.7" fill="currentColor" stroke="none"/></svg>
                 </button>
-                <button class="chrome-icon" id="downloads-toggle" type="button" aria-label="İndirmeler" title="İndirmeler">
+                <button class="chrome-icon" id="downloads-toggle" type="button" aria-label="Downloads" title="Downloads">
                   <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.4 4.2h9.2v9H3.4zM5 6.6h6M5 8.8h4.4"/><path d="M6.2 2.6h3.6v1.8H6.2z"/></svg>
                   <span class="downloads-badge" id="downloads-badge" hidden>0</span>
                 </button>
                 <div class="toolbar-wrap">
-                  <button class="chrome-icon" id="tools-toggle" type="button" aria-label="Eklentiler" title="Eklentiler">
+                  <button class="chrome-icon" id="tools-toggle" type="button" aria-label="Extensions" title="Extensions">
                     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 2.6h1.8v2.2H10c.9 0 1.6.7 1.6 1.6v2.2h2.2v1.8h-2.2V12c0 .9-.7 1.6-1.6 1.6H8v2.2H6.2V13.6H4c-.9 0-1.6-.7-1.6-1.6V9.8H.4V8h2.2V6.4c0-.9.7-1.6 1.6-1.6h2z"/></svg>
                   </button>
                 </div>
               </div>
-              <button class="chrome-icon" id="ai-toggle" type="button" aria-label="Yerel modeller" aria-expanded="false" aria-controls="ai-sidebar" title="Yerel modeller">
+              <button class="chrome-icon" id="ai-toggle" type="button" aria-label="Local models" aria-expanded="false" aria-controls="ai-sidebar" title="Local models">
                 <svg viewBox="0 0 16 16" aria-hidden="true">
                   <rect x="2.4" y="2.6" width="11.2" height="10.8" rx="1.2" />
                   <path d="M9.6 2.6v10.8" />
                 </svg>
               </button>
               <div class="toolbar-wrap">
-                <button class="chrome-avatar" id="profile-toggle" type="button" aria-label="Profil" aria-expanded="false" aria-haspopup="true" aria-controls="profile-pop" title="Profil">
+                <button class="chrome-avatar" id="profile-toggle" type="button" aria-label="Profile" aria-expanded="false" aria-haspopup="true" aria-controls="profile-pop" title="Profile">
                   <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#c5d0dc"/><circle cx="16" cy="13" r="5" fill="#5d6b7a"/><path fill="#5d6b7a" d="M7 27c1.4-5 4.8-7.4 9-7.4S23.6 22 25 27"/></svg>
                 </button>
-                <div id="profile-pop" class="toolbar-pop hidden" role="dialog" aria-label="Profil">
-                  <p class="shield-kicker">ram profili</p>
-                  <p class="toolbar-pop-host">Oturum hesabı yok</p>
-                  <p class="shield-note">Çerez, yer imi ve anahtarlar diske yazılmaz. Kapanışta silinir.</p>
+                <div id="profile-pop" class="toolbar-pop hidden" role="dialog" aria-label="Profile">
+                  <p class="shield-kicker">ram profile</p>
+                  <p class="toolbar-pop-host">No session account</p>
+                  <p class="shield-note">Cookies, bookmarks, and keys are not written to disk. They are wiped on close.</p>
                   <div class="toolbar-pop-actions">
-                    <button type="button" id="profile-settings">Ayarlar</button>
+                    <button type="button" id="profile-settings">Settings</button>
                     <button type="button" id="profile-panic">Excommunicado</button>
                   </div>
                 </div>
@@ -123,11 +123,11 @@
                   class="chrome-icon"
                   id="settings-toggle"
                   type="button"
-                  aria-label="Ayarlar menüsü"
+                  aria-label="Settings menu"
                   aria-expanded="false"
                   aria-haspopup="true"
                   aria-controls="agent-main-menu"
-                  title="Ayarlar"
+                  title="Settings"
                 >
                   <svg viewBox="0 0 16 16" aria-hidden="true">
                     <circle cx="8" cy="3.2" r="1.15" fill="currentColor" stroke="none" />
@@ -142,18 +142,18 @@
             </div>
           </div>
 
-          <div id="yerimleri-cubugu" aria-label="Yer imleri">
+          <div id="yerimleri-cubugu" aria-label="Bookmarks">
             <div id="yerimleri-sol" class="toolbar-wrap">
-              <button class="chrome-icon" id="apps-toggle" type="button" aria-label="Uygulamalar" aria-expanded="false" aria-haspopup="true" aria-controls="apps-pop" title="Uygulamalar">
+              <button class="chrome-icon" id="apps-toggle" type="button" aria-label="Apps" aria-expanded="false" aria-haspopup="true" aria-controls="apps-pop" title="Apps">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.4" y="2.4" width="4" height="4" rx="0.6"/><rect x="9.6" y="2.4" width="4" height="4" rx="0.6"/><rect x="2.4" y="9.6" width="4" height="4" rx="0.6"/><rect x="9.6" y="9.6" width="4" height="4" rx="0.6"/></svg>
               </button>
-              <div id="apps-pop" class="toolbar-pop toolbar-pop-left hidden" role="dialog" aria-label="Uygulamalar">
-                <p class="shield-kicker">kısayollar</p>
+              <div id="apps-pop" class="toolbar-pop toolbar-pop-left hidden" role="dialog" aria-label="Apps">
+                <p class="shield-kicker">shortcuts</p>
                 <button type="button" class="toolbar-pop-item" data-url="https://duckduckgo.com">DuckDuckGo</button>
                 <button type="button" class="toolbar-pop-item" data-url="https://www.startpage.com">Startpage</button>
                 <button type="button" class="toolbar-pop-item" data-url="https://www.wikipedia.org">Wikipedia</button>
                 <button type="button" class="toolbar-pop-item" data-url="https://proton.me">Proton</button>
-                <button type="button" class="toolbar-pop-item" data-action="new-tab">Yeni sekme</button>
+                <button type="button" class="toolbar-pop-item" data-action="new-tab">New tab</button>
               </div>
             </div>
             <div id="yerimleri-orta">
@@ -178,96 +178,96 @@
         </div>
         <div class="downloads-pop history-pop" id="session-history-pop" hidden>
           <header class="downloads-head">
-            <p>Oturum geçmişi</p>
+            <p>Session history</p>
             <span>RAM only</span>
           </header>
-          <p class="downloads-empty" id="session-history-empty">bu oturumda gezinti yok</p>
+          <p class="downloads-empty" id="session-history-empty">no visits in this session</p>
           <div class="downloads-list" id="session-history-list"></div>
         </div>
       </div>
     </header>
 
     <div class="workspace">
-      <aside class="settings-panel" id="settings-panel" aria-label="Ayarlar" hidden>
+      <aside class="settings-panel" id="settings-panel" aria-label="Settings" hidden>
         <header class="settings-head">
           <p class="settings-kicker">session only · ram</p>
-          <h1 class="settings-title">Ayarlar</h1>
-          <button class="settings-close" id="settings-close" type="button" aria-label="Ayarları kapat">×</button>
+          <h1 class="settings-title">Settings</h1>
+          <button class="settings-close" id="settings-close" type="button" aria-label="Close settings">×</button>
         </header>
 
         <div class="settings-body">
-          <p class="settings-section">Ajanlar</p>
+          <p class="settings-section">Agents</p>
           <label class="setting">
             <span>
-              <strong>Çoklu ajan köprüsü</strong>
-              <em>Yerel ajanların tarayıcıyı serbestçe kullanmasına izin ver</em>
+              <strong>Multi-agent bridge</strong>
+              <em>Let local agents drive the browser freely</em>
             </span>
             <input id="setting-agentBridge" type="checkbox" data-setting="agentBridge" />
           </label>
           <div class="agent-bridge-card" id="agent-bridge-card" hidden>
-            <p class="settings-note">Yalnızca 127.0.0.1. Her ajan kendi sekmesini açsın. Token oturumdadır, diske yazılmaz.</p>
+            <p class="settings-note">Loopback only (127.0.0.1). Each agent should open its own tab. The token stays in RAM and is not written to disk.</p>
             <label class="agent-bridge-field">
-              Uç nokta
+              Endpoint
               <input id="agent-bridge-url" type="text" readonly spellcheck="false" />
             </label>
             <label class="agent-bridge-field">
-              Oturum jetonu
+              Session token
               <input id="agent-bridge-token" type="text" readonly spellcheck="false" />
             </label>
             <p class="settings-note">
-              Örnek: <kbd>Authorization: Bearer &lt;jeton&gt;</kbd> ve
-              <kbd>POST /v1/tabs</kbd> <kbd>{"url":"https://duckduckgo.com","owner":"ajan-1"}</kbd>
+              Example: <kbd>Authorization: Bearer &lt;token&gt;</kbd> and
+              <kbd>POST /v1/tabs</kbd> <kbd>{"url":"https://duckduckgo.com","owner":"agent-1"}</kbd>
             </p>
           </div>
-          <p class="settings-section">Gizlilik</p>
+          <p class="settings-section">Privacy</p>
           <label class="setting">
             <span>
-              <strong>Takipçi engeli</strong>
-              <em>Bilinen izleyici ve reklam hostlarını kes</em>
+              <strong>Tracker blocker</strong>
+              <em>Cut known trackers, ads, and adult-site ad networks</em>
             </span>
             <input id="setting-blockTrackers" type="checkbox" data-setting="blockTrackers" checked />
           </label>
           <label class="setting">
             <span>
-              <strong>Üçüncü taraf çerezler</strong>
-              <em>Çapraz site çerezlerini düşür</em>
+              <strong>Third-party cookies</strong>
+              <em>Drop cross-site cookies</em>
             </span>
             <input id="setting-stripThirdPartyCookies" type="checkbox" data-setting="stripThirdPartyCookies" checked />
           </label>
           <label class="setting">
             <span>
               <strong>Do Not Track</strong>
-              <em>İsteklere DNT: 1 ekle</em>
+              <em>Add DNT: 1 to requests</em>
             </span>
             <input id="setting-sendDnt" type="checkbox" data-setting="sendDnt" checked />
           </label>
           <label class="setting">
             <span>
-              <strong>Ortak tarayıcı kimliği</strong>
-              <em>User-Agent’ı sıradan Chrome olarak göster</em>
+              <strong>Common browser identity</strong>
+              <em>Present the User-Agent as ordinary Chrome</em>
             </span>
             <input id="setting-spoofUserAgent" type="checkbox" data-setting="spoofUserAgent" checked />
           </label>
           <label class="setting">
             <span>
-              <strong>Hayalet Ağ</strong>
-              <em>Tüm trafiği SOCKS5 127.0.0.1:1080 üzerinden geçir</em>
+              <strong>Ghost Network</strong>
+              <em>Send all traffic through SOCKS5 127.0.0.1:1080</em>
             </span>
             <input id="setting-ghostNetwork" type="checkbox" data-setting="ghostNetwork" />
           </label>
           <label class="setting">
             <span>
-              <strong>Evrensel Medya Avcısı (Video Downloader)</strong>
-              <em>Sağ tık menüsünden HTML5 ve YouTube videolarını indir</em>
+              <strong>Universal Media Hunter (Video Downloader)</strong>
+              <em>Download HTML5 and YouTube videos from the context menu</em>
             </span>
             <input id="setting-mediaHunter" type="checkbox" data-setting="mediaHunter" />
           </label>
 
-          <p class="settings-section">Arama</p>
+          <p class="settings-section">Search</p>
           <label class="setting setting-stack">
             <span>
-              <strong>Arama motoru</strong>
-              <em>Adres çubuğundaki aramalar</em>
+              <strong>Search engine</strong>
+              <em>Address-bar searches</em>
             </span>
             <select id="setting-searchEngine" data-setting="searchEngine">
               <option value="duckduckgo">DuckDuckGo</option>
@@ -275,11 +275,11 @@
             </select>
           </label>
 
-          <p class="settings-section">Oturum</p>
+          <p class="settings-section">Session</p>
           <label class="setting is-locked">
             <span>
-              <strong>Bellek içi oturum</strong>
-              <em>Çerezler ve anahtarlar diske yazılmaz</em>
+              <strong>In-memory session</strong>
+              <em>Cookies and keys are not written to disk</em>
             </span>
             <input type="checkbox" checked disabled />
           </label>
@@ -288,8 +288,8 @@
           </p>
         </div>
       </aside>
-      <main class="viewport" id="viewport" aria-label="Sayfa görünümü">
-        <p class="viewport-idle">hedef bekleniyor</p>
+      <main class="viewport" id="viewport" aria-label="Page view">
+        <p class="viewport-idle">waiting for a target</p>
       </main>
 
       <aside class="ram-sheet" id="ram-sheet" aria-label="RAM-Only Data" hidden>
@@ -348,12 +348,12 @@
         </footer>
       </aside>
 
-      <aside class="ai-sidebar" id="ai-sidebar" aria-label="Yapay zeka paneli" hidden>
+      <aside class="ai-sidebar" id="ai-sidebar" aria-label="AI panel" hidden>
         <header class="ai-head">
           <p class="ai-kicker">session only · ram</p>
-          <h1 class="ai-title">Yerel modeller</h1>
-          <p class="ai-selected" id="ai-selected">model seçilmedi</p>
-          <label class="ai-key-label" for="ai-key" id="ai-key-label">API Key (yalnızca bulut · oturum)</label>
+          <h1 class="ai-title">Local models</h1>
+          <p class="ai-selected" id="ai-selected">no model selected</p>
+          <label class="ai-key-label" for="ai-key" id="ai-key-label">API key (cloud only · session)</label>
           <input
             id="ai-key"
             class="ai-key"
@@ -365,37 +365,33 @@
           />
         </header>
 
-        <section class="ai-intel" aria-label="Yerel tarama">
+        <section class="ai-intel" aria-label="Local scan">
           <div class="ai-intel-toolbar">
-            <p>Modeller</p>
+            <p>Models</p>
             <div class="ai-intel-actions">
-              <button class="ai-mini" id="ai-model-pick" type="button">Dosya</button>
-              <button class="ai-mini" id="ai-model-dir" type="button">Klasör</button>
+              <button class="ai-mini" id="ai-model-pick" type="button">File</button>
+              <button class="ai-mini" id="ai-model-dir" type="button">Folder</button>
             </div>
           </div>
-          <p class="ai-intel-status" id="ai-intel-status">taranıyor…</p>
-          <label class="sr-only" for="ai-model-select">Dil modeli</label>
+          <p class="ai-intel-status" id="ai-intel-status">scanning…</p>
+          <label class="sr-only" for="ai-model-select">Language model</label>
           <select class="ai-model-select" id="ai-model-select"></select>
-          <div class="ai-intel-toolbar">
-            <p>Ajan sistemleri</p>
-          </div>
-          <ul class="ai-intel-list" id="ai-agent-list"></ul>
         </section>
 
         <section class="ai-chat" id="ai-chat" aria-live="polite"></section>
 
         <form class="ai-composer" id="ai-form" autocomplete="off">
-          <label class="sr-only" for="ai-prompt">Soru</label>
+          <label class="sr-only" for="ai-prompt">Question</label>
           <textarea
             id="ai-prompt"
             class="ai-prompt"
             rows="3"
             maxlength="8000"
-            placeholder="hedef hakkında sor…"
+            placeholder="ask about the target…"
           ></textarea>
           <div class="ai-actions">
-            <button class="ai-btn ai-btn-ghost" id="ai-summarize" type="button">Sayfayı Özetle</button>
-            <button class="ai-btn ai-btn-primary" id="ai-send" type="submit">Gönder</button>
+            <button class="ai-btn ai-btn-ghost" id="ai-summarize" type="button">Summarize page</button>
+            <button class="ai-btn ai-btn-primary" id="ai-send" type="submit">Send</button>
           </div>
         </form>
       </aside>

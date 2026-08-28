@@ -14,11 +14,11 @@ function applySite(info) {
   const meta = document.getElementById('site-scheme');
   const badge = document.getElementById('site-scheme-badge');
   if (host) {
-    host.textContent = typeof info.host === 'string' && info.host ? info.host : 'sayfa yok';
+    host.textContent = typeof info.host === 'string' && info.host ? info.host : 'no page';
   }
   if (meta) {
     meta.textContent =
-      typeof info.meta === 'string' && info.meta ? info.meta : 'Adres çubuğundan bir hedef açın.';
+      typeof info.meta === 'string' && info.meta ? info.meta : 'Open a target from the address bar.';
   }
   if (badge) {
     badge.textContent = typeof info.scheme === 'string' && info.scheme ? info.scheme : 'ram';
@@ -54,7 +54,7 @@ function bindSiteMenu() {
         if (!result?.ok || !copyLabel) {
           return;
         }
-        copyLabel.textContent = 'Kopyalandı';
+        copyLabel.textContent = 'Copied';
         const token = Date.now();
         copyReset = token;
         setTimeout(() => {

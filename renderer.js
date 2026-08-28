@@ -100,8 +100,8 @@ function setReloadState(button, loading) {
   }
   button.classList.toggle('is-loading', loading);
   button.dataset.loading = loading ? '1' : '0';
-  button.setAttribute('aria-label', loading ? 'Durdur' : 'Yenile');
-  button.title = loading ? 'Durdur' : 'Yenile';
+  button.setAttribute('aria-label', loading ? 'Stop' : 'Reload');
+  button.title = loading ? 'Stop' : 'Reload';
 }
 
 function setStarState(button, bookmarked) {
@@ -310,7 +310,7 @@ function applyPrivacyChrome(settings) {
 
   const blocked = document.getElementById('shield-blocked');
   if (blocked && typeof settings.blockedRequestCount === 'number') {
-    blocked.textContent = `${settings.blockedRequestCount} izleyici engellendi`;
+    blocked.textContent = `${settings.blockedRequestCount} trackers blocked`;
   }
   if (settings.securityStats) {
     applySecurityStats(settings.securityStats);
@@ -341,7 +341,7 @@ function applySecurityStats(stats) {
 
   const blocked = document.getElementById('shield-blocked');
   if (blocked) {
-    blocked.textContent = `${trackers} izleyici engellendi`;
+    blocked.textContent = `${trackers} trackers blocked`;
   }
 }
 
@@ -635,68 +635,47 @@ function localRuntimeReady(intel) {
 
 function renderLocalIntel(intel) {
   const modelSelect = document.getElementById('ai-model-select');
-  const agentList = document.getElementById('ai-agent-list');
   const status = document.getElementById('ai-intel-status');
   const selectedLabel = document.getElementById('ai-selected');
   const keyLabel = document.getElementById('ai-key-label');
-  if (!modelSelect || !agentList) {
+  if (!modelSelect) {
     return;
   }
 
   const models = Array.isArray(intel?.models) ? intel.models : [];
-  const agents = Array.isArray(intel?.agents) ? intel.agents : [];
   const selectedId = intel?.selectedId || null;
   const selected = models.find((item) => item.id === selectedId) || null;
 
   modelSelect.replaceChildren();
   const cloud = document.createElement('option');
   cloud.value = '';
-  cloud.textContent = 'OpenAI (oturum anahtarı) · bulut';
+  cloud.textContent = 'OpenAI (session key) · cloud';
   modelSelect.appendChild(cloud);
 
   for (const model of models) {
     const option = document.createElement('option');
     option.value = model.id;
-    const state = model.live ? 'canlı' : model.kind === 'file' ? 'dosya' : 'kayıtlı';
+    const state = model.live ? 'live' : model.kind === 'file' ? 'file' : 'saved';
     option.textContent = [model.name, model.source, state, model.sizeLabel].filter(Boolean).join(' · ');
     modelSelect.appendChild(option);
   }
   modelSelect.value = selectedId || '';
 
-  agentList.replaceChildren();
-  if (!agents.length) {
-    const empty = document.createElement('li');
-    empty.className = 'ai-intel-status';
-    empty.textContent = 'kurulu ajan sistemi bulunamadı';
-    agentList.appendChild(empty);
-  } else {
-    for (const agent of agents) {
-      const row = document.createElement('li');
-      row.className = `ai-agent-row${agent.status === 'running' ? ' is-running' : ''}`;
-      const title = document.createElement('strong');
-      title.textContent = agent.name;
-      const line = document.createElement('span');
-      line.textContent = agent.status === 'running' ? `çalışıyor · ${agent.detail}` : agent.detail || 'kurulu';
-      row.append(title, line);
-      agentList.appendChild(row);
-    }
-  }
-
   if (status) {
     const liveCount = models.filter((item) => item.live).length;
     status.textContent = models.length
-      ? `${models.length} model · ${liveCount} canlı · ${agents.length} ajan`
-      : 'bilinen klasörlerde model yok — dosya veya klasör seçin';
+      ? `${models.length} model · ${liveCount} live`
+      : 'no models in known folders — pick a file or folder';
   }
   if (selectedLabel) {
     selectedLabel.textContent = selected
-      ? `${selected.name}${selected.live ? ' · canlı' : ' · dosya'}`
-      : 'model seçilmedi · OpenAI anahtarı veya yerel model';
+      ? `${selected.name}${selected.live ? ' · live' : ' · file'}`
+      : 'no model selected · OpenAI key or a local model';
   }
   if (keyLabel) {
     keyLabel.textContent = localRuntimeReady(intel)
-      ? 'API Key (yerel model seçili · gerekmez)'
-      : 'API Key (yalnızca bulut · oturum)';
+      ? 'API key (local model selected · not required)'
+      : 'API key (cloud only · session)';
   }
 }
 
@@ -764,7 +743,7 @@ function bindAiSidebar() {
       setBookmarksPanelOpen(false);
       const status = document.getElementById('ai-intel-status');
       if (status) {
-        status.textContent = 'taranıyor…';
+        status.textContent = 'scanning…';
       }
     }
     api?.setSidebarOpen?.(open);
@@ -792,14 +771,14 @@ function bindAiSidebar() {
       return;
     }
     if (!apiKey && !localRuntimeReady(intelState)) {
-      appendAiBubble('error', 'Yerel bir model seçin veya oturum anahtarı girin.');
+      appendAiBubble('error', 'Select a local model or enter a session API key.');
       return;
     }
 
     appendAiBubble('user', message);
     prompt.value = '';
     if (!api?.sendAiMessage) {
-      appendAiBubble('error', 'AI köprüsü yalnızca Electron oturumunda çalışır.');
+      appendAiBubble('error', 'The AI bridge only runs inside an Electron session.');
       return;
     }
     setAiBusy(true);
@@ -809,13 +788,13 @@ function bindAiSidebar() {
   summarizeBtn.addEventListener('click', () => {
     const apiKey = sessionApiKey();
     if (!apiKey && !localRuntimeReady(intelState)) {
-      appendAiBubble('error', 'Yerel bir model seçin veya oturum anahtarı girin.');
+      appendAiBubble('error', 'Select a local model or enter a session API key.');
       return;
     }
 
-    appendAiBubble('user', 'Sayfayı özetle');
+    appendAiBubble('user', 'Summarize page');
     if (!api?.summarizeCurrentPage) {
-      appendAiBubble('error', 'AI köprüsü yalnızca Electron oturumunda çalışır.');
+      appendAiBubble('error', 'The AI bridge only runs inside an Electron session.');
       return;
     }
     setAiBusy(true);
@@ -829,14 +808,14 @@ function bindAiSidebar() {
     }
 
     if (payload.ok !== false && payload.type === 'status') {
-      appendAiBubble('status', payload.content || 'işleniyor');
+      appendAiBubble('status', payload.content || 'processing');
       return;
     }
 
     setAiBusy(false);
 
     if (payload.ok === false) {
-      appendAiBubble('error', payload.error || 'AI isteği başarısız.');
+      appendAiBubble('error', payload.error || 'AI request failed.');
       return;
     }
 
@@ -907,12 +886,12 @@ function bindTabs() {
 
       const titleEl = document.createElement('span');
       titleEl.className = 'tab-title';
-      titleEl.textContent = title || 'Yükleniyor...';
+      titleEl.textContent = title || 'Loading...';
 
       const closeBtn = document.createElement('button');
       closeBtn.type = 'button';
       closeBtn.className = 'tab-close';
-      closeBtn.setAttribute('aria-label', 'Sekmeyi kapat');
+      closeBtn.setAttribute('aria-label', 'Close tab');
       closeBtn.textContent = '×';
 
       tab.append(pinEl, muteEl, titleEl, closeBtn);
@@ -1015,7 +994,7 @@ function bindBookmarks() {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'yerim-remove';
-      remove.setAttribute('aria-label', `${item.title} kısayolunu kaldır`);
+      remove.setAttribute('aria-label', `Remove ${item.title} shortcut`);
       remove.textContent = '×';
       remove.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -1049,7 +1028,7 @@ function bindBookmarks() {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'yerim-remove';
-      remove.setAttribute('aria-label', 'Yer imini kaldır');
+      remove.setAttribute('aria-label', 'Remove bookmark');
       remove.textContent = '×';
       chip.append(icon, label, remove);
       chip.addEventListener('click', (event) => {
@@ -1152,7 +1131,7 @@ function bindDownloads() {
   api?.onDiskWarning?.((payload) => {
     showChromeBanner(
       payload?.message ||
-        'Uyarı: Bu dosya yerel diskinize kaydedildi. Excommunicado protokolü bu dosyayı silmeyebilir.',
+        'Warning: This file was saved to your local disk. The Excommunicado protocol may not delete it.',
       8000,
     );
   });
@@ -1487,7 +1466,7 @@ function bindAppMenu() {
     cast: ['Cast, save, and share', 'Casting is disabled. Nothing is sent to a remote display from this browser.'],
     'more-tools': ['More tools', 'Task manager, developer extras, and install hooks stay out of this RAM session.'],
     help: ['Help', 'Ctrl+T new tab · Ctrl+N new window · Ctrl+Shift+N incognito window · Ctrl+J downloads · Ctrl+P print · Ctrl+F find · Ctrl+Shift+Del wipe RAM · Ctrl+Shift+E Excommunicado.'],
-    profile: ['Sanatçı (Agent)', 'Signed in for this RAM session only. There is no account graph and nothing syncs.'],
+    profile: ['Session (Agent)', 'Signed in for this RAM session only. There is no account graph and nothing syncs.'],
   };
 
   function kebabAnchor() {

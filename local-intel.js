@@ -572,7 +572,7 @@ async function probeAgentBridge(listenInfo) {
   if (listenInfo && listenInfo.host === '127.0.0.1' && listenInfo.port) {
     return {
       id: 'agent-bridge',
-      name: 'Agent Browser köprüsü',
+      name: 'Agent Browser bridge',
       status: 'running',
       detail: `127.0.0.1:${listenInfo.port}`,
       path: '',
@@ -582,7 +582,7 @@ async function probeAgentBridge(listenInfo) {
   if (body) {
     return {
       id: 'agent-bridge',
-      name: 'Agent Browser köprüsü',
+      name: 'Agent Browser bridge',
       status: 'running',
       detail: '127.0.0.1:17331',
       path: '',
@@ -638,7 +638,7 @@ async function collectIntel(options = {}) {
       id: install.id,
       name: install.name,
       status: 'installed',
-      detail: 'kurulu · şu an çalışmıyor',
+      detail: 'installed · not running now',
       path: foundPath,
     });
     seenAgentNames.add(install.name);

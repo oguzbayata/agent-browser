@@ -19,13 +19,13 @@ function applyBoundAgent(intel) {
   const running = agents.filter((item) => item.status === 'running');
 
   if (model) {
-    modelName.textContent = model.name || 'Yerel model';
-    modelMeta.textContent = [model.source || model.runtime, model.live ? 'canlı' : model.kind === 'file' ? 'dosya' : 'seçili']
+    modelName.textContent = model.name || 'Local model';
+    modelMeta.textContent = [model.source || model.runtime, model.live ? 'live' : model.kind === 'file' ? 'file' : 'selected']
       .filter(Boolean)
       .join(' · ');
   } else {
-    modelName.textContent = 'Dil modeli bağlı değil';
-    modelMeta.textContent = 'Yerel modeller panelinden bağlayın';
+    modelName.textContent = 'No language model bound';
+    modelMeta.textContent = 'Bind one from the Local models panel';
   }
 
   if (running.length) {
@@ -33,7 +33,7 @@ function applyBoundAgent(intel) {
       .map((item) => (item.detail ? `${item.name} · ${item.detail}` : item.name))
       .join(' · ');
   } else {
-    agentMeta.textContent = 'Ajan bağlı değil';
+    agentMeta.textContent = 'No agent bound';
   }
 
   card.classList.toggle('is-live', Boolean((model && model.live) || running.length));

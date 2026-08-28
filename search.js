@@ -1,6 +1,6 @@
 'use strict';
 
-const PYTHON_MISSING = 'Yerel İstihbarat Ajanı başlatılamadı: Python bulunamadı';
+const PYTHON_MISSING = 'Local Intelligence Agent could not start: Python was not found';
 const PER_PAGE = 10;
 const MAX_PAGES = 100;
 const faviconByHost = new Map();
@@ -104,7 +104,7 @@ function createLock(url) {
   const mark = document.createElement('span');
   mark.className = 'result-lock';
   mark.dataset.scheme = scheme || 'unknown';
-  mark.title = scheme === 'https' ? 'HTTPS · güvenilir bağlantı' : scheme === 'http' ? 'HTTP · güvenilir değil' : 'Bilinmeyen protokol';
+  mark.title = scheme === 'https' ? 'HTTPS · trusted connection' : scheme === 'http' ? 'HTTP · not trusted' : 'Unknown protocol';
   mark.setAttribute('aria-label', mark.title);
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 16 16');
@@ -155,11 +155,11 @@ function renderPager(total, page) {
     pager.append(button);
   };
 
-  addButton('Geri', page - 1, { disabled: page <= 1 });
+  addButton('Previous', page - 1, { disabled: page <= 1 });
   for (let index = 1; index <= pages; index += 1) {
     addButton(String(index), index, { current: index === page });
   }
-  addButton('İleri', page + 1, { disabled: page >= pages });
+  addButton('Next', page + 1, { disabled: page >= pages });
 }
 
 function renderResults(items) {
@@ -207,7 +207,7 @@ function showPage(page) {
   renderResults(slice);
   renderPager(total, currentPage);
   if (total) {
-    setStatus(`${total} sonuç · sayfa ${currentPage} / ${pages} · yerel stdout`);
+    setStatus(`${total} results · page ${currentPage} / ${pages} · local stdout`);
   }
   window.scrollTo(0, 0);
 }
@@ -216,13 +216,13 @@ async function run() {
   const query = queryFromLocation();
   const title = document.getElementById('query-title');
   if (title) {
-    title.textContent = query || 'Arama';
-    document.title = query ? query : 'Yerel Arama';
+    title.textContent = query || 'Search';
+    document.title = query ? query : 'Local Search';
   }
 
   if (!query) {
     setStatus('');
-    showError('Arama sorgusu boş.');
+    showError('The search query is empty.');
     return;
   }
 
@@ -233,7 +233,7 @@ async function run() {
     return;
   }
 
-  setStatus('Yerel ajan tarıyor…');
+  setStatus('Local agent scanning…');
   showError('');
 
   let result;
@@ -253,7 +253,7 @@ async function run() {
 
   allResults = Array.isArray(result.results) ? result.results : [];
   if (allResults.length === 0) {
-    setStatus('Sonuç yok. Ajan harici arama motoruna veri göndermedi.');
+    setStatus('No results. The agent did not send data to an external search engine.');
     renderResults([]);
     renderPager(0, 1);
     return;

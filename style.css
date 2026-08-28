@@ -2416,7 +2416,7 @@ body.find-open {
 .ai-model-select {
   width: 100%;
   height: 38px;
-  margin: 0 0 10px;
+  margin: 0;
   padding: 0 10px;
   border: 1px solid rgba(61, 255, 200, 0.35);
   border-radius: 8px;
@@ -2428,78 +2428,6 @@ body.find-open {
 
 .ai-model-select:focus {
   box-shadow: inset 0 0 0 1px rgba(61, 255, 200, 0.28);
-}
-
-.ai-intel-list {
-  list-style: none;
-  margin: 0 0 10px;
-  padding: 0;
-  max-height: 120px;
-  overflow: auto;
-}
-
-.ai-intel-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  width: 100%;
-  margin: 0 0 4px;
-  padding: 7px 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: #e8eaed;
-  text-align: left;
-  cursor: pointer;
-}
-
-.ai-intel-item:hover,
-.ai-intel-item.is-on {
-  background: #141c22;
-  border-color: #243038;
-}
-
-.ai-intel-item.is-on {
-  border-color: rgba(61, 255, 200, 0.35);
-}
-
-.ai-intel-item strong {
-  font-size: 12px;
-  font-weight: 650;
-  word-break: break-word;
-}
-
-.ai-intel-item span {
-  color: #8a969e;
-  font-size: 10.5px;
-}
-
-.ai-intel-item.is-live span {
-  color: var(--accent);
-}
-
-.ai-agent-row {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0 0 6px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  background: #10161c;
-}
-
-.ai-agent-row strong {
-  font-size: 12px;
-}
-
-.ai-agent-row span {
-  color: #8a969e;
-  font-size: 10.5px;
-}
-
-.ai-agent-row.is-running span {
-  color: var(--accent);
 }
 
 .ai-key,

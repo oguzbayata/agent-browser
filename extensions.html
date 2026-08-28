@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -7,85 +7,85 @@
       content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Eklentiler</title>
+    <title>Extensions</title>
     <link rel="stylesheet" href="extensions.css" />
     <link rel="stylesheet" href="hide-scrollbars.css" />
   </head>
   <body>
     <header class="ext-top">
-      <button type="button" class="ext-menu" id="nav-toggle" aria-label="Menü" aria-controls="ext-nav" aria-expanded="true">
+      <button type="button" class="ext-menu" id="nav-toggle" aria-label="Menu" aria-controls="ext-nav" aria-expanded="true">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
       </button>
       <img class="ext-logo" src="assets/agent-browser-logo.svg" width="28" height="28" alt="" />
-      <h1>Eklentiler</h1>
+      <h1>Extensions</h1>
       <label class="ext-search">
         <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.4" cy="8.4" r="5.2" /><path d="M12.2 12.2 16.4 16.4" /></svg>
-        <input id="ext-query" type="search" placeholder="Eklentilerde ara" autocomplete="off" spellcheck="false" />
+        <input id="ext-query" type="search" placeholder="Search extensions" autocomplete="off" spellcheck="false" />
       </label>
       <label class="ext-dev">
-        <span>Geliştirici modu</span>
-        <button type="button" class="ext-switch" id="dev-toggle" role="switch" aria-checked="false" aria-label="Geliştirici modu"></button>
+        <span>Developer mode</span>
+        <button type="button" class="ext-switch" id="dev-toggle" role="switch" aria-checked="false" aria-label="Developer mode"></button>
       </label>
     </header>
 
     <div class="ext-shell">
-      <nav class="ext-nav" id="ext-nav" aria-label="Eklenti sayfaları">
+      <nav class="ext-nav" id="ext-nav" aria-label="Extension pages">
         <button type="button" class="ext-nav-item is-active" data-view="extensions" id="nav-extensions">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.4 3.4h2.2v2.4h2.6a2 2 0 0 1 2 2v2.4h2.4v2.2h-2.4V15a2 2 0 0 1-2 2H9.6v2.2H7.4V17H5a2 2 0 0 1-2-2v-2.6H.8V10.2H3V7.8a2 2 0 0 1 2-2h2.4z"/></svg>
-          <span>Eklentilerim</span>
+          <span>My extensions</span>
           <em id="ext-nav-count" class="ext-count">0</em>
         </button>
         <button type="button" class="ext-nav-item" data-view="shortcuts" id="nav-shortcuts">
           <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.4" y="5.2" width="15.2" height="10.4" rx="1.6"/><path d="M5 8.2h2.2M8.4 8.2h2.2M11.8 8.2H14M5 11.4h10"/></svg>
-          <span>Klavye kısayolları</span>
+          <span>Keyboard shortcuts</span>
         </button>
 
-        <aside class="ext-expert" aria-label="Eklenti uzmanı">
+        <aside class="ext-expert" aria-label="Extension expert">
           <header class="ext-expert-head">
-            <p class="ext-expert-kicker">Eklenti uzmanı</p>
-            <p class="ext-expert-meta" id="ext-expert-meta">model ve hafıza bekleniyor</p>
+            <p class="ext-expert-kicker">Extension expert</p>
+            <p class="ext-expert-meta" id="ext-expert-meta">waiting for model and memory</p>
           </header>
           <div class="ext-expert-chat" id="ext-expert-chat" aria-live="polite"></div>
           <form class="ext-expert-form" id="ext-expert-form" autocomplete="off">
-            <label class="sr-only" for="ext-expert-prompt">Eklenti uzmanına sor</label>
+            <label class="sr-only" for="ext-expert-prompt">Ask the extension expert</label>
             <textarea
               id="ext-expert-prompt"
               rows="3"
               maxlength="2000"
-              placeholder="örn. reklamları kes, videoları indir…"
+              placeholder="e.g. block ads, download videos…"
             ></textarea>
-            <button type="submit" id="ext-expert-send">Gönder</button>
+            <button type="submit" id="ext-expert-send">Send</button>
           </form>
         </aside>
 
         <div class="ext-nav-store">
           <img src="assets/agent-browser-logo.svg" width="28" height="28" alt="" />
           <p>
-            Daha fazla açık kaynak araç
-            <button type="button" id="open-useful-links">Faydalı Linkler</button>
-            sayfasında.
+            More open-source tools are on the
+            <button type="button" id="open-useful-links">Useful Links</button>
+            page.
           </p>
         </div>
       </nav>
 
       <main class="ext-main">
         <section id="view-extensions" class="ext-view">
-          <h2 id="ext-heading">Tüm eklentiler (0)</h2>
-          <p class="ext-empty" id="ext-empty" hidden>Eşleşen oturum aracı yok.</p>
+          <h2 id="ext-heading">All extensions (0)</h2>
+          <p class="ext-empty" id="ext-empty" hidden>No matching session tools.</p>
           <div class="ext-grid" id="ext-grid" data-agent-extensions="true"></div>
         </section>
 
         <section id="view-shortcuts" class="ext-view" hidden>
-          <h2>Klavye kısayolları</h2>
+          <h2>Keyboard shortcuts</h2>
           <ul class="ext-keys">
-            <li><span>Yeni sekme</span><kbd>Ctrl</kbd><kbd>T</kbd></li>
-            <li><span>Yeni pencere</span><kbd>Ctrl</kbd><kbd>N</kbd></li>
-            <li><span>İndirmeler</span><kbd>Ctrl</kbd><kbd>J</kbd></li>
-            <li><span>Sayfada bul</span><kbd>Ctrl</kbd><kbd>F</kbd></li>
-            <li><span>Yazdır</span><kbd>Ctrl</kbd><kbd>P</kbd></li>
-            <li><span>Oturum verilerini sil</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Del</kbd></li>
+            <li><span>New tab</span><kbd>Ctrl</kbd><kbd>T</kbd></li>
+            <li><span>New window</span><kbd>Ctrl</kbd><kbd>N</kbd></li>
+            <li><span>Downloads</span><kbd>Ctrl</kbd><kbd>J</kbd></li>
+            <li><span>Find in page</span><kbd>Ctrl</kbd><kbd>F</kbd></li>
+            <li><span>Print</span><kbd>Ctrl</kbd><kbd>P</kbd></li>
+            <li><span>Clear session data</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Del</kbd></li>
             <li><span>Excommunicado</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd></li>
-            <li><span>Geri / İleri</span><kbd>Alt</kbd><kbd>←</kbd><kbd>→</kbd></li>
+            <li><span>Back / Forward</span><kbd>Alt</kbd><kbd>←</kbd><kbd>→</kbd></li>
           </ul>
         </section>
       </main>

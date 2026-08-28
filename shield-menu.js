@@ -23,7 +23,7 @@ function applyStats(stats) {
   }
   const blocked = document.getElementById('shield-blocked');
   if (blocked) {
-    blocked.textContent = `${trackers} izleyici engellendi`;
+    blocked.textContent = `${trackers} trackers blocked`;
   }
 }
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -7,17 +7,17 @@
       content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>İndirmeler</title>
+    <title>Downloads</title>
     <link rel="stylesheet" href="downloads.css" />
     <link rel="stylesheet" href="hide-scrollbars.css" />
   </head>
   <body>
     <main class="downloads-shell">
-      <p class="kicker">oturum listesi · ram</p>
-      <h1>İndirmeler</h1>
-      <p class="lede">Bu oturumda indirilen dosyalar burada görünür. Kapanışta liste silinir; dosyalar İndirilenler klasöründe kalır.</p>
+      <p class="kicker">session list · ram</p>
+      <h1>Downloads</h1>
+      <p class="lede">Files downloaded in this session appear here. The list is cleared on close; files stay in your Downloads folder.</p>
       <p id="disk-warning" class="disk-warning" hidden role="status"></p>
-      <p id="downloads-empty" class="empty">Henüz indirilen yok.</p>
+      <p id="downloads-empty" class="empty">No downloads yet.</p>
       <div id="downloads-list" class="list" aria-live="polite"></div>
     </main>
     <script src="downloads.js"></script>

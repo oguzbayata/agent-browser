@@ -69,13 +69,13 @@ const MEMORY_BRIDGE_FILE_URL = pathToFileURL(MEMORY_BRIDGE_PATH).href;
 const MEMORY_BRIDGE_PRELOAD_PATH = path.join(__dirname, 'memory-bridge-preload.js');
 const SCRAPER_PATH = path.join(__dirname, 'engine', 'scraper.py');
 const AGENT_SEARCH_PREFIX = 'agent-search:';
-const PYTHON_MISSING_MESSAGE = 'Yerel İstihbarat Ajanı başlatılamadı: Python bulunamadı';
+const PYTHON_MISSING_MESSAGE = 'Local Intelligence Agent could not start: Python was not found';
 const PANIC_QUIT_MS = 1500;
 const PANIC_SHORTCUT = 'CommandOrControl+Shift+E';
 const PAGE_TEXT_LIMIT = 80000;
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 const SUMMARIZE_SYSTEM_PROMPT =
-  'Sen bir siber istihbarat özetleyicisisin. Aşağıdaki metni analiz et ve en önemli noktaları çıkar:';
+  'You are a cyber-intelligence summarizer. Analyze the text below and extract the most important points:';
 const SEARCH_ENGINES = Object.freeze({
   duckduckgo: 'https://duckduckgo.com/?q=',
   startpage: 'https://www.startpage.com/sp/search?query=',
@@ -156,38 +156,38 @@ const EXTENSION_TOGGLE_IDS = Object.freeze({
 });
 const EXT_EXPERT_DANGEROUS_IDS = new Set(['dead-man-switch', 'excommunicado-lock']);
 const EXT_EXPERT_CATALOG = Object.freeze([
-  { id: 'shield', setting: 'blockTrackers', name: 'Kalkan' },
-  { id: 'ghost', setting: 'ghostNetwork', name: 'Hayalet Ağ' },
-  { id: 'guvenlik', setting: 'blockMedia', name: 'Güvenlik V1' },
-  { id: 'hunter', setting: 'mediaHunter', name: 'Evrensel Medya Avcısı' },
-  { id: 'cookies', setting: 'stripThirdPartyCookies', name: 'Çerez kesici' },
+  { id: 'shield', setting: 'blockTrackers', name: 'Shield' },
+  { id: 'ghost', setting: 'ghostNetwork', name: 'Ghost Network' },
+  { id: 'guvenlik', setting: 'blockMedia', name: 'Security V1' },
+  { id: 'hunter', setting: 'mediaHunter', name: 'Universal Media Hunter' },
+  { id: 'cookies', setting: 'stripThirdPartyCookies', name: 'Cookie cutter' },
   { id: 'dnt', setting: 'sendDnt', name: 'Do Not Track' },
-  { id: 'ua', setting: 'spoofUserAgent', name: 'Kimlik maskesi' },
-  { id: 'canvas-poisoner', setting: 'canvasPoisoner', name: 'Canvas & WebGL Zehirleyici' },
-  { id: 'siyuan-bridge', setting: 'siyuanBridge', name: 'Hafıza Köprüsü' },
-  { id: 'human-jitter', setting: 'humanJitter', name: 'Hayalet Fare' },
-  { id: 'dead-man-switch', setting: 'deadManSwitch', name: 'Protokol Anahtarı' },
-  { id: 'web3-shield', setting: 'web3Shield', name: 'Web3 Kripto Kalkanı' },
-  { id: 'shadow-dom-pierce', setting: 'shadowDomPierce', name: 'Shadow DOM Delici' },
-  { id: 'markdown-dom', setting: 'markdownDom', name: 'Markdown DOM Çevirici' },
-  { id: 'ui-code-extract', setting: 'uiCodeExtract', name: 'UI & Code Çıkarıcı' },
-  { id: 'infinite-scroll', setting: 'infiniteScroll', name: 'Sonsuz Kaydırma Otonomu' },
-  { id: 'table-parser', setting: 'tableParser', name: 'Tablo & Grid Ayrıştırıcı' },
-  { id: 'xhr-hunter', setting: 'xhrHunter', name: 'XHR & WebSocket Avcısı' },
-  { id: 'json-form-fill', setting: 'jsonFormFill', name: 'Otomatik JSON Form Doldurucu' },
-  { id: 'proxy-rotate', setting: 'proxyRotate', name: 'Dinamik Proxy Rotatörü' },
-  { id: 'webgl-inspector', setting: 'webglInspector', name: '3D/WebGL Varlık İnceleyici' },
-  { id: 'media-source', setting: 'mediaSourceReveal', name: 'Medya Kaynağı Açığa Çıkarıcı' },
-  { id: 'n8n-webhook', setting: 'n8nWebhook', name: 'n8n Webhook Tetikleyici' },
-  { id: 'lm-studio-port', setting: 'lmStudioPort', name: 'LM Studio Bağlantı Noktası' },
-  { id: 'memory-block', setting: 'memoryBlockSync', name: 'Hafıza Bloğu Aktarıcı' },
-  { id: 'cursor-ide-bridge', setting: 'cursorIdeBridge', name: 'Cursor IDE Kod Köprüsü' },
-  { id: 'tab-orchestrator', setting: 'tabOrchestrator', name: 'Çoklu Sekme Orkestratörü' },
-  { id: 'headless-mode', setting: 'headlessMode', name: 'Headless (Görünmez) Mod' },
-  { id: 'input-simulator', setting: 'inputSimulator', name: 'Fare & Klavye Simülatörü' },
-  { id: 'rate-limit-guard', setting: 'rateLimitGuard', name: 'Rate-Limit Atlatıcı' },
-  { id: 'sandbox-isolator', setting: 'sandboxIsolator', name: 'Sandbox Görev İzolatörü' },
-  { id: 'excommunicado-lock', setting: 'excommunicadoLock', name: 'Excommunicado Kiliti' },
+  { id: 'ua', setting: 'spoofUserAgent', name: 'Identity mask' },
+  { id: 'canvas-poisoner', setting: 'canvasPoisoner', name: 'Canvas & WebGL Poisoner' },
+  { id: 'siyuan-bridge', setting: 'siyuanBridge', name: 'Memory Bridge' },
+  { id: 'human-jitter', setting: 'humanJitter', name: 'Ghost Mouse' },
+  { id: 'dead-man-switch', setting: 'deadManSwitch', name: 'Protocol Switch' },
+  { id: 'web3-shield', setting: 'web3Shield', name: 'Web3 Crypto Shield' },
+  { id: 'shadow-dom-pierce', setting: 'shadowDomPierce', name: 'Shadow DOM Piercer' },
+  { id: 'markdown-dom', setting: 'markdownDom', name: 'Markdown DOM Translator' },
+  { id: 'ui-code-extract', setting: 'uiCodeExtract', name: 'UI & Code Extractor' },
+  { id: 'infinite-scroll', setting: 'infiniteScroll', name: 'Infinite Scroll Autonomy' },
+  { id: 'table-parser', setting: 'tableParser', name: 'Table & Grid Parser' },
+  { id: 'xhr-hunter', setting: 'xhrHunter', name: 'XHR & WebSocket Hunter' },
+  { id: 'json-form-fill', setting: 'jsonFormFill', name: 'Automatic JSON Form Filler' },
+  { id: 'proxy-rotate', setting: 'proxyRotate', name: 'Dynamic Proxy Rotator' },
+  { id: 'webgl-inspector', setting: 'webglInspector', name: '3D/WebGL Asset Inspector' },
+  { id: 'media-source', setting: 'mediaSourceReveal', name: 'Media Source Revealer' },
+  { id: 'n8n-webhook', setting: 'n8nWebhook', name: 'n8n Webhook Trigger' },
+  { id: 'lm-studio-port', setting: 'lmStudioPort', name: 'LM Studio Port' },
+  { id: 'memory-block', setting: 'memoryBlockSync', name: 'Memory Block Sync' },
+  { id: 'cursor-ide-bridge', setting: 'cursorIdeBridge', name: 'Cursor IDE Code Bridge' },
+  { id: 'tab-orchestrator', setting: 'tabOrchestrator', name: 'Multi-Tab Orchestrator' },
+  { id: 'headless-mode', setting: 'headlessMode', name: 'Headless (Invisible) Mode' },
+  { id: 'input-simulator', setting: 'inputSimulator', name: 'Mouse & Keyboard Simulator' },
+  { id: 'rate-limit-guard', setting: 'rateLimitGuard', name: 'Rate-Limit Guard' },
+  { id: 'sandbox-isolator', setting: 'sandboxIsolator', name: 'Sandbox Task Isolator' },
+  { id: 'excommunicado-lock', setting: 'excommunicadoLock', name: 'Excommunicado Lock' },
 ]);
 const COMMON_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -318,14 +318,14 @@ const MEMORY_BRIDGE_CATALOG = Object.freeze([
   {
     id: 'mem0',
     name: 'Mem0',
-    hint: 'Mem0 bellek API',
+    hint: 'Mem0 memory API',
     defaultUrl: 'http://127.0.0.1:8888/v1/memories',
     kind: 'http',
   },
   {
     id: 'zep',
     name: 'Zep',
-    hint: 'Zep bellek sunucusu',
+    hint: 'Zep memory server',
     defaultUrl: 'http://127.0.0.1:8000/api/v2/memory',
     kind: 'http',
   },
@@ -346,14 +346,14 @@ const MEMORY_BRIDGE_CATALOG = Object.freeze([
   {
     id: 'llamaindex',
     name: 'LlamaIndex Memory Modules',
-    hint: 'LlamaIndex bellek servisi',
+    hint: 'LlamaIndex memory service',
     defaultUrl: 'http://127.0.0.1:8001/memory',
     kind: 'http',
   },
   {
     id: 'motorhead',
     name: 'Motorhead',
-    hint: 'Motorhead oturum belleği',
+    hint: 'Motorhead session memory',
     defaultUrl: 'http://127.0.0.1:8080/sessions',
     kind: 'http',
   },
@@ -367,7 +367,7 @@ const MEMORY_BRIDGE_CATALOG = Object.freeze([
   {
     id: 'obsidian',
     name: 'Obsidian',
-    hint: 'Yerel kasa klasörü',
+    hint: 'Local vault folder',
     defaultUrl: '',
     kind: 'folder',
   },
@@ -1049,8 +1049,8 @@ function snapshotSiteInfo() {
   if (!url) {
     return {
       url: '',
-      host: 'sayfa yok',
-      meta: 'Adres çubuğundan bir hedef açın.',
+      host: 'no page',
+      meta: 'Open a target from the address bar.',
       scheme: 'ram',
     };
   }
@@ -1061,14 +1061,14 @@ function snapshotSiteInfo() {
     return {
       url,
       host: parsed.hostname || parsed.href,
-      meta: secure ? 'Bağlantı şifreli (HTTPS)' : `${protocol} · şifresiz`,
+      meta: secure ? 'Connection encrypted (HTTPS)' : `${protocol} · not encrypted`,
       scheme: secure ? 'HTTPS' : protocol || 'ram',
     };
   } catch {
     return {
       url,
       host: url,
-      meta: 'Adres çözümlenemedi.',
+      meta: 'Address could not be resolved.',
       scheme: 'ram',
     };
   }
@@ -1331,7 +1331,7 @@ function ytDlpCandidates() {
 }
 
 const DISK_PERSIST_WARNING =
-  'Uyarı: Bu dosya yerel diskinize kaydedildi. Excommunicado protokolü bu dosyayı silmeyebilir.';
+  'Warning: This file was saved to your local disk. The Excommunicado protocol may not delete it.';
 
 function emitDiskWarning() {
   const payload = { message: DISK_PERSIST_WARNING };
@@ -1690,7 +1690,7 @@ async function scrapePageImages(webContents) {
     console.error('Image scrape failed:', error);
     sources = [];
   }
-  emitChromeToast(`Görseller kazınıyor: ${sources.length} adet bulundu`);
+  emitChromeToast(`Scraping images: ${sources.length} found`);
   if (!sources.length) {
     return;
   }
@@ -1911,7 +1911,7 @@ async function downloadWithYtdlCore(pageUrl, record, savePath) {
   try {
     ytdl = require('@distube/ytdl-core');
   } catch {
-    currentFail(record, 'interrupted', 'YouTube yedek indirici yüklenemedi. yt-dlp kurulu olmalı.');
+    currentFail(record, 'interrupted', 'YouTube fallback downloader could not load. yt-dlp must be installed.');
     return false;
   }
 
@@ -1939,7 +1939,7 @@ async function downloadWithYtdlCore(pageUrl, record, savePath) {
         broadcastDownloads();
       });
       stream.on('error', (error) => {
-        currentFail(record, 'interrupted', error?.message || 'Video akışı kesildi.');
+        currentFail(record, 'interrupted', error?.message || 'The video stream was interrupted.');
         finish(false);
       });
       const out = fs.createWriteStream(savePath);
@@ -1975,7 +1975,7 @@ function startMediaHunterDownload(pageUrl, srcUrl) {
   const src = typeof srcUrl === 'string' ? srcUrl : '';
   const extractUrl = /^https?:/i.test(page) ? page : /^https?:/i.test(src) ? src : '';
   if (!extractUrl) {
-    emitChromeToast('Video kaynağı bulunamadı.');
+    emitChromeToast('No video source found.');
     return;
   }
   if (isDirectMediaFile(extractUrl) && !isYoutubeWatchUrl(extractUrl) && !/^https?:/i.test(page)) {
@@ -2103,14 +2103,14 @@ function attachGuestContextMenu(webContents) {
       const hunterIcon = mediaHunterMenuIcon();
       template.push(
         {
-          label: '[Agent] Bu Resmi İndir',
+          label: '[Agent] Download this image',
           ...(hunterIcon ? { icon: hunterIcon } : {}),
           click: () => {
             startImageDownload(webContents, params.srcURL || params.linkURL || '');
           },
         },
         {
-          label: '[Agent] Sayfadaki Tüm Resimleri Çek',
+          label: '[Agent] Grab all images on this page',
           ...(hunterIcon ? { icon: hunterIcon } : {}),
           click: () => {
             scrapePageImages(webContents).catch((error) => {
@@ -2125,7 +2125,7 @@ function attachGuestContextMenu(webContents) {
       const hunterIcon = mediaHunterMenuIcon();
       template.push(
         {
-          label: '[Agent] Bu Videoyu İndir',
+          label: '[Agent] Download this video',
           ...(hunterIcon ? { icon: hunterIcon } : {}),
           click: () => {
             startMediaHunterDownload(pageUrl, params.srcURL || params.linkURL || '');
@@ -2136,7 +2136,7 @@ function attachGuestContextMenu(webContents) {
     }
     template.push(
       {
-        label: 'Geri',
+        label: 'Back',
         enabled: flags.canGoBack,
         click: () => {
           if (goHistoryOn(webContents, 'back') && webContents === getGuestWebContents()) {
@@ -2145,7 +2145,7 @@ function attachGuestContextMenu(webContents) {
         },
       },
       {
-        label: 'İleri',
+        label: 'Forward',
         enabled: flags.canGoForward,
         click: () => {
           if (goHistoryOn(webContents, 'forward') && webContents === getGuestWebContents()) {
@@ -2154,28 +2154,28 @@ function attachGuestContextMenu(webContents) {
         },
       },
       {
-        label: 'Yeniden Yükle',
+        label: 'Reload',
         click: () => webContents.reload(),
       },
       { type: 'separator' },
       {
-        label: 'Kopyala',
+        label: 'Copy',
         enabled: canCopy,
         click: () => webContents.copy(),
       },
       {
-        label: 'Yapıştır',
+        label: 'Paste',
         enabled: canPaste,
         click: () => webContents.paste(),
       },
       {
-        label: 'Resmi Kopyala',
+        label: 'Copy image',
         visible: hasImage,
         click: () => webContents.copyImageAt(params.x, params.y),
       },
       { type: 'separator' },
       {
-        label: 'İncele',
+        label: 'Inspect',
         click: () => webContents.inspectElement(params.x, params.y),
       },
     );
@@ -2187,15 +2187,15 @@ function attachGuestContextMenu(webContents) {
 function installHiddenEditMenu() {
   const template = [
     {
-      label: 'Düzen',
+      label: 'Edit',
       submenu: [
-        { role: 'undo', label: 'Geri Al' },
-        { role: 'redo', label: 'Yinele' },
+        { role: 'undo', label: 'Undo' },
+        { role: 'redo', label: 'Redo' },
         { type: 'separator' },
-        { role: 'cut', label: 'Kes', accelerator: 'CommandOrControl+X' },
-        { role: 'copy', label: 'Kopyala', accelerator: 'CommandOrControl+C' },
-        { role: 'paste', label: 'Yapıştır', accelerator: 'CommandOrControl+V' },
-        { role: 'selectAll', label: 'Tümünü Seç', accelerator: 'CommandOrControl+A' },
+        { role: 'cut', label: 'Cut', accelerator: 'CommandOrControl+X' },
+        { role: 'copy', label: 'Copy', accelerator: 'CommandOrControl+C' },
+        { role: 'paste', label: 'Paste', accelerator: 'CommandOrControl+V' },
+        { role: 'selectAll', label: 'Select all', accelerator: 'CommandOrControl+A' },
       ],
     },
   ];
@@ -2217,13 +2217,13 @@ function attachChromeContextMenu(webContents) {
     const flags = params.editFlags || {};
     const template = editable
       ? [
-          { label: 'Kes', role: 'cut', enabled: Boolean(flags.canCut) && hasSelection },
-          { label: 'Kopyala', role: 'copy', enabled: Boolean(flags.canCopy) && hasSelection },
-          { label: 'Yapıştır', role: 'paste', enabled: true },
+          { label: 'Cut', role: 'cut', enabled: Boolean(flags.canCut) && hasSelection },
+          { label: 'Copy', role: 'copy', enabled: Boolean(flags.canCopy) && hasSelection },
+          { label: 'Paste', role: 'paste', enabled: true },
           { type: 'separator' },
-          { label: 'Tümünü Seç', role: 'selectAll', enabled: flags.canSelectAll !== false },
+          { label: 'Select all', role: 'selectAll', enabled: flags.canSelectAll !== false },
         ]
-      : [{ label: 'Kopyala', role: 'copy', enabled: hasSelection }];
+      : [{ label: 'Copy', role: 'copy', enabled: hasSelection }];
 
     const win = BrowserWindow.fromWebContents(webContents);
     Menu.buildFromTemplate(template).popup({ window: win || mainWindow || undefined });
@@ -2241,11 +2241,11 @@ function popupTabContextMenu(tabId, x, y) {
   const pinned = Boolean(entry.pinned);
   const menu = Menu.buildFromTemplate([
     {
-      label: 'Sekmeyi Kapat',
+      label: 'Close tab',
       click: () => destroyTab(tabId),
     },
     {
-      label: 'Diğerlerini Kapat',
+      label: 'Close others',
       enabled: views.size > 1,
       click: () => {
         for (const otherId of [...views.keys()]) {
@@ -2259,14 +2259,14 @@ function popupTabContextMenu(tabId, x, y) {
       },
     },
     {
-      label: muted ? 'Sesi Aç' : 'Sesi Kapat',
+      label: muted ? 'Unmute' : 'Mute',
       click: () => {
         guest.setAudioMuted(!guest.isAudioMuted());
         emitTabUpdated(tabId);
       },
     },
     {
-      label: pinned ? 'Sabiti Kaldır' : 'Sabitle',
+      label: pinned ? 'Unpin' : 'Pin',
       click: () => {
         entry.pinned = !entry.pinned;
         emitTabUpdated(tabId);
@@ -2757,7 +2757,7 @@ function runScraperProcess(command, args, env) {
 async function runLocalScraper(query) {
   const q = String(query || '').trim().slice(0, 500);
   if (!q) {
-    return { ok: false, error: 'invalid-query', message: 'Arama sorgusu boş.', results: [] };
+    return { ok: false, error: 'invalid-query', message: 'The search query is empty.', results: [] };
   }
 
   const env = {
@@ -2785,7 +2785,7 @@ async function runLocalScraper(query) {
         return {
           ok: false,
           error: 'python-deps',
-          message: 'Yerel İstihbarat Ajanı başlatılamadı: Python paketleri eksik (pip install -r engine/requirements.txt)',
+          message: 'Local Intelligence Agent could not start: Python packages are missing (pip install -r engine/requirements.txt)',
           results: [],
         };
       }
@@ -2798,7 +2798,7 @@ async function runLocalScraper(query) {
       return {
         ok: false,
         error: error?.code || 'scraper-failed',
-        message: 'Yerel İstihbarat Ajanı sonuç döndüremedi.',
+        message: 'Local Intelligence Agent returned no results.',
         results: [],
       };
     }
@@ -2815,29 +2815,29 @@ async function runLocalScraper(query) {
 function tabTitleOf(webContents) {
   const url = webContents.getURL();
   if (isStartPage(url)) {
-    return 'Yeni Sekme';
+    return 'New Tab';
   }
   if (isSearchFile(url)) {
-    return searchQueryFromUrl(url).slice(0, 80) || 'Arama';
+    return searchQueryFromUrl(url).slice(0, 80) || 'Search';
   }
   if (isDownloadsFile(url)) {
-    return 'İndirmeler';
+    return 'Downloads';
   }
   if (isUsefulLinksFile(url)) {
-    return 'Faydalı Linkler';
+    return 'Useful Links';
   }
   if (isExtensionsFile(url)) {
-    return 'Eklentiler';
+    return 'Extensions';
   }
   if (isMemoryBridgeFile(url)) {
-    return 'Hafıza Köprüsü';
+    return 'Memory Bridge';
   }
 
   const title = webContents.getTitle();
-  if (title && title !== 'about:blank' && title !== 'Yeni Sekme') {
+  if (title && title !== 'about:blank' && title !== 'New Tab') {
     return title.slice(0, 80);
   }
-  return 'Yükleniyor...';
+  return 'Loading...';
 }
 
 function agentVideoAdSkipper() {
@@ -3704,16 +3704,16 @@ function attachTabListeners(tabId, webContents) {
     sendToChrome('agent:tab-title-updated', {
       tabId,
       title: isDownloadsFile(webContents.getURL())
-        ? 'İndirmeler'
+        ? 'Downloads'
         : isUsefulLinksFile(webContents.getURL())
-          ? 'Faydalı Linkler'
+          ? 'Useful Links'
           : isExtensionsFile(webContents.getURL())
-            ? 'Eklentiler'
+            ? 'Extensions'
             : isMemoryBridgeFile(webContents.getURL())
-              ? 'Hafıza Köprüsü'
+              ? 'Memory Bridge'
               : isStartPage(webContents.getURL())
-            ? 'Yeni Sekme'
-            : 'Yükleniyor...',
+            ? 'New Tab'
+            : 'Loading...',
     });
     emitTabUpdated(tabId);
     if (tabId === activeTabId) {
@@ -3851,16 +3851,16 @@ function createGuestTab(initialUrl, options = {}) {
   sendToChrome('agent:tab-created', {
     tabId,
     title: downloads
-      ? 'İndirmeler'
+      ? 'Downloads'
       : usefulLinks
-        ? 'Faydalı Linkler'
+        ? 'Useful Links'
         : extensions
-          ? 'Eklentiler'
+          ? 'Extensions'
           : memory
-            ? 'Hafıza Köprüsü'
+            ? 'Memory Bridge'
             : target === 'about:blank'
-            ? 'Yeni Sekme'
-            : 'Yükleniyor...',
+            ? 'New Tab'
+            : 'Loading...',
     url: target,
     active: activate,
     pinned: false,
@@ -5754,7 +5754,7 @@ async function requestOllamaChat(model, messages) {
   }
   const content = body?.message?.content;
   if (typeof content !== 'string' || content.trim().length === 0) {
-    throw new Error('Yerel model boş yanıt döndü.');
+    throw new Error('The local model returned an empty reply.');
   }
   return content.trim();
 }
@@ -5779,12 +5779,12 @@ async function requestLocalOpenAiChat(model, messages) {
     const message =
       body && typeof body.error?.message === 'string'
         ? body.error.message
-        : `Yerel sunucu HTTP ${response.status}`;
+        : `Local server HTTP ${response.status}`;
     throw new Error(message);
   }
   const content = body?.choices?.[0]?.message?.content;
   if (typeof content !== 'string' || content.trim().length === 0) {
-    throw new Error('Yerel model boş yanıt döndü.');
+    throw new Error('The local model returned an empty reply.');
   }
   return content.trim();
 }
@@ -5805,7 +5805,7 @@ async function requestChat(apiKey, messages) {
     return requestLocalOpenAiChat(target, messages);
   }
   if (!apiKey) {
-    throw new Error('Yerel bir model seçin veya oturum API anahtarı girin.');
+    throw new Error('Select a local model or enter a session API key.');
   }
   return requestOpenAiChat(apiKey, messages);
 }
@@ -5864,7 +5864,7 @@ async function requestOpenAiChat(apiKey, messages) {
 
   const content = body?.choices?.[0]?.message?.content;
   if (typeof content !== 'string' || content.trim().length === 0) {
-    throw new Error('AI boş yanıt döndü.');
+    throw new Error('The AI returned an empty reply.');
   }
 
   return content.trim();
@@ -5922,12 +5922,12 @@ ipcMain.handle('agent:local-intel-select', async (event, id) => {
     return { ok: true, intel: snapshot };
   }
   if (typeof id !== 'string' || id.length > 480) {
-    return { ok: false, error: 'geçersiz model' };
+    return { ok: false, error: 'invalid model' };
   }
   const snapshot = await buildLocalIntelSnapshot();
   const match = snapshot.models.find((item) => item.id === id);
   if (!match) {
-    return { ok: false, error: 'model bulunamadı' };
+    return { ok: false, error: 'model not found' };
   }
   selectedLocalModel = match;
   snapshot.selectedId = match.id;
@@ -5942,13 +5942,13 @@ ipcMain.handle('agent:local-intel-pick', async (event, kind) => {
 
   const wantDir = kind === 'dir';
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: wantDir ? 'Model klasörü seç' : 'Yerel model dosyası seç',
+    title: wantDir ? 'Choose a model folder' : 'Choose a local model file',
     properties: wantDir ? ['openDirectory'] : ['openFile'],
     filters: wantDir
       ? undefined
       : [
-          { name: 'LLM ağırlıkları', extensions: ['gguf', 'ggml', 'bin', 'onnx', 'safetensors', 'pt', 'pth'] },
-          { name: 'Tüm dosyalar', extensions: ['*'] },
+          { name: 'LLM weights', extensions: ['gguf', 'ggml', 'bin', 'onnx', 'safetensors', 'pt', 'pth'] },
+          { name: 'All files', extensions: ['*'] },
         ],
   });
   if (result.canceled || !result.filePaths?.[0]) {
@@ -5957,7 +5957,7 @@ ipcMain.handle('agent:local-intel-pick', async (event, kind) => {
 
   const picked = rememberUserPath(result.filePaths[0], wantDir ? sessionLocalDirs : sessionLocalFiles);
   if (!picked) {
-    return { ok: false, error: 'geçersiz yol' };
+    return { ok: false, error: 'invalid path' };
   }
 
   const snapshot = await pushLocalIntel();
@@ -6137,7 +6137,7 @@ const agentBridgeHandlers = {
     if (privacySettings.lmStudioPort && text.length > 6000) {
       try {
         text = await requestChat('', [
-          { role: 'system', content: 'Özeti kısa tut. Yalnızca sayfa içeriğini özetle.' },
+          { role: 'system', content: 'Keep the summary short. Summarize only the page content.' },
           { role: 'user', content: text.slice(0, 12000) },
         ]);
       } catch {
@@ -6455,7 +6455,7 @@ async function applyBooleanSetting(key, value) {
       await ensureAgentBridge(privacySettings.agentBridge);
     } catch {
       privacySettings.agentBridge = false;
-      return { ok: false, error: 'Ajan köprüsü dinlenemedi.' };
+      return { ok: false, error: 'The agent bridge could not listen.' };
     }
   }
   if (key === 'blockMedia') {
@@ -6470,7 +6470,7 @@ async function applyBooleanSetting(key, value) {
       await applyGhostNetwork().catch(() => {});
       return {
         ok: false,
-        error: 'SOCKS5 vekil uygulanamadı. 127.0.0.1:1080 dinleniyor mu?',
+        error: 'SOCKS5 proxy could not be applied. Is 127.0.0.1:1080 listening?',
       };
     }
   }
@@ -6565,7 +6565,7 @@ function heuristicExpertToggles(message) {
   const text = String(message).toLocaleLowerCase('tr');
   const toggles = [];
   const seen = new Set();
-  const wantsOff = /(kapat|kapa\b|devre\s*d[iı][sş][iı]|kapal[iı]|iptal et|durdur)/.test(text);
+  const wantsOff = /(kapat|kapa\b|devre\s*d[iı][sş][iı]|kapal[iı]|iptal et|durdur|turn\s*off|disable|stop\b)/.test(text);
   const add = (id, on) => {
     if (seen.has(id) || toggles.length >= 20) {
       return;
@@ -6574,52 +6574,52 @@ function heuristicExpertToggles(message) {
     toggles.push({ id, on: Boolean(on) });
   };
 
-  if (/(reklam|izleyici|kalkan|tracker|adblock)/.test(text)) {
+  if (/(reklam|izleyici|kalkan|tracker|adblock|block ads|ad blocker|shield)/.test(text)) {
     add('shield', !wantsOff);
   }
-  if (/(hayalet a[gğ]|socks|vekil|proxy|tor\b)/.test(text)) {
+  if (/(hayalet a[gğ]|ghost network|socks|vekil|proxy|tor\b)/.test(text)) {
     add('ghost', !wantsOff);
   }
-  if (/(kamera|mikrofon|webcam|g[uü]venlik v1)/.test(text)) {
-    add('guvenlik', /(izin ver|a[cç]\b|etkin)/.test(text) && !wantsOff ? false : true);
+  if (/(kamera|mikrofon|webcam|camera|microphone|g[uü]venlik v1|security v1)/.test(text)) {
+    add('guvenlik', /(izin ver|allow|enable|a[cç]\b|etkin)/.test(text) && !wantsOff ? false : true);
   }
-  if (/(video indir|medya avc|youtube|downloader)/.test(text)) {
+  if (/(video indir|download video|medya avc|media hunter|youtube|downloader)/.test(text)) {
     add('hunter', !wantsOff);
     add('media-source', !wantsOff);
   }
-  if (/([cç]erez)/.test(text)) {
+  if (/([cç]erez|cookie)/.test(text)) {
     add('cookies', !wantsOff);
   }
   if (/(do not track|\bdnt\b)/.test(text)) {
     add('dnt', !wantsOff);
   }
-  if (/(kullan[iı]c[iı] ajan|kimlik mask|user[- ]?agent|parmak izi)/.test(text)) {
+  if (/(kullan[iı]c[iı] ajan|kimlik mask|identity mask|user[- ]?agent|parmak izi|fingerprint)/.test(text)) {
     add('ua', !wantsOff);
     add('canvas-poisoner', !wantsOff);
   }
-  if (/(haf[iı]za k[oö]pr|siyuan|mem0|obsidian|langgraph)/.test(text)) {
+  if (/(haf[iı]za k[oö]pr|memory bridge|siyuan|mem0|obsidian|langgraph)/.test(text)) {
     add('siyuan-bridge', !wantsOff);
   }
-  if (/(web3|c[uü]zdan|metamask|kripto kalkan)/.test(text)) {
+  if (/(web3|c[uü]zdan|wallet|metamask|kripto kalkan|crypto shield)/.test(text)) {
     add('web3-shield', !wantsOff);
   }
-  if (/(kaz[iı]|markdown|shadow dom|tablo|xhr|websocket|sonsuz kayd[iı]r)/.test(text)) {
+  if (/(kaz[iı]|scrape|markdown|shadow dom|tablo|table|xhr|websocket|sonsuz kayd[iı]r|infinite scroll)/.test(text)) {
     add('markdown-dom', !wantsOff);
     add('shadow-dom-pierce', !wantsOff);
     add('table-parser', !wantsOff);
     add('xhr-hunter', !wantsOff);
     add('infinite-scroll', !wantsOff);
   }
-  if (/(form doldur|json form)/.test(text)) {
+  if (/(form doldur|json form|fill form)/.test(text)) {
     add('json-form-fill', !wantsOff);
   }
-  if (/(headless|g[oö]r[uü]nmez mod)/.test(text)) {
+  if (/(headless|g[oö]r[uü]nmez mod|invisible mode)/.test(text)) {
     add('headless-mode', !wantsOff);
   }
-  if (/(rate[- ]?limit|cloudflare bekle|ajan[iı] duraklat)/.test(text)) {
+  if (/(rate[- ]?limit|cloudflare bekle|pause agent|ajan[iı] duraklat)/.test(text)) {
     add('rate-limit-guard', !wantsOff);
   }
-  if (/(gizlilik|anonim|izliyor|parmak izi azalt)/.test(text) && toggles.length === 0) {
+  if (/(gizlilik|privacy|anonim|anonymous|izliyor|parmak izi azalt)/.test(text) && toggles.length === 0) {
     add('shield', true);
     add('cookies', true);
     add('dnt', true);
@@ -6633,7 +6633,7 @@ function expertAllowsDangerous(message, id) {
   if (!EXT_EXPERT_DANGEROUS_IDS.has(id)) {
     return true;
   }
-  return /(excommunicado|panik|protokol anahtar|dead.?man)/i.test(String(message));
+  return /(excommunicado|panik|panic|protokol anahtar|protocol switch|dead.?man)/i.test(String(message));
 }
 
 function normalizeExpertToggles(rawToggles, message) {
@@ -6659,15 +6659,15 @@ function expertSystemPrompt() {
   const memory = snapshotMemoryBridge();
   const rows = EXT_EXPERT_CATALOG.map((item) => {
     const on = Boolean(privacySettings[item.setting]);
-    return `${item.id}\t${item.name}\t${on ? 'açık' : 'kapalı'}`;
+    return `${item.id}\t${item.name}\t${on ? 'on' : 'off'}`;
   }).join('\n');
   return [
-    'Sen Agent Browser içindeki Eklenti uzmanısın. Kullanıcıya hangi oturum araçlarının açık olması gerektiğini söyle ve yalnızca gerekli olanları aç/kapat.',
-    'Yanıtın tek bir JSON nesnesi olsun: {"reply":"kısa Türkçe açıklama","toggles":[{"id":"shield","on":true}]}',
-    'id alanı katalogdaki id olmalıdır. Sohbeti diske yazma. Excommunicado protokolünü tetikleme.',
-    'dead-man-switch ve excommunicado-lock yalnızca kullanıcı açıkça panik/kilit/protokol isterse değişsin.',
-    `Seçili model: ${model?.name || 'yok'}. Hafıza köprüsü: ${memory.providerName || 'yok'} (${privacySettings.siyuanBridge ? 'açık' : 'kapalı'}).`,
-    'Katalog (id, ad, durum):',
+    'You are the Extension expert inside Agent Browser. Tell the user which session tools should be on, and only toggle what is needed.',
+    'Reply with a single JSON object: {"reply":"short English explanation","toggles":[{"id":"shield","on":true}]}',
+    'id must match a catalog id. Do not write the chat to disk. Do not trigger the Excommunicado protocol.',
+    'Change dead-man-switch and excommunicado-lock only if the user clearly asks for panic, lock, or the protocol.',
+    `Selected model: ${model?.name || 'none'}. Memory bridge: ${memory.providerName || 'none'} (${privacySettings.siyuanBridge ? 'on' : 'off'}).`,
+    'Catalog (id, name, state):',
     rows,
   ].join('\n');
 }
@@ -6685,7 +6685,7 @@ ipcMain.handle('agent:ext-expert', async (event, payload) => {
   }
   const message = typeof payload?.message === 'string' ? payload.message.trim() : '';
   if (!message || message.length > 2000) {
-    return { ok: false, error: 'Geçersiz mesaj.' };
+    return { ok: false, error: 'Invalid message.' };
   }
 
   try {
@@ -6706,7 +6706,7 @@ ipcMain.handle('agent:ext-expert', async (event, payload) => {
     usedModel = false;
     plan = null;
     reply = '';
-    modelError = error instanceof Error ? error.message : 'Yerel model yanıt vermedi.';
+    modelError = error instanceof Error ? error.message : 'The local model did not reply.';
   }
 
   let toggles = normalizeExpertToggles(plan?.toggles, message);
@@ -6729,15 +6729,15 @@ ipcMain.handle('agent:ext-expert', async (event, payload) => {
   if (!reply) {
     if (applied.length) {
       reply = applied
-        .map((item) => `${item.name} ${item.on ? 'açıldı' : 'kapatıldı'}`)
+        .map((item) => `${item.name} ${item.on ? 'turned on' : 'turned off'}`)
         .join(', ');
       if (!usedModel) {
-        reply += '. Yerel model yoktu; anahtar sözcüklere göre uyguladım.';
+        reply += '. No local model was available; I applied keyword rules.';
       }
     } else if (!usedModel) {
-      reply = modelError || 'Yerel bir model seçin; şimdilik eklenti değişikliği yok.';
+      reply = modelError || 'Select a local model; no extension changes for now.';
     } else {
-      reply = 'Bu istek için eklenti değişikliği gerekmedi.';
+      reply = 'No extension changes were needed for this request.';
     }
   }
   if (notes.length) {
@@ -6748,16 +6748,16 @@ ipcMain.handle('agent:ext-expert', async (event, payload) => {
   pushExpertHistory('assistant', reply);
   if (privacySettings.siyuanBridge) {
     const appliedLine = applied.length
-      ? applied.map((item) => `${item.name}: ${item.on ? 'açık' : 'kapalı'}`).join(', ')
-      : 'yok';
-    postToMemoryBridge(`Eklenti uzmanı\nSoru: ${message}\nYanıt: ${reply}\nUygulanan: ${appliedLine}`);
+      ? applied.map((item) => `${item.name}: ${item.on ? 'on' : 'off'}`).join(', ')
+      : 'none';
+    postToMemoryBridge(`Extension expert\nQuestion: ${message}\nReply: ${reply}\nApplied: ${appliedLine}`);
   }
 
   return { ok: true, reply, applied: applied.map((item) => ({ id: item.id, on: item.on })), settings };
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : 'Eklenti uzmanı yanıt veremedi.',
+      error: error instanceof Error ? error.message : 'The extension expert could not reply.',
       settings: snapshotSettings(),
     };
   }
@@ -6787,7 +6787,7 @@ ipcMain.handle('agent:memory-bridge-pick-vault', async (event) => {
   }
   applyMemoryBridgePatch({ provider: 'obsidian' });
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Obsidian kasası',
+    title: 'Obsidian vault',
     properties: ['openDirectory'],
   });
   if (result.canceled || !result.filePaths?.[0]) {
@@ -6795,7 +6795,7 @@ ipcMain.handle('agent:memory-bridge-pick-vault', async (event) => {
   }
   const picked = rememberUserPath(result.filePaths[0], sessionLocalDirs);
   if (!picked) {
-    return { ok: false, error: 'geçersiz yol', bridge: snapshotMemoryBridge() };
+    return { ok: false, error: 'invalid path', bridge: snapshotMemoryBridge() };
   }
   memoryBridge.vaultPath = picked;
   const bridge = snapshotMemoryBridge();
@@ -6822,23 +6822,23 @@ ipcMain.handle('agent:settings-panel', async (event, open) => {
 
 ipcMain.handle('agent:ai-message', async (event, payload) => {
   if (!isChromeSender(event)) {
-    return emitAiResponse({ ok: false, error: 'yetkisiz' });
+    return emitAiResponse({ ok: false, error: 'unauthorized' });
   }
 
   const apiKey = readSessionApiKey(payload?.apiKey);
   const message = typeof payload?.message === 'string' ? payload.message.trim() : '';
   if (!message || message.length > 8000) {
-    return emitAiResponse({ ok: false, error: 'Geçersiz mesaj.' });
+    return emitAiResponse({ ok: false, error: 'Invalid message.' });
   }
 
-  emitAiResponse({ ok: true, type: 'status', content: 'ajan yanıtlıyor' });
+  emitAiResponse({ ok: true, type: 'status', content: 'agent is replying' });
 
   try {
     const content = await requestChat(apiKey, [
       {
         role: 'system',
         content:
-          'Sen Agent Browser içinde çalışan gizlilik odaklı bir asistansın. Sohbeti diske yazma. Kısa ve net yanıt ver.',
+          'You are a privacy-focused assistant running inside Agent Browser. Do not write the chat to disk. Keep replies short and clear.',
       },
       { role: 'user', content: message },
     ]);
@@ -6846,7 +6846,7 @@ ipcMain.handle('agent:ai-message', async (event, payload) => {
   } catch (error) {
     return emitAiResponse({
       ok: false,
-      error: error instanceof Error ? error.message : 'AI isteği başarısız.',
+      error: error instanceof Error ? error.message : 'AI request failed.',
     });
   }
 });
@@ -6871,22 +6871,22 @@ ipcMain.on('trigger-panic', (event) => {
 
 ipcMain.handle('agent:ai-summarize', async (event, payload) => {
   if (!isChromeSender(event)) {
-    return emitAiResponse({ ok: false, error: 'yetkisiz' });
+    return emitAiResponse({ ok: false, error: 'unauthorized' });
   }
 
   const apiKey = readSessionApiKey(payload?.apiKey);
 
-  emitAiResponse({ ok: true, type: 'status', content: 'sayfa metni okunuyor' });
+  emitAiResponse({ ok: true, type: 'status', content: 'reading page text' });
 
   let pageText = '';
   try {
     pageText = await extractVisiblePageText();
   } catch {
-    return emitAiResponse({ ok: false, error: 'Sayfa metni alınamadı.' });
+    return emitAiResponse({ ok: false, error: 'Could not read page text.' });
   }
 
   if (!pageText) {
-    return emitAiResponse({ ok: false, error: 'Özetlenecek görünür metin yok.' });
+    return emitAiResponse({ ok: false, error: 'No visible text to summarize.' });
   }
 
   try {
@@ -6898,7 +6898,7 @@ ipcMain.handle('agent:ai-summarize', async (event, payload) => {
   } catch (error) {
     return emitAiResponse({
       ok: false,
-      error: error instanceof Error ? error.message : 'Özet isteği başarısız.',
+      error: error instanceof Error ? error.message : 'Summary request failed.',
     });
   }
 });
@@ -7057,7 +7057,7 @@ function removeAgentPortFiles() {
       fs.unlinkSync(file);
     } catch (error) {
       if (error && error.code !== 'ENOENT') {
-        logAgentWarn(`Port dosyası silinemedi: ${path.basename(file)}`);
+        logAgentWarn(`Could not delete port file: ${path.basename(file)}`);
       }
     }
   }
@@ -7134,7 +7134,7 @@ function findCdpAndApiPorts() {
       // Consecutive API port was taken; try another CDP port.
     }
   }
-  throw new Error('Ardışık boş localhost portu bulunamadı.');
+  throw new Error('No free consecutive localhost ports found.');
 }
 
 function jsonResponse(res, status, payload) {
@@ -7242,7 +7242,7 @@ async function agentVision() {
   if (!guest || guest.isDestroyed()) {
     return { ok: false, error: 'no-active-tab' };
   }
-  logAgent('Ekran görüntüsü alınıyor...');
+  logAgent('Capturing screenshot...');
   const image = await guest.capturePage();
   const size = image.getSize();
   return {
@@ -7259,7 +7259,7 @@ async function agentReadMarkdown() {
   if (!guest || guest.isDestroyed()) {
     return { ok: false, error: 'no-active-tab' };
   }
-  logAgent('Sayfa Markdown olarak okunuyor...');
+  logAgent('Reading page as Markdown...');
   const markdown = await guest.executeJavaScript(AGENT_MARKDOWN_SOURCE, true);
   const text = typeof markdown === 'string' ? markdown.slice(0, PAGE_TEXT_LIMIT * 2) : '';
   return { ok: true, url: guest.getURL(), markdown: text };
@@ -7278,7 +7278,7 @@ async function agentType(body) {
   if (text.length > 8000) {
     return { ok: false, error: 'invalid-text' };
   }
-  logAgent(`Form dolduruluyor... (${selector})`);
+  logAgent(`Filling form... (${selector})`);
   const result = await guest.executeJavaScript(
     `(function () {
       const el = document.querySelector(${JSON.stringify(selector)});
@@ -7319,7 +7319,7 @@ async function agentEvaluate(body) {
   if (!source || source.length > 32000) {
     return { ok: false, error: 'invalid-expression' };
   }
-  logAgent(`JavaScript çalıştırılıyor... (${source.length} karakter)`);
+  logAgent(`Running JavaScript... (${source.length} characters)`);
   const result = await guest.executeJavaScript(source, true);
   let safeResult = null;
   try {
@@ -7366,7 +7366,7 @@ function startAgentApiServer(port) {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       handleAgentApiRequest(req, res).catch((error) => {
-        logAgentError(error instanceof Error ? error.message : 'iç hata');
+        logAgentError(error instanceof Error ? error.message : 'internal error');
         if (!res.writableEnded) {
           jsonResponse(res, 500, { ok: false, error: 'internal' });
         }
@@ -7388,7 +7388,7 @@ function startAgentApiServer(port) {
 
 async function handleAgentApiRequest(req, res) {
   if (!isLoopbackSocket(req)) {
-    logAgentWarn('Loopback dışı istek reddedildi');
+    logAgentWarn('Rejected non-loopback request');
     jsonResponse(res, 403, { ok: false, error: 'forbidden' });
     return;
   }
@@ -7409,7 +7409,7 @@ async function handleAgentApiRequest(req, res) {
   }
 
   if (!tokensEqual(readAgentKey(req), agentControlKey)) {
-    logAgentWarn('Yetkisiz istek reddedildi');
+    logAgentWarn('Rejected unauthorized request');
     jsonResponse(res, 401, { ok: false, error: 'unauthorized' });
     return;
   }
@@ -7449,7 +7449,7 @@ try {
   app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1');
   writeAgentPortFile(AGENT_PORT_FILE, agentCdpPort);
   writeAgentPortFile(AGENT_API_PORT_FILE, agentApiPort);
-  logAgent(`CDP 127.0.0.1:${agentCdpPort} ayrıldı`);
+  logAgent(`CDP 127.0.0.1:${agentCdpPort} allocated`);
 } catch (error) {
   logAgentError(error instanceof Error ? error.message : String(error));
   removeAgentPortFiles();
