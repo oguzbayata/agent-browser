@@ -67,6 +67,52 @@ const TOOLS = Object.freeze([
     action: 'models',
     icon: 'models',
   },
+  {
+    id: 'canvas-poisoner',
+    setting: 'canvasPoisoner',
+    extId: 'canvas-poisoner',
+    name: 'Canvas & WebGL Zehirleyici',
+    description: 'Piksel çizimlerine mikro parazit ekleyerek donanım parmak izini bozar.',
+    action: 'settings',
+    icon: 'canvas',
+  },
+  {
+    id: 'siyuan-bridge',
+    setting: 'siyuanBridge',
+    extId: 'siyuan-bridge',
+    name: 'SiYuan Bellek Köprüsü',
+    description: 'Ajanların web’den çektiği verileri doğrudan SiYuan yerel hafıza bloklarına aktarır.',
+    action: 'settings',
+    icon: 'siyuan',
+  },
+  {
+    id: 'human-jitter',
+    setting: 'humanJitter',
+    extId: 'human-jitter',
+    name: 'Hayalet Fare (Human Jitter)',
+    description: 'Otonom tıklamalara insansı rastgelelik ve kaydırma gecikmeleri ekler.',
+    action: 'settings',
+    icon: 'jitter',
+  },
+  {
+    id: 'dead-man-switch',
+    setting: 'deadManSwitch',
+    extId: 'dead-man-switch',
+    name: 'Protokol Anahtarı',
+    description: 'Ağ geçidi değişince Excommunicado protokolünü otonom tetikler.',
+    action: 'settings',
+    icon: 'deadman',
+    alert: true,
+  },
+  {
+    id: 'web3-shield',
+    setting: 'web3Shield',
+    extId: 'web3-shield',
+    name: 'Web3 Kripto Kalkanı',
+    description: 'DApp bağlantılarını izole eder, yetkisiz cüzdan erişimi yoklamalarını engeller.',
+    action: 'settings',
+    icon: 'web3',
+  },
 ]);
 
 const ICONS = {
@@ -79,6 +125,11 @@ const ICONS = {
   ua: '<circle cx="10" cy="10" r="6.2"/><path d="M3.8 10h12.4M10 3.8c1.8 1.8 2.6 3.8 2.6 6.2S11.8 14.4 10 16.2C8.2 14.4 7.4 12.4 7.4 10S8.2 5.6 10 3.8Z"/>',
   models: '<rect x="3.4" y="4.2" width="13.2" height="11.6" rx="2"/><path d="M7.2 8.2h5.6M7.2 11.2h3.8"/>',
   guvenlik: '<rect x="3.2" y="6.6" width="8.2" height="7.2" rx="1.2"/><path d="M11.4 8.6 16.6 6.4v9.6l-5.2-2.2"/><path d="M3.4 16.2 16.6 3.8"/>',
+  canvas: '<path d="M4.2 14.8 13.4 5.6a2 2 0 0 1 2.8 2.8L7 17.6H4.2z"/><path d="M12.2 6.8 14.8 9.4"/>',
+  siyuan: '<circle cx="7.2" cy="8" r="2.4"/><circle cx="13.2" cy="12.4" r="2.4"/><path d="M9.2 9.4 11.2 11"/>',
+  jitter: '<path d="M8.2 3.2 11 9.4 8.8 9.8 11.6 16.8"/><path d="M13.2 6.2c1.4.8 2.2 2 2.2 3.6s-.8 2.8-2.2 3.6"/>',
+  deadman: '<circle cx="10" cy="8.4" r="3.4"/><path d="M7.4 11.6 5.2 16.4M12.6 11.6 14.8 16.4M6.4 8.2h7.2"/>',
+  web3: '<circle cx="10" cy="10" r="6.2"/><path d="M10 3.8v12.4M4.4 8.2h11.2M4.4 11.8h11.2"/>',
 };
 
 let settings = {};
@@ -93,6 +144,11 @@ const DEFAULTS = Object.freeze({
   ghostNetwork: false,
   mediaHunter: false,
   blockMedia: true,
+  canvasPoisoner: false,
+  siyuanBridge: false,
+  humanJitter: false,
+  deadManSwitch: false,
+  web3Shield: false,
 });
 
 function toolEnabled(tool) {
@@ -140,6 +196,22 @@ function visibleTools(query) {
   });
 }
 
+function installedCount() {
+  return TOOLS.filter((tool) => !removed.has(tool.id)).length;
+}
+
+function updateExtensionCounts(visible) {
+  const total = installedCount();
+  const heading = document.getElementById('ext-heading');
+  if (heading) {
+    heading.textContent = visible === total ? `Tüm eklentiler (${total})` : `Tüm eklentiler (${visible} / ${total})`;
+  }
+  const navCount = document.getElementById('ext-nav-count');
+  if (navCount) {
+    navCount.textContent = String(total);
+  }
+}
+
 function renderGrid() {
   const grid = document.getElementById('ext-grid');
   const empty = document.getElementById('ext-empty');
@@ -150,11 +222,12 @@ function renderGrid() {
 
   const tools = visibleTools(query);
   empty.hidden = tools.length > 0;
+  updateExtensionCounts(tools.length);
   grid.replaceChildren();
 
   for (const tool of tools) {
     const card = document.createElement('article');
-    card.className = 'ext-card';
+    card.className = tool.alert ? 'ext-card is-alert' : 'ext-card';
     card.dataset.id = tool.id;
 
     const icon = document.createElement('div');
@@ -197,6 +270,9 @@ function renderGrid() {
       toggle.setAttribute('role', 'switch');
       toggle.setAttribute('aria-checked', toolEnabled(tool) ? 'true' : 'false');
       toggle.setAttribute('aria-label', `${tool.name} açık/kapalı`);
+      if (tool.extId) {
+        toggle.dataset.ext = tool.extId;
+      }
       actions.append(toggle);
     }
 
@@ -267,12 +343,17 @@ function bindPage() {
       const key = toggle.dataset.setting;
       const next = toggle.getAttribute('aria-checked') !== 'true';
       toggle.setAttribute('aria-checked', next ? 'true' : 'false');
-      api?.setSetting?.(key, next)?.then((result) => {
+      const apply = (result) => {
         if (result?.settings) {
           settings = result.settings;
           renderGrid();
         }
-      });
+      };
+      if (toggle.dataset.ext) {
+        api?.toggleExtension?.(toggle.dataset.ext, next)?.then(apply);
+      } else {
+        api?.setSetting?.(key, next)?.then(apply);
+      }
     }
   });
 

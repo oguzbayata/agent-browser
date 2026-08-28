@@ -32,6 +32,7 @@
         <button type="button" class="ext-nav-item is-active" data-view="extensions" id="nav-extensions">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.4 3.4h2.2v2.4h2.6a2 2 0 0 1 2 2v2.4h2.4v2.2h-2.4V15a2 2 0 0 1-2 2H9.6v2.2H7.4V17H5a2 2 0 0 1-2-2v-2.6H.8V10.2H3V7.8a2 2 0 0 1 2-2h2.4z"/></svg>
           <span>Eklentilerim</span>
+          <em id="ext-nav-count" class="ext-count">0</em>
         </button>
         <button type="button" class="ext-nav-item" data-view="shortcuts" id="nav-shortcuts">
           <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.4" y="5.2" width="15.2" height="10.4" rx="1.6"/><path d="M5 8.2h2.2M8.4 8.2h2.2M11.8 8.2H14M5 11.4h10"/></svg>
@@ -49,7 +50,7 @@
 
       <main class="ext-main">
         <section id="view-extensions" class="ext-view">
-          <h2>Tüm eklentiler</h2>
+          <h2 id="ext-heading">Tüm eklentiler (0)</h2>
           <p class="ext-empty" id="ext-empty" hidden>Eşleşen oturum aracı yok.</p>
           <div class="ext-grid" id="ext-grid"></div>
         </section>

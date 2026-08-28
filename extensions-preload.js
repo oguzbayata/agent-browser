@@ -17,11 +17,11 @@ contextBridge.exposeInMainWorld(
   'electronAPI',
   Object.freeze({
     getSettings: () => ipcRenderer.invoke('agent:settings-get'),
-    setSetting: (key, value) => {
-      if (typeof key !== 'string') {
+    toggleExtension: (id, state) => {
+      if (typeof id !== 'string') {
         return Promise.resolve({ ok: false });
       }
-      return ipcRenderer.invoke('agent:settings-set', { key, value });
+      return ipcRenderer.invoke('agent:toggle-extension', { id, state: Boolean(state) });
     },
     onSettings: (callback) => subscribePayload('agent:settings', callback),
     getLocalIntel: () => ipcRenderer.invoke('agent:local-intel-get'),

@@ -79,6 +79,11 @@ const BOOLEAN_SETTINGS = new Set([
   'ghostNetwork',
   'mediaHunter',
   'blockMedia',
+  'canvasPoisoner',
+  'siyuanBridge',
+  'humanJitter',
+  'deadManSwitch',
+  'web3Shield',
 ]);
 const AGENT_BRIDGE_HOST = '127.0.0.1';
 const AGENT_BRIDGE_PORT = 17331;
@@ -91,7 +96,13 @@ const AJAN_ERR = '\x1b[31m[AJAN]\x1b[0m';
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 const NETWORK_FILTER = Object.freeze({ urls: ['http://*/*', 'https://*/*'] });
 const GHOST_DENIED_PERMISSIONS = new Set(['media', 'geolocation', 'display-capture']);
-const MEDIA_DENIED_PERMISSIONS = new Set(['media', 'display-capture', 'speaker-selection']);
+const EXTENSION_TOGGLE_IDS = Object.freeze({
+  'canvas-poisoner': 'canvasPoisoner',
+  'siyuan-bridge': 'siyuanBridge',
+  'human-jitter': 'humanJitter',
+  'dead-man-switch': 'deadManSwitch',
+  'web3-shield': 'web3Shield',
+});
 const COMMON_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
@@ -285,6 +296,8 @@ let localIntelWatchers = [];
 let localIntelTimer = null;
 let localIntelBusy = false;
 let localIntelPending = false;
+let deadManTimer = null;
+let deadManGateway = '';
 const privacySettings = {
   blockTrackers: true,
   stripThirdPartyCookies: true,
@@ -295,6 +308,11 @@ const privacySettings = {
   ghostNetwork: false,
   mediaHunter: false,
   blockMedia: true,
+  canvasPoisoner: false,
+  siyuanBridge: false,
+  humanJitter: false,
+  deadManSwitch: false,
+  web3Shield: false,
 };
 global.isDownloaderEnabled = false;
 let blockedRequestCount = 0;
@@ -2749,14 +2767,147 @@ function agentVideoAdSkipper() {
 
 const VIDEO_AD_SKIPPER_SOURCE = `(${agentVideoAdSkipper.toString()})();`;
 
+function agentCanvasPoisoner() {
+  if (window.__agentCanvasPoisoner) {
+    return;
+  }
+  window.__agentCanvasPoisoner = true;
+  const originalGetContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (type, attrs) {
+    const ctx = originalGetContext.call(this, type, attrs);
+    if (!ctx || typeof ctx.getImageData !== 'function') {
+      return ctx;
+    }
+    const originalGetImageData = ctx.getImageData.bind(ctx);
+    ctx.getImageData = function (x, y, w, h) {
+      const image = originalGetImageData(x, y, w, h);
+      const bytes = image.data;
+      const steps = Math.min(12, Math.max(1, Math.floor(bytes.length / 64)));
+      for (let i = 0; i < bytes.length; i += steps * 4) {
+        bytes[i] = bytes[i] ^ 1;
+      }
+      return image;
+    };
+    return ctx;
+  };
+}
+
+function agentWeb3Shield() {
+  if (window.__agentWeb3Shield) {
+    return;
+  }
+  window.__agentWeb3Shield = true;
+  for (const name of ['ethereum', 'solana', 'phantom']) {
+    try {
+      Object.defineProperty(window, name, {
+        configurable: false,
+        enumerable: false,
+        get() {
+          return undefined;
+        },
+        set() {},
+      });
+    } catch {
+      // Provider may already be locked by the page.
+    }
+  }
+}
+
+const CANVAS_POISONER_SOURCE = `(${agentCanvasPoisoner.toString()})();`;
+const WEB3_SHIELD_SOURCE = `(${agentWeb3Shield.toString()})();`;
+
+function isInternalGuestUrl(rawUrl) {
+  return (
+    isStartPage(rawUrl) ||
+    isSearchFile(rawUrl) ||
+    isDownloadsFile(rawUrl) ||
+    isUsefulLinksFile(rawUrl) ||
+    isExtensionsFile(rawUrl)
+  );
+}
+
+function injectGuestScript(webContents, source) {
+  if (!webContents || webContents.isDestroyed() || isInternalGuestUrl(webContents.getURL())) {
+    return;
+  }
+  webContents.executeJavaScript(source, true).catch(() => {});
+}
+
 function injectVideoAdSkipper(webContents) {
-  if (!webContents || webContents.isDestroyed()) {
-    return;
+  injectGuestScript(webContents, VIDEO_AD_SKIPPER_SOURCE);
+}
+
+function injectSessionGuards(webContents) {
+  injectVideoAdSkipper(webContents);
+  if (privacySettings.canvasPoisoner) {
+    injectGuestScript(webContents, CANVAS_POISONER_SOURCE);
   }
-  if (isStartPage(webContents.getURL()) || isSearchFile(webContents.getURL()) || isDownloadsFile(webContents.getURL()) || isUsefulLinksFile(webContents.getURL()) || isExtensionsFile(webContents.getURL())) {
-    return;
+  if (privacySettings.web3Shield) {
+    injectGuestScript(webContents, WEB3_SHIELD_SOURCE);
   }
-  webContents.executeJavaScript(VIDEO_AD_SKIPPER_SOURCE, true).catch(() => {});
+}
+
+function injectSessionGuardsIntoGuests() {
+  for (const entry of views.values()) {
+    const webContents = entry.view?.webContents;
+    if (!webContents || webContents.isDestroyed()) {
+      continue;
+    }
+    if (entry.kind === 'downloads' || entry.kind === 'extensions') {
+      continue;
+    }
+    injectSessionGuards(webContents);
+  }
+}
+
+function readDefaultGateway() {
+  try {
+    const printed = spawnSync(process.platform === 'win32' ? 'route' : 'ip', process.platform === 'win32' ? ['print', '0.0.0.0'] : ['route'], {
+      encoding: 'utf8',
+      timeout: 4000,
+      windowsHide: true,
+    });
+    const text = String(printed.stdout || '');
+    const match = text.match(/0\.0\.0\.0\s+0\.0\.0\.0\s+(\d+\.\d+\.\d+\.\d+)/);
+    return match ? match[1] : '';
+  } catch {
+    return '';
+  }
+}
+
+function stopDeadManWatch() {
+  if (deadManTimer) {
+    clearInterval(deadManTimer);
+    deadManTimer = null;
+  }
+  deadManGateway = '';
+}
+
+function startDeadManWatch() {
+  stopDeadManWatch();
+  deadManGateway = readDefaultGateway();
+  deadManTimer = setInterval(() => {
+    if (!privacySettings.deadManSwitch || panicInProgress) {
+      return;
+    }
+    const next = readDefaultGateway();
+    if (deadManGateway && next && next !== deadManGateway) {
+      triggerExcommunicado();
+    }
+  }, 15000);
+}
+
+function applyExtensionSideEffect(key) {
+  if (key === 'canvasPoisoner' || key === 'web3Shield') {
+    injectSessionGuardsIntoGuests();
+  }
+  if (key === 'deadManSwitch') {
+    if (privacySettings.deadManSwitch) {
+      startDeadManWatch();
+    } else {
+      stopDeadManWatch();
+    }
+  }
 }
 
 function attachTabListeners(tabId, webContents) {
@@ -2794,8 +2945,8 @@ function attachTabListeners(tabId, webContents) {
       event.preventDefault();
     }
   });
-  webContents.on('dom-ready', () => injectVideoAdSkipper(webContents));
-  webContents.on('did-finish-load', () => injectVideoAdSkipper(webContents));
+  webContents.on('dom-ready', () => injectSessionGuards(webContents));
+  webContents.on('did-finish-load', () => injectSessionGuards(webContents));
 
   const emitTitle = () => {
     sendToChrome('agent:tab-title-updated', {
@@ -3119,6 +3270,12 @@ function triggerExcommunicado() {
     privacySettings.ghostNetwork = false;
     privacySettings.mediaHunter = false;
     privacySettings.blockMedia = true;
+    privacySettings.canvasPoisoner = false;
+    privacySettings.siyuanBridge = false;
+    privacySettings.humanJitter = false;
+    privacySettings.deadManSwitch = false;
+    privacySettings.web3Shield = false;
+    stopDeadManWatch();
     global.isDownloaderEnabled = false;
     applyGhostNetwork().catch(() => {});
   } catch {
@@ -5020,6 +5177,11 @@ function snapshotSettings() {
     ghostNetwork: privacySettings.ghostNetwork,
     mediaHunter: Boolean(privacySettings.mediaHunter),
     blockMedia: privacySettings.blockMedia !== false,
+    canvasPoisoner: Boolean(privacySettings.canvasPoisoner),
+    siyuanBridge: Boolean(privacySettings.siyuanBridge),
+    humanJitter: Boolean(privacySettings.humanJitter),
+    deadManSwitch: Boolean(privacySettings.deadManSwitch),
+    web3Shield: Boolean(privacySettings.web3Shield),
     proxyUrl: privacySettings.ghostNetwork ? SOCKS5_PROXY : '',
     blockedRequestCount,
     securityStats: snapshotSecurityStats(),
@@ -5172,6 +5334,29 @@ const agentBridgeHandlers = {
     if (!selector || selector.length > 512) {
       return { ok: false, error: 'invalid-selector' };
     }
+    if (privacySettings.humanJitter) {
+      const box = await guest.executeJavaScript(
+        `(function () {
+          const el = document.querySelector(${JSON.stringify(selector)});
+          if (!el) { return null; }
+          const r = el.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };
+        })()`,
+        true,
+      );
+      if (!box) {
+        return { ok: false, error: 'not-found', tabId };
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50 + Math.floor(Math.random() * 101));
+      });
+      const x = Math.round(box.x + (Math.random() - 0.5) * Math.min(8, Math.max(2, box.w * 0.25)));
+      const y = Math.round(box.y + (Math.random() - 0.5) * Math.min(8, Math.max(2, box.h * 0.25)));
+      guest.sendInputEvent({ type: 'mouseMove', x, y });
+      guest.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+      guest.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+      return { ok: true, tabId };
+    }
     const result = await guest.executeJavaScript(
       `(function () {
         const el = document.querySelector(${JSON.stringify(selector)});
@@ -5286,6 +5471,7 @@ ipcMain.handle('agent:settings-set', async (event, payload) => {
     if (key === 'blockMedia') {
       applySessionPermissions(getIsolatedSession());
     }
+    applyExtensionSideEffect(key);
     if (key === 'ghostNetwork') {
       try {
         await applyGhostNetwork();
@@ -5305,6 +5491,19 @@ ipcMain.handle('agent:settings-set', async (event, payload) => {
     return { ok: false, settings: snapshotSettings() };
   }
 
+  return { ok: true, settings: broadcastSettings() };
+});
+
+ipcMain.handle('agent:toggle-extension', async (event, payload) => {
+  if ((!isChromeSender(event) && !isExtensionsSender(event)) || !payload || typeof payload !== 'object') {
+    return { ok: false };
+  }
+  const key = EXTENSION_TOGGLE_IDS[payload.id];
+  if (!key || !BOOLEAN_SETTINGS.has(key)) {
+    return { ok: false };
+  }
+  privacySettings[key] = Boolean(payload.state);
+  applyExtensionSideEffect(key);
   return { ok: true, settings: broadcastSettings() };
 });
 

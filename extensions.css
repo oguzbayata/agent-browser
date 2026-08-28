@@ -194,6 +194,14 @@ body.is-nav-collapsed .ext-nav {
   cursor: pointer;
 }
 
+.ext-count {
+  margin-left: auto;
+  font: 12px/1 "Segoe UI", system-ui, sans-serif;
+  font-style: normal;
+  color: inherit;
+  opacity: 0.72;
+}
+
 .ext-nav-item:hover {
   background: rgba(255, 255, 255, 0.05);
 }
@@ -279,6 +287,10 @@ body.is-nav-collapsed .ext-nav {
   border-radius: 10px;
   background: #0a0c0f;
   color: var(--accent);
+}
+
+.ext-card.is-alert .ext-icon {
+  color: #ff5a6a;
 }
 
 .ext-copy {
