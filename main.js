@@ -11,6 +11,19 @@ const net = require('node:net');
 const { startAgentBridgeServer, stopAgentBridgeServer, getListenInfo } = require('./agent-bridge');
 const { collectIntel, knownModelRoots, isLoopbackHttpUrl } = require('./local-intel');
 
+if (process.platform === 'win32') {
+  app.setAppUserModelId('oguzbayata.agent-browser');
+}
+
+function appIconPath() {
+  const ico = path.join(__dirname, 'assets', 'agent-browser-logo.ico');
+  if (fs.existsSync(ico)) {
+    return ico;
+  }
+  const png = path.join(__dirname, 'assets', 'agent-browser-logo.png');
+  return fs.existsSync(png) ? png : undefined;
+}
+
 /**
  * In-memory partition only. A `persist:` prefix would write the session to disk.
  * An empty string would fall back to Electron's default (persistent) session.
@@ -5248,6 +5261,7 @@ function createAgentWindow() {
     frame: false,
     autoHideMenuBar: true,
     backgroundColor: '#0a0c0f',
+    icon: appIconPath(),
     title: 'Agent Browser',
     titleBarStyle: 'hidden',
     titleBarOverlay: {
