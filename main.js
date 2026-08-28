@@ -57,6 +57,9 @@ const USEFUL_LINKS_FILE_URL = pathToFileURL(USEFUL_LINKS_PATH).href;
 const EXTENSIONS_PATH = path.join(__dirname, 'extensions.html');
 const EXTENSIONS_FILE_URL = pathToFileURL(EXTENSIONS_PATH).href;
 const EXTENSIONS_PRELOAD_PATH = path.join(__dirname, 'extensions-preload.js');
+const MEMORY_BRIDGE_PATH = path.join(__dirname, 'memory-bridge.html');
+const MEMORY_BRIDGE_FILE_URL = pathToFileURL(MEMORY_BRIDGE_PATH).href;
+const MEMORY_BRIDGE_PRELOAD_PATH = path.join(__dirname, 'memory-bridge-preload.js');
 const SCRAPER_PATH = path.join(__dirname, 'engine', 'scraper.py');
 const AGENT_SEARCH_PREFIX = 'agent-search:';
 const PYTHON_MISSING_MESSAGE = 'Yerel İstihbarat Ajanı başlatılamadı: Python bulunamadı';
@@ -275,6 +278,11 @@ const extensionsWebPreferences = Object.freeze({
   preload: EXTENSIONS_PRELOAD_PATH,
 });
 
+const memoryBridgeWebPreferences = Object.freeze({
+  ...sharedSessionPrefs,
+  preload: MEMORY_BRIDGE_PRELOAD_PATH,
+});
+
 let mainWindow = null;
 const views = new Map();
 const scraperChildren = new Set();
@@ -350,6 +358,70 @@ let localIntelBusy = false;
 let localIntelPending = false;
 let deadManTimer = null;
 let deadManGateway = '';
+const MEMORY_BRIDGE_CATALOG = Object.freeze([
+  {
+    id: 'mem0',
+    name: 'Mem0',
+    hint: 'Mem0 bellek API',
+    defaultUrl: 'http://127.0.0.1:8888/v1/memories',
+    kind: 'http',
+  },
+  {
+    id: 'zep',
+    name: 'Zep',
+    hint: 'Zep bellek sunucusu',
+    defaultUrl: 'http://127.0.0.1:8000/api/v2/memory',
+    kind: 'http',
+  },
+  {
+    id: 'langgraph',
+    name: 'LangGraph / LangChain Memory',
+    hint: 'LangGraph Studio / checkpoint',
+    defaultUrl: 'http://127.0.0.1:2024/memory',
+    kind: 'http',
+  },
+  {
+    id: 'siyuan',
+    name: 'SiYuan',
+    hint: 'SiYuan kernel API',
+    defaultUrl: 'http://127.0.0.1:6806/api/block/insertBlock',
+    kind: 'http',
+  },
+  {
+    id: 'llamaindex',
+    name: 'LlamaIndex Memory Modules',
+    hint: 'LlamaIndex bellek servisi',
+    defaultUrl: 'http://127.0.0.1:8001/memory',
+    kind: 'http',
+  },
+  {
+    id: 'motorhead',
+    name: 'Motorhead',
+    hint: 'Motorhead oturum belleği',
+    defaultUrl: 'http://127.0.0.1:8080/sessions',
+    kind: 'http',
+  },
+  {
+    id: 'memgpt',
+    name: 'MemGPT',
+    hint: 'Letta / MemGPT',
+    defaultUrl: 'http://127.0.0.1:8283/v1/agents/memory',
+    kind: 'http',
+  },
+  {
+    id: 'obsidian',
+    name: 'Obsidian',
+    hint: 'Yerel kasa klasörü',
+    defaultUrl: '',
+    kind: 'folder',
+  },
+]);
+const memoryBridge = {
+  provider: 'siyuan',
+  endpoint: 'http://127.0.0.1:6806/api/block/insertBlock',
+  token: '',
+  vaultPath: '',
+};
 const privacySettings = {
   blockTrackers: true,
   stripThirdPartyCookies: true,
@@ -1036,7 +1108,7 @@ function currentGuestUrl() {
     return '';
   }
   const url = guest.getURL();
-  if (isStartPage(url) || isSearchFile(url) || isDownloadsFile(url) || isUsefulLinksFile(url) || isExtensionsFile(url)) {
+  if (isStartPage(url) || isSearchFile(url) || isDownloadsFile(url) || isUsefulLinksFile(url) || isExtensionsFile(url) || isMemoryBridgeFile(url)) {
     return '';
   }
   return url;
@@ -2361,6 +2433,27 @@ function isExtensionsFile(rawUrl) {
   return Boolean(filePath) && filePath.toLowerCase() === path.normalize(EXTENSIONS_PATH).toLowerCase();
 }
 
+function isMemoryBridgeFile(rawUrl) {
+  if (!rawUrl) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.pathname.toLowerCase().endsWith('/memory-bridge.html') || parsed.href.split('?')[0] === MEMORY_BRIDGE_FILE_URL) {
+      const filePath = fileUrlToPath(parsed.href);
+      if (filePath && filePath.toLowerCase() === path.normalize(MEMORY_BRIDGE_PATH).toLowerCase()) {
+        return true;
+      }
+    }
+  } catch {
+    // Compare by filesystem path below.
+  }
+
+  const filePath = fileUrlToPath(rawUrl);
+  return Boolean(filePath) && filePath.toLowerCase() === path.normalize(MEMORY_BRIDGE_PATH).toLowerCase();
+}
+
 function searchQueryFromUrl(rawUrl) {
   try {
     return String(new URL(rawUrl).searchParams.get('q') || '').trim().slice(0, 500);
@@ -2400,6 +2493,9 @@ function displayGuestUrl(rawUrl) {
   if (isExtensionsFile(rawUrl)) {
     return '';
   }
+  if (isMemoryBridgeFile(rawUrl)) {
+    return '';
+  }
   return rawUrl;
 }
 
@@ -2425,7 +2521,7 @@ function isStartPage(rawUrl) {
 }
 
 function isAllowedGuestUrl(rawUrl) {
-  return rawUrl === 'about:blank' || isNewTabFile(rawUrl) || isSearchFile(rawUrl) || isDownloadsFile(rawUrl) || isUsefulLinksFile(rawUrl) || isExtensionsFile(rawUrl) || Boolean(sanitizeUrl(rawUrl));
+  return rawUrl === 'about:blank' || isNewTabFile(rawUrl) || isSearchFile(rawUrl) || isDownloadsFile(rawUrl) || isUsefulLinksFile(rawUrl) || isExtensionsFile(rawUrl) || isMemoryBridgeFile(rawUrl) || Boolean(sanitizeUrl(rawUrl));
 }
 
 function loadStartPage(webContents) {
@@ -2464,6 +2560,13 @@ function loadExtensionsPage(webContents) {
   return webContents.loadFile(EXTENSIONS_PATH);
 }
 
+function loadMemoryBridgePage(webContents) {
+  if (!webContents || webContents.isDestroyed()) {
+    return Promise.resolve();
+  }
+  return webContents.loadFile(MEMORY_BRIDGE_PATH);
+}
+
 function openUsefulLinksTab() {
   return createGuestTab(USEFUL_LINKS_FILE_URL);
 }
@@ -2488,6 +2591,26 @@ function openExtensionsTab() {
   const tabId = createGuestTab(EXTENSIONS_FILE_URL, { extensions: true });
   pushLocalIntel();
   return tabId;
+}
+
+function findMemoryBridgeTabId() {
+  for (const [tabId, entry] of views.entries()) {
+    const webContents = entry.view?.webContents;
+    if (entry.kind === 'memory' && webContents && !webContents.isDestroyed()) {
+      return tabId;
+    }
+  }
+  return null;
+}
+
+function openMemoryBridgeTab() {
+  const existing = findMemoryBridgeTabId();
+  if (existing) {
+    switchToTab(existing);
+    sendToKind('memory', 'agent:memory-bridge', snapshotMemoryBridge());
+    return existing;
+  }
+  return createGuestTab(MEMORY_BRIDGE_FILE_URL, { memory: true });
 }
 
 function findDownloadsTabId() {
@@ -2696,6 +2819,9 @@ function tabTitleOf(webContents) {
   }
   if (isExtensionsFile(url)) {
     return 'Eklentiler';
+  }
+  if (isMemoryBridgeFile(url)) {
+    return 'Hafıza Köprüsü';
   }
 
   const title = webContents.getTitle();
@@ -3116,7 +3242,8 @@ function isInternalGuestUrl(rawUrl) {
     isSearchFile(rawUrl) ||
     isDownloadsFile(rawUrl) ||
     isUsefulLinksFile(rawUrl) ||
-    isExtensionsFile(rawUrl)
+    isExtensionsFile(rawUrl) ||
+    isMemoryBridgeFile(rawUrl)
   );
 }
 
@@ -3148,7 +3275,7 @@ function injectSessionGuardsIntoGuests() {
     if (!webContents || webContents.isDestroyed()) {
       continue;
     }
-    if (entry.kind === 'downloads' || entry.kind === 'extensions') {
+    if (entry.kind === 'downloads' || entry.kind === 'extensions' || entry.kind === 'memory') {
       continue;
     }
     injectSessionGuards(webContents);
@@ -3220,6 +3347,108 @@ function emitAgentLocalHook(eventName, data) {
     req.end(raw);
   } catch {
     // Local hook is best-effort.
+  }
+}
+
+function memoryBridgeSpec(id) {
+  return MEMORY_BRIDGE_CATALOG.find((item) => item.id === id) || MEMORY_BRIDGE_CATALOG.find((item) => item.id === 'siyuan');
+}
+
+function snapshotMemoryBridge() {
+  const spec = memoryBridgeSpec(memoryBridge.provider);
+  return {
+    enabled: Boolean(privacySettings.siyuanBridge),
+    provider: spec.id,
+    providerName: spec.name,
+    endpoint: memoryBridge.endpoint || spec.defaultUrl,
+    hasToken: Boolean(memoryBridge.token),
+    vaultPath: memoryBridge.vaultPath,
+    catalog: MEMORY_BRIDGE_CATALOG.map((item) => ({
+      id: item.id,
+      name: item.name,
+      hint: item.hint,
+      defaultUrl: item.defaultUrl,
+      kind: item.kind,
+    })),
+  };
+}
+
+function resetMemoryBridge() {
+  const spec = memoryBridgeSpec('siyuan');
+  memoryBridge.provider = spec.id;
+  memoryBridge.endpoint = spec.defaultUrl;
+  memoryBridge.token = '';
+  memoryBridge.vaultPath = '';
+}
+
+function applyMemoryBridgePatch(payload) {
+  const spec = memoryBridgeSpec(typeof payload?.provider === 'string' ? payload.provider : memoryBridge.provider);
+  memoryBridge.provider = spec.id;
+  if (spec.kind === 'folder') {
+    memoryBridge.endpoint = '';
+  } else if (typeof payload?.endpoint === 'string') {
+    const next = payload.endpoint.trim().slice(0, 256);
+    memoryBridge.endpoint = next && isLoopbackHttpUrl(next) ? next : spec.defaultUrl;
+  } else if (!memoryBridge.endpoint) {
+    memoryBridge.endpoint = spec.defaultUrl;
+  }
+  if (typeof payload?.token === 'string') {
+    memoryBridge.token = payload.token.trim().slice(0, 512);
+  }
+}
+
+function writeObsidianNote(text) {
+  const vault = memoryBridge.vaultPath;
+  if (!vault) {
+    return false;
+  }
+  try {
+    if (!fs.statSync(vault).isDirectory()) {
+      return false;
+    }
+    const dir = path.join(vault, 'Agent Browser');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.appendFileSync(path.join(dir, 'oturum.md'), `\n\n## ${new Date().toISOString()}\n\n${text}\n`, 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function postToMemoryBridge(text) {
+  if (!privacySettings.siyuanBridge || typeof text !== 'string' || !text) {
+    return;
+  }
+  const spec = memoryBridgeSpec(memoryBridge.provider);
+  if (spec.kind === 'folder') {
+    writeObsidianNote(text);
+    return;
+  }
+  const endpoint = memoryBridge.endpoint || spec.defaultUrl;
+  if (!isLoopbackHttpUrl(endpoint)) {
+    return;
+  }
+  try {
+    const raw = JSON.stringify({
+      text,
+      source: 'agent-browser',
+      provider: spec.id,
+      at: Date.now(),
+    });
+    const headers = {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(raw),
+    };
+    if (memoryBridge.token) {
+      headers.Authorization = spec.id === 'siyuan' ? `Token ${memoryBridge.token}` : `Bearer ${memoryBridge.token}`;
+    }
+    const req = http.request(endpoint, { method: 'POST', headers }, (res) => {
+      res.resume();
+    });
+    req.on('error', () => {});
+    req.end(raw);
+  } catch {
+    // Local memory backends are best-effort.
   }
 }
 
@@ -3347,6 +3576,9 @@ function applyExtensionSideEffect(key) {
     case 'lmStudioPort':
     case 'n8nWebhook':
     case 'memoryBlockSync':
+    case 'siyuanBridge':
+      sendToKind('memory', 'agent:memory-bridge', snapshotMemoryBridge());
+      break;
     case 'cursorIdeBridge':
     case 'inputSimulator':
     case 'rateLimitGuard':
@@ -3388,7 +3620,13 @@ function attachTabListeners(tabId, webContents) {
       }
       return;
     }
-    if (isDownloadsFile(url) || isExtensionsFile(url) || !isAllowedGuestUrl(url)) {
+    if (entry?.kind === 'memory') {
+      if (!isMemoryBridgeFile(url)) {
+        event.preventDefault();
+      }
+      return;
+    }
+    if (isDownloadsFile(url) || isExtensionsFile(url) || isMemoryBridgeFile(url) || !isAllowedGuestUrl(url)) {
       event.preventDefault();
     }
   });
@@ -3412,7 +3650,9 @@ function attachTabListeners(tabId, webContents) {
           ? 'Faydalı Linkler'
           : isExtensionsFile(webContents.getURL())
             ? 'Eklentiler'
-            : isStartPage(webContents.getURL())
+            : isMemoryBridgeFile(webContents.getURL())
+              ? 'Hafıza Köprüsü'
+              : isStartPage(webContents.getURL())
             ? 'Yeni Sekme'
             : 'Yükleniyor...',
     });
@@ -3497,12 +3737,15 @@ function createGuestTab(initialUrl, options = {}) {
   const downloads = options.downloads === true || isDownloadsFile(initialUrl);
   const usefulLinks = isUsefulLinksFile(initialUrl);
   const extensions = options.extensions === true || isExtensionsFile(initialUrl);
+  const memory = options.memory === true || isMemoryBridgeFile(initialUrl);
   const view = new WebContentsView({
     webPreferences: downloads
       ? downloadsWebPreferences
       : extensions
         ? extensionsWebPreferences
-        : webPreferencesForGuest(owner),
+        : memory
+          ? memoryBridgeWebPreferences
+          : webPreferencesForGuest(owner),
   });
   view.setBackgroundColor('#070809');
   views.set(tabId, {
@@ -3511,7 +3754,7 @@ function createGuestTab(initialUrl, options = {}) {
     owner,
     pinned: false,
     window: host,
-    kind: downloads ? 'downloads' : extensions ? 'extensions' : 'guest',
+    kind: downloads ? 'downloads' : extensions ? 'extensions' : memory ? 'memory' : 'guest',
   });
   tabSecurityStats.set(tabId, emptySecurityStats());
   attachTabListeners(tabId, view.webContents);
@@ -3531,6 +3774,8 @@ function createGuestTab(initialUrl, options = {}) {
     loadUsefulLinksPage(view.webContents);
   } else if (extensions) {
     loadExtensionsPage(view.webContents);
+  } else if (memory) {
+    loadMemoryBridgePage(view.webContents);
   } else if (searchQuery) {
     loadSearchPage(view.webContents, searchQuery);
   } else if (target !== 'about:blank') {
@@ -3552,7 +3797,9 @@ function createGuestTab(initialUrl, options = {}) {
         ? 'Faydalı Linkler'
         : extensions
           ? 'Eklentiler'
-          : target === 'about:blank'
+          : memory
+            ? 'Hafıza Köprüsü'
+            : target === 'about:blank'
             ? 'Yeni Sekme'
             : 'Yükleniyor...',
     url: target,
@@ -3724,6 +3971,7 @@ function triggerExcommunicado() {
     privacySettings.blockMedia = true;
     privacySettings.canvasPoisoner = false;
     privacySettings.siyuanBridge = false;
+    resetMemoryBridge();
     privacySettings.humanJitter = false;
     privacySettings.deadManSwitch = false;
     privacySettings.web3Shield = false;
@@ -3875,6 +4123,24 @@ function isExtensionsSender(event) {
     }
   }
   return isExtensionsFile(contents.getURL());
+}
+
+function isMemoryBridgeSender(event) {
+  const contents = event?.sender;
+  if (!contents || contents.isDestroyed()) {
+    return false;
+  }
+  for (const entry of views.values()) {
+    if (
+      entry.kind === 'memory' &&
+      entry.view?.webContents &&
+      !entry.view.webContents.isDestroyed() &&
+      entry.view.webContents === contents
+    ) {
+      return true;
+    }
+  }
+  return isMemoryBridgeFile(contents.getURL());
 }
 
 function notifyChromeMenuClosed() {
@@ -4654,8 +4920,10 @@ ipcMain.handle('agent:navigate', async (event, rawUrl) => {
   if (
     isDownloadsFile(guest.getURL()) ||
     isExtensionsFile(guest.getURL()) ||
+    isMemoryBridgeFile(guest.getURL()) ||
     views.get(activeTabId)?.kind === 'downloads' ||
-    views.get(activeTabId)?.kind === 'extensions'
+    views.get(activeTabId)?.kind === 'extensions' ||
+    views.get(activeTabId)?.kind === 'memory'
   ) {
     if (searchQuery) {
       const tabId = createGuestTab(`${AGENT_SEARCH_PREFIX}${encodeURIComponent(searchQuery)}`);
@@ -5049,6 +5317,10 @@ ipcMain.handle('agent:tools-action', async (event, action) => {
   hideToolsMenu();
   if (action === 'downloads') {
     openDownloadsTab();
+    return { ok: true };
+  }
+  if (action === 'memory-bridge') {
+    openMemoryBridgeTab();
     return { ok: true };
   }
   if (action === 'shield' || action === 'ghost' || action === 'settings' || action === 'models') {
@@ -5651,6 +5923,10 @@ function snapshotSettings() {
     blockMedia: privacySettings.blockMedia !== false,
     canvasPoisoner: Boolean(privacySettings.canvasPoisoner),
     siyuanBridge: Boolean(privacySettings.siyuanBridge),
+    memoryBridge: {
+      provider: snapshotMemoryBridge().provider,
+      providerName: snapshotMemoryBridge().providerName,
+    },
     humanJitter: Boolean(privacySettings.humanJitter),
     deadManSwitch: Boolean(privacySettings.deadManSwitch),
     web3Shield: Boolean(privacySettings.web3Shield),
@@ -5753,7 +6029,7 @@ const agentBridgeHandlers = {
     if (!url) {
       return { ok: false, error: 'invalid-url' };
     }
-    if (entry?.kind === 'downloads' || entry?.kind === 'extensions') {
+    if (entry?.kind === 'downloads' || entry?.kind === 'extensions' || entry?.kind === 'memory') {
       const nextId = createGuestTab(url, { owner: entry.owner });
       return nextId ? { ok: true, tab: serializeTab(nextId) } : failTab('cannot-create-tab');
     }
@@ -6034,6 +6310,7 @@ const agentBridgeHandlers = {
       }
     }
     emitAgentLocalHook('memory-block', { tabId, bytes: text.length });
+    postToMemoryBridge(text);
     return {
       ok: true,
       stored: privacySettings.cursorIdeBridge ? sessionCodeSnippets.length : sessionMemoryBlocks.length,
@@ -6170,6 +6447,47 @@ ipcMain.handle('agent:toggle-extension', async (event, payload) => {
     return { ok: false };
   }
   return applyAgentExtensionToggle(payload.id, payload.state);
+});
+
+ipcMain.handle('agent:memory-bridge-get', async (event) => {
+  if (!isMemoryBridgeSender(event) && !isExtensionsSender(event) && !isChromeSender(event)) {
+    return { ok: false };
+  }
+  return { ok: true, bridge: snapshotMemoryBridge() };
+});
+
+ipcMain.handle('agent:memory-bridge-set', async (event, payload) => {
+  if (!isMemoryBridgeSender(event) || !payload || typeof payload !== 'object') {
+    return { ok: false };
+  }
+  applyMemoryBridgePatch(payload);
+  const bridge = snapshotMemoryBridge();
+  sendToKind('memory', 'agent:memory-bridge', bridge);
+  broadcastSettings();
+  return { ok: true, bridge };
+});
+
+ipcMain.handle('agent:memory-bridge-pick-vault', async (event) => {
+  if (!isMemoryBridgeSender(event) || !mainWindow || mainWindow.isDestroyed()) {
+    return { ok: false };
+  }
+  applyMemoryBridgePatch({ provider: 'obsidian' });
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Obsidian kasası',
+    properties: ['openDirectory'],
+  });
+  if (result.canceled || !result.filePaths?.[0]) {
+    return { ok: true, canceled: true, bridge: snapshotMemoryBridge() };
+  }
+  const picked = rememberUserPath(result.filePaths[0], sessionLocalDirs);
+  if (!picked) {
+    return { ok: false, error: 'geçersiz yol', bridge: snapshotMemoryBridge() };
+  }
+  memoryBridge.vaultPath = picked;
+  const bridge = snapshotMemoryBridge();
+  sendToKind('memory', 'agent:memory-bridge', bridge);
+  broadcastSettings();
+  return { ok: true, bridge };
 });
 
 ipcMain.handle('agent:settings-panel', async (event, open) => {

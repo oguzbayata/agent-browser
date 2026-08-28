@@ -1,0 +1,73 @@
+.mem-kicker {
+  margin: 0 0 0 auto;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.mem-main {
+  padding: 20px 24px 40px;
+}
+
+.mem-status {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.mem-card {
+  cursor: pointer;
+}
+
+.mem-card.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.mem-form {
+  display: grid;
+  gap: 14px;
+  max-width: 640px;
+  margin-top: 24px;
+}
+
+.mem-form label,
+.mem-form > div {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mem-form input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0a0c0f;
+  color: var(--text);
+  font: 14px/1.2 "Segoe UI", system-ui, sans-serif;
+}
+
+.mem-vault-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#mem-vault-path {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.mem-save {
+  justify-self: start;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}

@@ -80,9 +80,9 @@ const TOOLS = Object.freeze([
     id: 'siyuan-bridge',
     setting: 'siyuanBridge',
     extId: 'siyuan-bridge',
-    name: 'SiYuan Bellek Köprüsü',
-    description: 'Ajanların web’den çektiği verileri doğrudan SiYuan yerel hafıza bloklarına aktarır.',
-    action: 'settings',
+    name: 'Hafıza Köprüsü',
+    description: 'Ayrıntılar’dan Mem0, Zep, LangGraph, SiYuan, LlamaIndex, Motorhead, MemGPT veya Obsidian seçin.',
+    action: 'memory-bridge',
     icon: 'siyuan',
   },
   {
@@ -416,6 +416,14 @@ function iconSvg(name) {
   return `<svg viewBox="0 0 20 20" aria-hidden="true">${ICONS[name] || ICONS.shield}</svg>`;
 }
 
+function memoryBridgeDescription() {
+  const name = settings?.memoryBridge?.providerName;
+  if (name) {
+    return `${name} bu oturuma bağlı. Ayrıntılar’dan köprü değiştirin.`;
+  }
+  return 'Ayrıntılar’dan Mem0, Zep, LangGraph, SiYuan, LlamaIndex, Motorhead, MemGPT veya Obsidian seçin.';
+}
+
 function modelDescription() {
   const models = Array.isArray(intel?.models) ? intel.models : [];
   const agents = Array.isArray(intel?.agents) ? intel.agents : [];
@@ -509,7 +517,8 @@ function renderGrid() {
     const title = document.createElement('h3');
     title.textContent = tool.id === 'models' ? (intel?.selectedId ? 'Yerel modeller' : tool.name) : tool.name;
     const desc = document.createElement('p');
-    desc.textContent = tool.id === 'models' ? modelDescription() : tool.description;
+    desc.textContent =
+      tool.id === 'models' ? modelDescription() : tool.id === 'siyuan-bridge' ? memoryBridgeDescription() : tool.description;
     const idLine = document.createElement('p');
     idLine.className = 'ext-id';
     idLine.textContent = `oturum/${tool.id}`;

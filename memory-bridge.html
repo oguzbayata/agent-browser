@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hafıza Köprüsü</title>
+    <link rel="stylesheet" href="extensions.css" />
+    <link rel="stylesheet" href="memory-bridge.css" />
+  </head>
+  <body>
+    <header class="ext-top">
+      <img class="ext-logo" src="assets/agent-browser-logo.svg" width="28" height="28" alt="" />
+      <h1>Hafıza Köprüsü</h1>
+      <p class="mem-kicker">SESSION ONLY · RAM</p>
+    </header>
+
+    <main class="mem-main">
+      <p id="mem-status" class="mem-status">köprü seçilmedi</p>
+      <div class="ext-grid" id="mem-grid"></div>
+
+      <form class="mem-form" id="mem-form" autocomplete="off">
+        <label id="mem-endpoint-row">
+          <span>Uç nokta (yalnızca localhost)</span>
+          <input id="mem-endpoint" type="url" spellcheck="false" placeholder="http://127.0.0.1:6806/api/..." />
+        </label>
+        <label id="mem-token-row">
+          <span>Oturum anahtarı / token</span>
+          <input id="mem-token" type="password" spellcheck="false" placeholder="yalnızca bu oturum · diske yazılmaz" />
+        </label>
+        <div id="mem-vault-row" hidden>
+          <span>Obsidian kasası</span>
+          <div class="mem-vault-row">
+            <p id="mem-vault-path">klasör seçilmedi</p>
+            <button type="button" class="ext-btn" id="mem-pick-vault">Klasör seç</button>
+          </div>
+        </div>
+        <button type="submit" class="ext-btn mem-save">Kaydet</button>
+      </form>
+    </main>
+    <script src="memory-bridge.js"></script>
+  </body>
+</html>
