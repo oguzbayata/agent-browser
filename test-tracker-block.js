@@ -2,25 +2,71 @@
 
 const { shouldBlockUrl } = require('./tracker-block');
 
-const BLOCK = [
-  'https://ads.trafficjunky.net/ad/banner.js',
-  'https://media.trafficjunky.net/media/vast.xml',
-  'https://static.trafficjunky.com/js/mp.min.js',
-  'https://syndication.exoclick.com/splash.php',
-  'https://ads.exoclick.com/ad.js',
-  'https://s.magsrv.com/tag.js',
-  'https://js.juicyads.com/show.js',
-  'https://poweredby.jads.co/js/jads.js',
-  'https://delivery.trafficfactory.biz/ads',
-  'https://ads.doublepimp.com/ad',
-  'https://ads2.contentabc.com/ads',
-  'https://www.adtng.com/vast',
-  'https://cdn.tsyndicate.com/sdk.js',
-  'https://alaska.xhamster.com/vast',
-  'https://www.pornhub.com/_xa/ads',
-  'https://www.xvideos.com/zoneload/foo',
-  'https://www.doubleclick.net/gampad/ads',
-];
+const BLOCK = {
+  'Google AdSense': 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js',
+  'Google AdMob': 'https://googleads.g.doubleclick.net/mads/gma',
+  'Google Ads': 'https://www.googleadservices.com/pagead/conversion.js',
+  'Meta Audience Network': 'https://an.facebook.com/v2/placement',
+  'Amazon Publisher Services': 'https://c.amazon-adsystem.com/aax2/apstag.js',
+  'Unity Ads': 'https://unityads.unity3d.com/webview/index.html',
+  'AppLovin': 'https://ms.applovin.com/1.0/bid',
+  'ironSource': 'https://init.supersonicads.com/sdk',
+  'Taboola': 'https://cdn.taboola.com/libtrc/unip/123/tfa.js',
+  'Outbrain': 'https://widgets.outbrain.com/outbrain.js',
+  'PropellerAds': 'https://cdn.propellerads.com/tag.js',
+  'Adsterra': 'https://www.adsterra.com/js/push.js',
+  'Media.net': 'https://contextual.media.net/dmedianet.js',
+  'InMobi': 'https://config.inmobi.com/config',
+  'Liftoff': 'https://cdn.liftoff.io/js/creative.js',
+  'Mintegral': 'https://cdn-adn.rayjump.com/cdn-adn/js.js',
+  'Chartboost': 'https://live.chartboost.com/api/preload',
+  'Microsoft Advertising': 'https://flex.msn.com/mstag/site/tag.js',
+  'Criteo': 'https://static.criteo.net/js/ld/publishertag.js',
+  'The Trade Desk': 'https://insight.adsrvr.org/track/conv.js',
+  'PubMatic': 'https://ads.pubmatic.com/AdServer/js/showad.js',
+  'Index Exchange': 'https://js-sec.indexww.com/ht/p/index.js',
+  'Magnite': 'https://fastlane.rubiconproject.com/a/api/fastlane.json',
+  'OpenX': 'https://us-u.openx.net/w/1.0/arj',
+  'TripleLift': 'https://ib.3lift.com/ttj',
+  'Sovrn': 'https://ap.lijit.com/header/auction',
+  'RevenueHits': 'https://www.revenuehits.com/tag.js',
+  'BuySellAds': 'https://s3.buysellads.com/ac/bsa.js',
+  'Ezoic': 'https://www.ezojs.com/ezoic/sa.min.js',
+  'Mediavine': 'https://scripts.mediavine.com/tags/site.js',
+  'Raptive': 'https://ads.adthrive.com/sites/site/ads.min.js',
+  'PopAds': 'https://cdn.popads.net/pop.js',
+  'PopCash': 'https://cdn.popcash.net/pop.js',
+  'ExoClick': 'https://ads.exoclick.com/ad.js',
+  'JuicyAds': 'https://js.juicyads.com/show.js',
+  'TrafficStars': 'https://cdn.tsyndicate.com/sdk.js',
+  'PlugRush': 'https://www.plugrush.com/script.js',
+  'Bidvertiser': 'https://bdv.bidvertiser.com/BidVertiser.dbm',
+  'MGID': 'https://jsc.mgid.com/site.js',
+  'RevContent': 'https://trends.revcontent.com/serve.js',
+  'Undertone': 'https://cdn.undertone.com/js/u.js',
+  'Teads': 'https://a.teads.tv/page/0/tag',
+  'Showheroes': 'https://sdk.showheroes.com/shim.js',
+  'SmartyAds': 'https://n.smartyads.com/tag.js',
+  'Epom': 'https://www.epom.com/ad.js',
+  'ClickAdu': 'https://s.clickadu.com/script.js',
+  'HilltopAds': 'https://hilltopads.net/script.js',
+  'RichAds': 'https://richads.com/tag.js',
+  'RollerAds': 'https://rollerads.com/tag.js',
+  'Coinzilla': 'https://coinzilla.com/tag.js',
+  'CoinTraffic': 'https://app.cointraffic.io/js/script.js',
+  'AdBlade': 'https://web.adblade.com/js/ads/async/show.js',
+  'Yahoo Native': 'https://gemini.yahoo.com/sapi/native',
+  'Skimlinks': 'https://s.skimresources.com/js/skimlinks.js',
+  'ShareASale': 'https://www.shareasale.com/sale.cfm',
+  'CJ Affiliate': 'https://www.emjcd.com/u',
+  'Rakuten Advertising': 'https://click.linksynergy.com/fs-bin/click',
+  'Awin': 'https://www.awin1.com/awclick.php',
+  'Impact': 'https://example.evyy.net/c/click',
+  'AdColony': 'https://ads30.adcolony.com/configure',
+  'Digital Turbine': 'https://canvas.digitalturbine.com/tag.js',
+  'Moloco': 'https://sdkapi.molocoads.com/v1/bid',
+  'adult-trafficjunky': 'https://ads.trafficjunky.net/ad/banner.js',
+};
 
 const ALLOW = [
   'https://www.pornhub.com/view_video.php?viewkey=abc',
@@ -30,13 +76,21 @@ const ALLOW = [
   'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   'https://duckduckgo.com/?q=test',
   'https://github.com/oguzbayata/agent-browser',
+  'https://www.amazon.com/dp/B000000000',
+  'https://www.facebook.com/zuck',
+  'https://www.bing.com/search?q=test',
+  'https://www.microsoft.com/',
+  'https://www.yahoo.com/',
+  'https://www.rakuten.com/',
+  'https://impact.com/',
+  'https://unity.com/',
 ];
 
 let failed = 0;
-for (const url of BLOCK) {
+for (const [network, url] of Object.entries(BLOCK)) {
   if (!shouldBlockUrl(url)) {
     failed += 1;
-    console.error(`expected block: ${url}`);
+    console.error(`expected block (${network}): ${url}`);
   }
 }
 for (const url of ALLOW) {
@@ -51,4 +105,4 @@ if (failed) {
   process.exit(1);
 }
 
-console.log(`tracker-block ok · ${BLOCK.length} blocked · ${ALLOW.length} allowed`);
+console.log(`tracker-block ok · ${Object.keys(BLOCK).length} blocked · ${ALLOW.length} allowed`);
