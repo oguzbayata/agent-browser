@@ -2363,10 +2363,10 @@ body.find-open {
 .ai-intel {
   display: flex;
   flex-direction: column;
-  flex: 0 1 42%;
-  min-height: 140px;
-  max-height: 46%;
-  overflow: auto;
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
   padding: 8px 10px 10px;
   border-bottom: 1px solid var(--line);
 }
@@ -2413,10 +2413,29 @@ body.find-open {
   font-size: 11px;
 }
 
+.ai-model-select {
+  width: 100%;
+  height: 38px;
+  margin: 0 0 10px;
+  padding: 0 10px;
+  border: 1px solid rgba(61, 255, 200, 0.35);
+  border-radius: 8px;
+  background: #141c22;
+  color: #e8eaed;
+  font: 12px/1.2 "Segoe UI", system-ui, sans-serif;
+  outline: none;
+}
+
+.ai-model-select:focus {
+  box-shadow: inset 0 0 0 1px rgba(61, 255, 200, 0.28);
+}
+
 .ai-intel-list {
   list-style: none;
   margin: 0 0 10px;
   padding: 0;
+  max-height: 120px;
+  overflow: auto;
 }
 
 .ai-intel-item {

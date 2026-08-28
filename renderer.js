@@ -628,12 +628,12 @@ function localRuntimeReady(intel) {
 }
 
 function renderLocalIntel(intel) {
-  const modelList = document.getElementById('ai-model-list');
+  const modelSelect = document.getElementById('ai-model-select');
   const agentList = document.getElementById('ai-agent-list');
   const status = document.getElementById('ai-intel-status');
   const selectedLabel = document.getElementById('ai-selected');
   const keyLabel = document.getElementById('ai-key-label');
-  if (!modelList || !agentList) {
+  if (!modelSelect || !agentList) {
     return;
   }
 
@@ -642,37 +642,20 @@ function renderLocalIntel(intel) {
   const selectedId = intel?.selectedId || null;
   const selected = models.find((item) => item.id === selectedId) || null;
 
-  modelList.replaceChildren();
-  const cloud = document.createElement('button');
-  cloud.type = 'button';
-  cloud.className = `ai-intel-item${selectedId ? '' : ' is-on'}`;
-  const cloudTitle = document.createElement('strong');
-  cloudTitle.textContent = 'OpenAI (oturum anahtarı)';
-  const cloudMeta = document.createElement('span');
-  cloudMeta.textContent = 'bulut · anahtar gerekir';
-  cloud.append(cloudTitle, cloudMeta);
-  cloud.addEventListener('click', () => {
-    window.electronAPI?.selectLocalModel?.(null);
-  });
-  modelList.appendChild(cloud);
+  modelSelect.replaceChildren();
+  const cloud = document.createElement('option');
+  cloud.value = '';
+  cloud.textContent = 'OpenAI (oturum anahtarı) · bulut';
+  modelSelect.appendChild(cloud);
 
   for (const model of models) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = `ai-intel-item${model.id === selectedId ? ' is-on' : ''}${model.live ? ' is-live' : ''}`;
+    const option = document.createElement('option');
+    option.value = model.id;
     const state = model.live ? 'canlı' : model.kind === 'file' ? 'dosya' : 'kayıtlı';
-    const meta = [model.source, state, model.sizeLabel].filter(Boolean).join(' · ');
-    btn.innerHTML = '';
-    const title = document.createElement('strong');
-    title.textContent = model.name;
-    const line = document.createElement('span');
-    line.textContent = meta;
-    btn.append(title, line);
-    btn.addEventListener('click', () => {
-      window.electronAPI?.selectLocalModel?.(model.id);
-    });
-    modelList.appendChild(btn);
+    option.textContent = [model.name, model.source, state, model.sizeLabel].filter(Boolean).join(' · ');
+    modelSelect.appendChild(option);
   }
+  modelSelect.value = selectedId || '';
 
   agentList.replaceChildren();
   if (!agents.length) {
@@ -786,6 +769,11 @@ function bindAiSidebar() {
   });
   pickDir?.addEventListener('click', () => {
     api?.pickLocalModel?.('dir');
+  });
+
+  document.getElementById('ai-model-select')?.addEventListener('change', (event) => {
+    const value = event.target.value;
+    api?.selectLocalModel?.(value || null);
   });
 
   api?.onLocalIntel?.(applyIntel);
