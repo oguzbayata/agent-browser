@@ -12,6 +12,7 @@ const { startAgentBridgeServer, stopAgentBridgeServer, getListenInfo } = require
 const { collectIntel, knownModelRoots, isLoopbackHttpUrl, resolveLocalChatTarget } = require('./local-intel');
 const { AD_HIDE_CSS, shouldBlockUrl } = require('./tracker-block');
 const { findFfmpeg, findYtDlp, hunterPathEnv, isWindowsStoreStub } = require('./hunter-tools');
+const agentExtensionCatalog = require('./extensions_data');
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('oguzbayata.agent-browser');
@@ -64,6 +65,8 @@ const USEFUL_LINKS_FILE_URL = pathToFileURL(USEFUL_LINKS_PATH).href;
 const EXTENSIONS_PATH = path.join(__dirname, 'extensions.html');
 const EXTENSIONS_FILE_URL = pathToFileURL(EXTENSIONS_PATH).href;
 const EXTENSIONS_PRELOAD_PATH = path.join(__dirname, 'extensions-preload.js');
+const SETTINGS_PATH = path.join(__dirname, 'settings.html');
+const SETTINGS_FILE_URL = pathToFileURL(SETTINGS_PATH).href;
 const MEMORY_BRIDGE_PATH = path.join(__dirname, 'memory-bridge.html');
 const MEMORY_BRIDGE_FILE_URL = pathToFileURL(MEMORY_BRIDGE_PATH).href;
 const MEMORY_BRIDGE_PRELOAD_PATH = path.join(__dirname, 'memory-bridge-preload.js');
@@ -76,10 +79,19 @@ const PAGE_TEXT_LIMIT = 80000;
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 const SUMMARIZE_SYSTEM_PROMPT =
   'You are a cyber-intelligence summarizer. Analyze the text below and extract the most important points:';
-const SEARCH_ENGINES = Object.freeze({
-  duckduckgo: 'https://duckduckgo.com/?q=',
-  startpage: 'https://www.startpage.com/sp/search?query=',
-});
+const SEARCH_ENGINE_LIST = Object.freeze([
+  { id: 'duckduckgo', name: 'DuckDuckGo', base: 'https://duckduckgo.com/?q=', icon: 'assets/search-engines/duckduckgo.svg' },
+  { id: 'startpage', name: 'Startpage', base: 'https://www.startpage.com/sp/search?query=', icon: 'assets/search-engines/startpage.svg' },
+  { id: 'google', name: 'Google', base: 'https://www.google.com/search?q=', icon: 'assets/search-engines/google.svg' },
+  { id: 'bing', name: 'Bing', base: 'https://www.bing.com/search?q=', icon: 'assets/search-engines/bing.svg' },
+  { id: 'baidu', name: 'Baidu', base: 'https://www.baidu.com/s?wd=', icon: 'assets/search-engines/baidu.svg' },
+  { id: 'yandex', name: 'Yandex', base: 'https://yandex.com/search/?text=', icon: 'assets/search-engines/yandex.svg' },
+  { id: 'yahoo', name: 'Yahoo', base: 'https://search.yahoo.com/search?p=', icon: 'assets/search-engines/yahoo.svg' },
+  { id: 'naver', name: 'Naver', base: 'https://search.naver.com/search.naver?query=', icon: 'assets/search-engines/naver.svg' },
+]);
+const SEARCH_ENGINES = Object.freeze(
+  Object.fromEntries(SEARCH_ENGINE_LIST.map((item) => [item.id, item.base])),
+);
 const BOOLEAN_SETTINGS = new Set([
   'blockTrackers',
   'stripThirdPartyCookies',
@@ -129,66 +141,55 @@ const GHOST_DENIED_PERMISSIONS = new Set(['media', 'geolocation', 'display-captu
 const MEDIA_DENIED_PERMISSIONS = new Set(['media', 'display-capture', 'speaker-selection']);
 const EXTENSION_TOGGLE_IDS = Object.freeze({
   'canvas-poisoner': 'canvasPoisoner',
+  'canvas-fingerprint-defender': 'canvasPoisoner',
   'siyuan-bridge': 'siyuanBridge',
   'human-jitter': 'humanJitter',
+  'human-jitter-cursor-simulator': 'humanJitter',
   'dead-man-switch': 'deadManSwitch',
   'web3-shield': 'web3Shield',
   'shadow-dom-pierce': 'shadowDomPierce',
+  'shadow-dom-piercer': 'shadowDomPierce',
   'markdown-dom': 'markdownDom',
+  'page-to-markdown-converter': 'markdownDom',
   'ui-code-extract': 'uiCodeExtract',
   'infinite-scroll': 'infiniteScroll',
+  'infinite-scroll-autopilot': 'infiniteScroll',
   'table-parser': 'tableParser',
+  'table-to-json-auto-parser': 'tableParser',
   'xhr-hunter': 'xhrHunter',
+  'xhr-fetch-payload-catcher': 'xhrHunter',
   'json-form-fill': 'jsonFormFill',
   'proxy-rotate': 'proxyRotate',
+  'dynamic-proxy-swapper': 'proxyRotate',
   'webgl-inspector': 'webglInspector',
   'media-source': 'mediaSourceReveal',
+  'media-source-blob-revealer': 'mediaSourceReveal',
   'n8n-webhook': 'n8nWebhook',
+  'multi-agent-swarm-broadcaster': 'n8nWebhook',
   'lm-studio-port': 'lmStudioPort',
   'memory-block': 'memoryBlockSync',
   'cursor-ide-bridge': 'cursorIdeBridge',
   'tab-orchestrator': 'tabOrchestrator',
+  'autonomous-agent-task-queue': 'tabOrchestrator',
   'headless-mode': 'headlessMode',
+  'headless-mode-resource-saver': 'headlessMode',
   'input-simulator': 'inputSimulator',
   'rate-limit-guard': 'rateLimitGuard',
+  'rate-limit-auto-pauser': 'rateLimitGuard',
   'sandbox-isolator': 'sandboxIsolator',
   'excommunicado-lock': 'excommunicadoLock',
+  'user-agent-rotator': 'spoofUserAgent',
+  'third-party-cookie-annihilator': 'stripThirdPartyCookies',
 });
 const EXT_EXPERT_DANGEROUS_IDS = new Set(['dead-man-switch', 'excommunicado-lock']);
-const EXT_EXPERT_CATALOG = Object.freeze([
-  { id: 'shield', setting: 'blockTrackers', name: 'Shield' },
-  { id: 'ghost', setting: 'ghostNetwork', name: 'Ghost Network' },
-  { id: 'guvenlik', setting: 'blockMedia', name: 'Security V1' },
-  { id: 'hunter', setting: 'mediaHunter', name: 'Universal Media Hunter' },
-  { id: 'cookies', setting: 'stripThirdPartyCookies', name: 'Cookie cutter' },
-  { id: 'dnt', setting: 'sendDnt', name: 'Do Not Track' },
-  { id: 'ua', setting: 'spoofUserAgent', name: 'Identity mask' },
-  { id: 'canvas-poisoner', setting: 'canvasPoisoner', name: 'Canvas & WebGL Poisoner' },
-  { id: 'siyuan-bridge', setting: 'siyuanBridge', name: 'Memory Bridge' },
-  { id: 'human-jitter', setting: 'humanJitter', name: 'Ghost Mouse' },
-  { id: 'dead-man-switch', setting: 'deadManSwitch', name: 'Protocol Switch' },
-  { id: 'web3-shield', setting: 'web3Shield', name: 'Web3 Crypto Shield' },
-  { id: 'shadow-dom-pierce', setting: 'shadowDomPierce', name: 'Shadow DOM Piercer' },
-  { id: 'markdown-dom', setting: 'markdownDom', name: 'Markdown DOM Translator' },
-  { id: 'ui-code-extract', setting: 'uiCodeExtract', name: 'UI & Code Extractor' },
-  { id: 'infinite-scroll', setting: 'infiniteScroll', name: 'Infinite Scroll Autonomy' },
-  { id: 'table-parser', setting: 'tableParser', name: 'Table & Grid Parser' },
-  { id: 'xhr-hunter', setting: 'xhrHunter', name: 'XHR & WebSocket Hunter' },
-  { id: 'json-form-fill', setting: 'jsonFormFill', name: 'Automatic JSON Form Filler' },
-  { id: 'proxy-rotate', setting: 'proxyRotate', name: 'Dynamic Proxy Rotator' },
-  { id: 'webgl-inspector', setting: 'webglInspector', name: '3D/WebGL Asset Inspector' },
-  { id: 'media-source', setting: 'mediaSourceReveal', name: 'Media Source Revealer' },
-  { id: 'n8n-webhook', setting: 'n8nWebhook', name: 'n8n Webhook Trigger' },
-  { id: 'lm-studio-port', setting: 'lmStudioPort', name: 'LM Studio Port' },
-  { id: 'memory-block', setting: 'memoryBlockSync', name: 'Memory Block Sync' },
-  { id: 'cursor-ide-bridge', setting: 'cursorIdeBridge', name: 'Cursor IDE Code Bridge' },
-  { id: 'tab-orchestrator', setting: 'tabOrchestrator', name: 'Multi-Tab Orchestrator' },
-  { id: 'headless-mode', setting: 'headlessMode', name: 'Headless (Invisible) Mode' },
-  { id: 'input-simulator', setting: 'inputSimulator', name: 'Mouse & Keyboard Simulator' },
-  { id: 'rate-limit-guard', setting: 'rateLimitGuard', name: 'Rate-Limit Guard' },
-  { id: 'sandbox-isolator', setting: 'sandboxIsolator', name: 'Sandbox Task Isolator' },
-  { id: 'excommunicado-lock', setting: 'excommunicadoLock', name: 'Excommunicado Lock' },
-]);
+const EXT_EXPERT_CATALOG = Object.freeze(
+  (Array.isArray(agentExtensionCatalog) ? agentExtensionCatalog : []).map((item) => ({
+    id: item.id,
+    setting: item.id,
+    name: item.name,
+  })),
+);
+const KNOWN_EXTENSION_IDS = new Set(EXT_EXPERT_CATALOG.map((item) => item.id));
 const COMMON_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
@@ -231,6 +232,11 @@ const extensionsWebPreferences = Object.freeze({
   preload: EXTENSIONS_PRELOAD_PATH,
 });
 
+const settingsWebPreferences = Object.freeze({
+  ...sharedSessionPrefs,
+  preload: path.join(__dirname, 'preload.js'),
+});
+
 const memoryBridgeWebPreferences = Object.freeze({
   ...sharedSessionPrefs,
   preload: MEMORY_BRIDGE_PRELOAD_PATH,
@@ -267,6 +273,8 @@ const xhrCaptureLog = [];
 const sessionMemoryBlocks = [];
 const sessionCodeSnippets = [];
 const agentFailCounts = new Map();
+const agentSearchEngines = new Map();
+const sessionExtensionState = new Map();
 const agentLockedTabs = new Set();
 const XHR_CAPTURE_LIMIT = 80;
 const N8N_WEBHOOK_URL = 'http://127.0.0.1:5678/webhook/agent-browser';
@@ -302,6 +310,16 @@ let toolsMenuView = null;
 let toolsMenuReady = Promise.resolve();
 let toolsHostWindow = null;
 let toolsHostDismiss = null;
+let shortcutsOpen = false;
+let shortcutsMenuView = null;
+let shortcutsMenuReady = Promise.resolve();
+let shortcutsHostWindow = null;
+let shortcutsHostDismiss = null;
+let profileOpen = false;
+let profileMenuView = null;
+let profileMenuReady = Promise.resolve();
+let profileHostWindow = null;
+let profileHostDismiss = null;
 const sessionLocalFiles = [];
 const sessionLocalDirs = [];
 let selectedLocalModel = null;
@@ -1038,7 +1056,7 @@ function currentGuestUrl() {
     return '';
   }
   const url = guest.getURL();
-  if (isStartPage(url) || isSearchFile(url) || isDownloadsFile(url) || isUsefulLinksFile(url) || isExtensionsFile(url) || isMemoryBridgeFile(url)) {
+  if (isStartPage(url) || isSearchFile(url) || isDownloadsFile(url) || isUsefulLinksFile(url) || isExtensionsFile(url) || isSettingsFile(url) || isMemoryBridgeFile(url)) {
     return '';
   }
   return url;
@@ -1156,8 +1174,37 @@ function purgeSessionChromeState() {
     toolsMenuView = null;
     toolsMenuReady = Promise.resolve();
   }
+  hideShortcutsMenu({ notify: false });
+  hideProfileMenu({ notify: false });
+  if (shortcutsMenuView) {
+    try {
+      if (!shortcutsMenuView.webContents.isDestroyed()) {
+        shortcutsMenuView.webContents.close();
+      }
+    } catch {
+      // Wipe still proceeds if the popup view is already gone.
+    }
+    shortcutsMenuView = null;
+    shortcutsMenuReady = Promise.resolve();
+  }
+  hideProfileMenu({ notify: false });
+  if (profileMenuView) {
+    try {
+      if (!profileMenuView.webContents.isDestroyed()) {
+        profileMenuView.webContents.close();
+      }
+    } catch {
+      // Wipe still proceeds if the popup view is already gone.
+    }
+    profileMenuView = null;
+    profileMenuReady = Promise.resolve();
+  }
   siteOpen = false;
   toolsOpen = false;
+  shortcutsOpen = false;
+  profileOpen = false;
+  agentSearchEngines.clear();
+  sessionExtensionState.clear();
   tabSecurityStats.clear();
   blockedRequestCount = 0;
   if (securityStatsFlush) {
@@ -2328,6 +2375,8 @@ function bringViewToFront(view) {
       raiseShieldMenu();
       raiseSiteMenu();
       raiseToolsMenu();
+      raiseShortcutsMenu();
+      raiseProfileMenu();
       return;
     } catch {
       // WebContentsView is not a BrowserView; fall through.
@@ -2339,6 +2388,8 @@ function bringViewToFront(view) {
   raiseShieldMenu();
   raiseSiteMenu();
   raiseToolsMenu();
+  raiseShortcutsMenu();
+  raiseProfileMenu();
 }
 
 function fileUrlToPath(rawUrl) {
@@ -2442,6 +2493,27 @@ function isExtensionsFile(rawUrl) {
   return Boolean(filePath) && filePath.toLowerCase() === path.normalize(EXTENSIONS_PATH).toLowerCase();
 }
 
+function isSettingsFile(rawUrl) {
+  if (!rawUrl) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.pathname.toLowerCase().endsWith('/settings.html') || parsed.href.split('?')[0] === SETTINGS_FILE_URL) {
+      const filePath = fileUrlToPath(parsed.href);
+      if (filePath && filePath.toLowerCase() === path.normalize(SETTINGS_PATH).toLowerCase()) {
+        return true;
+      }
+    }
+  } catch {
+    // Compare by filesystem path below.
+  }
+
+  const filePath = fileUrlToPath(rawUrl);
+  return Boolean(filePath) && filePath.toLowerCase() === path.normalize(SETTINGS_PATH).toLowerCase();
+}
+
 function isMemoryBridgeFile(rawUrl) {
   if (!rawUrl) {
     return false;
@@ -2486,6 +2558,39 @@ function parseAgentSearchTarget(raw) {
   }
 }
 
+function normalizeSearchEngineId(raw) {
+  const id = String(raw || '').trim().toLowerCase();
+  return Object.hasOwn(SEARCH_ENGINES, id) ? id : '';
+}
+
+function searchEngineIdForAgent(agentId) {
+  const owned = agentId ? normalizeSearchEngineId(agentSearchEngines.get(agentId)) : '';
+  return owned || normalizeSearchEngineId(privacySettings.searchEngine) || 'duckduckgo';
+}
+
+function searchUrlFor(query, engineId) {
+  const q = String(query || '').trim().slice(0, 500);
+  if (!q) {
+    return '';
+  }
+  const id = normalizeSearchEngineId(engineId) || searchEngineIdForAgent('');
+  const base = SEARCH_ENGINES[id] || SEARCH_ENGINES.duckduckgo;
+  return `${base}${encodeURIComponent(q)}`;
+}
+
+function snapshotSearchSettings(agentId) {
+  const sessionEngine = normalizeSearchEngineId(privacySettings.searchEngine) || 'duckduckgo';
+  const agentEngine = agentId ? normalizeSearchEngineId(agentSearchEngines.get(agentId)) : '';
+  const active = agentEngine || sessionEngine;
+  return {
+    searchEngine: active,
+    sessionSearchEngine: sessionEngine,
+    agentSearchEngine: agentEngine || null,
+    searchBase: SEARCH_ENGINES[active] || SEARCH_ENGINES.duckduckgo,
+    searchEngines: SEARCH_ENGINE_LIST.map((item) => ({ id: item.id, name: item.name, base: item.base, icon: item.icon })),
+  };
+}
+
 function displayGuestUrl(rawUrl) {
   if (isStartPage(rawUrl)) {
     return '';
@@ -2500,6 +2605,9 @@ function displayGuestUrl(rawUrl) {
     return '';
   }
   if (isExtensionsFile(rawUrl)) {
+    return '';
+  }
+  if (isSettingsFile(rawUrl)) {
     return '';
   }
   if (isMemoryBridgeFile(rawUrl)) {
@@ -2530,7 +2638,7 @@ function isStartPage(rawUrl) {
 }
 
 function isAllowedGuestUrl(rawUrl) {
-  return rawUrl === 'about:blank' || isNewTabFile(rawUrl) || isSearchFile(rawUrl) || isDownloadsFile(rawUrl) || isUsefulLinksFile(rawUrl) || isExtensionsFile(rawUrl) || isMemoryBridgeFile(rawUrl) || Boolean(sanitizeUrl(rawUrl));
+  return rawUrl === 'about:blank' || isNewTabFile(rawUrl) || isSearchFile(rawUrl) || isDownloadsFile(rawUrl) || isUsefulLinksFile(rawUrl) || isExtensionsFile(rawUrl) || isSettingsFile(rawUrl) || isMemoryBridgeFile(rawUrl) || Boolean(sanitizeUrl(rawUrl));
 }
 
 function loadStartPage(webContents) {
@@ -2567,6 +2675,33 @@ function loadExtensionsPage(webContents) {
     return Promise.resolve();
   }
   return webContents.loadFile(EXTENSIONS_PATH);
+}
+
+function loadSettingsPage(webContents) {
+  if (!webContents || webContents.isDestroyed()) {
+    return Promise.resolve();
+  }
+  return webContents.loadFile(SETTINGS_PATH);
+}
+
+function findSettingsTabId() {
+  for (const [tabId, entry] of views.entries()) {
+    const webContents = entry.view?.webContents;
+    if (entry.kind === 'settings' && webContents && !webContents.isDestroyed()) {
+      return tabId;
+    }
+  }
+  return null;
+}
+
+function openSettingsTab() {
+  const existing = findSettingsTabId();
+  if (existing) {
+    switchToTab(existing);
+    broadcastSettings();
+    return existing;
+  }
+  return createGuestTab(SETTINGS_FILE_URL, { settings: true });
 }
 
 function loadMemoryBridgePage(webContents) {
@@ -2828,6 +2963,9 @@ function tabTitleOf(webContents) {
   }
   if (isExtensionsFile(url)) {
     return 'Extensions';
+  }
+  if (isSettingsFile(url)) {
+    return 'Settings';
   }
   if (isMemoryBridgeFile(url)) {
     return 'Memory Bridge';
@@ -3272,6 +3410,7 @@ function isInternalGuestUrl(rawUrl) {
     isDownloadsFile(rawUrl) ||
     isUsefulLinksFile(rawUrl) ||
     isExtensionsFile(rawUrl) ||
+    isSettingsFile(rawUrl) ||
     isMemoryBridgeFile(rawUrl)
   );
 }
@@ -3330,7 +3469,7 @@ function injectSessionGuardsIntoGuests() {
     if (!webContents || webContents.isDestroyed()) {
       continue;
     }
-    if (entry.kind === 'downloads' || entry.kind === 'extensions' || entry.kind === 'memory') {
+    if (entry.kind === 'downloads' || entry.kind === 'extensions' || entry.kind === 'settings' || entry.kind === 'memory') {
       continue;
     }
     injectSessionGuards(webContents);
@@ -3675,13 +3814,19 @@ function attachTabListeners(tabId, webContents) {
       }
       return;
     }
+    if (entry?.kind === 'settings') {
+      if (!isSettingsFile(url)) {
+        event.preventDefault();
+      }
+      return;
+    }
     if (entry?.kind === 'memory') {
       if (!isMemoryBridgeFile(url)) {
         event.preventDefault();
       }
       return;
     }
-    if (isDownloadsFile(url) || isExtensionsFile(url) || isMemoryBridgeFile(url) || !isAllowedGuestUrl(url)) {
+    if (isDownloadsFile(url) || isExtensionsFile(url) || isSettingsFile(url) || isMemoryBridgeFile(url) || !isAllowedGuestUrl(url)) {
       event.preventDefault();
     }
   });
@@ -3709,6 +3854,8 @@ function attachTabListeners(tabId, webContents) {
           ? 'Useful Links'
           : isExtensionsFile(webContents.getURL())
             ? 'Extensions'
+            : isSettingsFile(webContents.getURL())
+              ? 'Settings'
             : isMemoryBridgeFile(webContents.getURL())
               ? 'Memory Bridge'
               : isStartPage(webContents.getURL())
@@ -3796,12 +3943,15 @@ function createGuestTab(initialUrl, options = {}) {
   const downloads = options.downloads === true || isDownloadsFile(initialUrl);
   const usefulLinks = isUsefulLinksFile(initialUrl);
   const extensions = options.extensions === true || isExtensionsFile(initialUrl);
+  const settingsPage = options.settings === true || isSettingsFile(initialUrl);
   const memory = options.memory === true || isMemoryBridgeFile(initialUrl);
   const view = new WebContentsView({
     webPreferences: downloads
       ? downloadsWebPreferences
       : extensions
         ? extensionsWebPreferences
+        : settingsPage
+          ? settingsWebPreferences
         : memory
           ? memoryBridgeWebPreferences
           : webPreferencesForGuest(owner),
@@ -3813,7 +3963,7 @@ function createGuestTab(initialUrl, options = {}) {
     owner,
     pinned: false,
     window: host,
-    kind: downloads ? 'downloads' : extensions ? 'extensions' : memory ? 'memory' : 'guest',
+    kind: downloads ? 'downloads' : extensions ? 'extensions' : settingsPage ? 'settings' : memory ? 'memory' : 'guest',
   });
   tabSecurityStats.set(tabId, emptySecurityStats());
   attachTabListeners(tabId, view.webContents);
@@ -3833,10 +3983,17 @@ function createGuestTab(initialUrl, options = {}) {
     loadUsefulLinksPage(view.webContents);
   } else if (extensions) {
     loadExtensionsPage(view.webContents);
+  } else if (settingsPage) {
+    loadSettingsPage(view.webContents);
   } else if (memory) {
     loadMemoryBridgePage(view.webContents);
   } else if (searchQuery) {
-    loadSearchPage(view.webContents, searchQuery);
+    const nextUrl = searchUrlFor(searchQuery);
+    if (nextUrl) {
+      view.webContents.loadURL(nextUrl);
+    } else {
+      loadStartPage(view.webContents);
+    }
   } else if (target !== 'about:blank') {
     const safeUrl = sanitizeUrl(target);
     if (safeUrl) {
@@ -3856,6 +4013,8 @@ function createGuestTab(initialUrl, options = {}) {
         ? 'Useful Links'
         : extensions
           ? 'Extensions'
+          : settingsPage
+            ? 'Settings'
           : memory
             ? 'Memory Bridge'
             : target === 'about:blank'
@@ -4016,6 +4175,8 @@ function triggerExcommunicado() {
   hideShieldMenu({ notify: false });
   hideSiteMenu({ notify: false });
   hideToolsMenu({ notify: false });
+  hideShortcutsMenu({ notify: false });
+  hideProfileMenu({ notify: false });
   setTimeout(forcePanicQuit, PANIC_QUIT_MS);
 
   try {
@@ -4137,6 +4298,30 @@ function isChromeSender(event) {
     event.sender === toolsMenuView.webContents
   ) {
     return true;
+  }
+  if (
+    shortcutsMenuView &&
+    !shortcutsMenuView.webContents.isDestroyed() &&
+    event.sender === shortcutsMenuView.webContents
+  ) {
+    return true;
+  }
+  if (
+    profileMenuView &&
+    !profileMenuView.webContents.isDestroyed() &&
+    event.sender === profileMenuView.webContents
+  ) {
+    return true;
+  }
+  for (const entry of views.values()) {
+    if (
+      entry.kind === 'settings' &&
+      entry.view?.webContents &&
+      !entry.view.webContents.isDestroyed() &&
+      entry.view.webContents === event.sender
+    ) {
+      return true;
+    }
   }
   return Boolean(chromeWindowFromEvent(event));
 }
@@ -4278,6 +4463,8 @@ function showOverflowMenu(anchor, host) {
   hideShieldMenu({ notify: false });
   hideSiteMenu({ notify: false });
   hideToolsMenu({ notify: false });
+  hideShortcutsMenu({ notify: false });
+  hideProfileMenu({ notify: false });
   hideOverflowMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
@@ -4416,6 +4603,8 @@ function showShieldMenu(anchor, host) {
   hideOverflowMenu({ notify: false });
   hideSiteMenu({ notify: false });
   hideToolsMenu({ notify: false });
+  hideShortcutsMenu({ notify: false });
+  hideProfileMenu({ notify: false });
   hideShieldMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
@@ -4554,6 +4743,8 @@ function showSiteMenu(anchor, host) {
   hideOverflowMenu({ notify: false });
   hideShieldMenu({ notify: false });
   hideToolsMenu({ notify: false });
+  hideShortcutsMenu({ notify: false });
+  hideProfileMenu({ notify: false });
   hideSiteMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
@@ -4696,6 +4887,8 @@ function showToolsMenu(anchor, host) {
   hideOverflowMenu({ notify: false });
   hideShieldMenu({ notify: false });
   hideSiteMenu({ notify: false });
+  hideShortcutsMenu({ notify: false });
+  hideProfileMenu({ notify: false });
   hideToolsMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
@@ -4763,6 +4956,291 @@ function showToolsMenu(anchor, host) {
     .catch((error) => {
       console.error('Failed to open tools menu:', error);
       hideToolsMenu();
+    });
+}
+
+function shortcutsViewAlive() {
+  return Boolean(shortcutsMenuView && !shortcutsMenuView.webContents.isDestroyed());
+}
+
+function raiseShortcutsMenu() {
+  if (!shortcutsOpen || !shortcutsViewAlive() || !shortcutsHostWindow || shortcutsHostWindow.isDestroyed()) {
+    return;
+  }
+  shortcutsHostWindow.contentView.addChildView(shortcutsMenuView);
+}
+
+function detachShortcutsHost() {
+  if (shortcutsHostWindow && !shortcutsHostWindow.isDestroyed() && shortcutsHostDismiss) {
+    shortcutsHostWindow.removeListener('move', shortcutsHostDismiss);
+    shortcutsHostWindow.removeListener('resize', shortcutsHostDismiss);
+  }
+  shortcutsHostWindow = null;
+  shortcutsHostDismiss = null;
+}
+
+function notifyChromeShortcutsClosed() {
+  for (const win of chromeWindows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('agent:shortcuts-closed');
+    }
+  }
+}
+
+function hideShortcutsMenu(options = {}) {
+  const notify = options.notify !== false;
+  shortcutsOpen = false;
+  const host = shortcutsHostWindow;
+  detachShortcutsHost();
+  if (shortcutsViewAlive() && host && !host.isDestroyed()) {
+    try {
+      host.contentView.removeChildView(shortcutsMenuView);
+    } catch {
+      // View may already have been detached.
+    }
+  }
+  if (notify) {
+    notifyChromeShortcutsClosed();
+  }
+}
+
+function ensureShortcutsMenuView() {
+  if (shortcutsViewAlive()) {
+    return shortcutsMenuReady;
+  }
+
+  shortcutsMenuView = new WebContentsView({
+    webPreferences: chromeWebPreferences,
+  });
+  shortcutsMenuView.setBackgroundColor('#292a2d');
+  shortcutsMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  watchHiddenScrollbars(shortcutsMenuView.webContents);
+  shortcutsMenuView.webContents.on('blur', () => {
+    setTimeout(() => {
+      if (
+        shortcutsOpen &&
+        shortcutsViewAlive() &&
+        !shortcutsMenuView.webContents.isFocused()
+      ) {
+        hideShortcutsMenu();
+        hideProfileMenu();
+      }
+    }, 0);
+  });
+  shortcutsMenuReady = shortcutsMenuView.webContents.loadFile(path.join(__dirname, 'shortcuts-menu.html'));
+  return shortcutsMenuReady;
+}
+
+function showShortcutsMenu(anchor, host) {
+  hideOverflowMenu({ notify: false });
+  hideShieldMenu({ notify: false });
+  hideSiteMenu({ notify: false });
+  hideToolsMenu({ notify: false });
+  hideShortcutsMenu({ notify: false });
+  hideProfileMenu({ notify: false });
+  if (!host || host.isDestroyed()) {
+    return;
+  }
+
+  const { width: contentWidth, height: contentHeight } = host.getContentBounds();
+  const width = MENU_DROPDOWN_WIDTH;
+  const btnBottom = Number(anchor && anchor.bottom);
+  const btnLeft = Number(anchor && anchor.left);
+  const bottom = Number.isFinite(btnBottom)
+    ? btnBottom
+    : TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT + BOOKMARKS_BAR_HEIGHT;
+  const left = Number.isFinite(btnLeft) ? btnLeft : 8;
+  let x = Math.round(left);
+  let y = Math.round(bottom + 4);
+  x = Math.max(8, Math.min(x, Math.max(8, contentWidth - width - 8)));
+  if (y < 8) {
+    y = 8;
+  }
+  const maxH = Math.max(160, contentHeight - y - 8);
+  const initialH = Math.min(360, maxH);
+
+  shortcutsHostWindow = host;
+  shortcutsOpen = true;
+  shortcutsHostDismiss = () => {
+    if (shortcutsHostWindow === host) {
+      hideShortcutsMenu();
+      hideProfileMenu();
+    }
+  };
+  host.on('move', shortcutsHostDismiss);
+  host.on('resize', shortcutsHostDismiss);
+
+  ensureShortcutsMenuView()
+    .then(async () => {
+      if (!shortcutsOpen || shortcutsHostWindow !== host || host.isDestroyed() || !shortcutsViewAlive()) {
+        return;
+      }
+      shortcutsMenuView.setBounds({ x, y, width, height: Math.min(420, maxH) });
+      let measured = initialH;
+      try {
+        measured = await shortcutsMenuView.webContents.executeJavaScript(`(() => {
+          const menu = document.getElementById('agent-shortcuts-menu');
+          if (!menu) {
+            return 0;
+          }
+          return Math.ceil(Math.max(menu.scrollHeight, menu.getBoundingClientRect().height));
+        })()`);
+      } catch {
+        // Keep the initial height if measurement fails.
+      }
+      if (!shortcutsOpen || shortcutsHostWindow !== host || !shortcutsViewAlive()) {
+        return;
+      }
+      const raw = Number(measured);
+      const height = Math.min(Math.max(raw >= 80 ? raw : initialH, 120), maxH);
+      shortcutsMenuView.setBounds({ x, y, width, height });
+      host.contentView.addChildView(shortcutsMenuView);
+      shortcutsMenuView.webContents.focus();
+    })
+    .catch((error) => {
+      console.error('Failed to open shortcuts menu:', error);
+      hideShortcutsMenu();
+      hideProfileMenu();
+    });
+}
+
+function profileViewAlive() {
+  return Boolean(profileMenuView && !profileMenuView.webContents.isDestroyed());
+}
+
+function raiseProfileMenu() {
+  if (!profileOpen || !profileViewAlive() || !profileHostWindow || profileHostWindow.isDestroyed()) {
+    return;
+  }
+  profileHostWindow.contentView.addChildView(profileMenuView);
+}
+
+function detachProfileHost() {
+  if (profileHostWindow && !profileHostWindow.isDestroyed() && profileHostDismiss) {
+    profileHostWindow.removeListener('move', profileHostDismiss);
+    profileHostWindow.removeListener('resize', profileHostDismiss);
+  }
+  profileHostWindow = null;
+  profileHostDismiss = null;
+}
+
+function notifyChromeProfileClosed() {
+  for (const win of chromeWindows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('agent:profile-closed');
+    }
+  }
+}
+
+function hideProfileMenu(options = {}) {
+  const notify = options.notify !== false;
+  profileOpen = false;
+  const host = profileHostWindow;
+  detachProfileHost();
+  if (profileViewAlive() && host && !host.isDestroyed()) {
+    try {
+      host.contentView.removeChildView(profileMenuView);
+    } catch {
+      // View may already have been detached.
+    }
+  }
+  if (notify) {
+    notifyChromeProfileClosed();
+  }
+}
+
+function ensureProfileMenuView() {
+  if (profileViewAlive()) {
+    return profileMenuReady;
+  }
+
+  profileMenuView = new WebContentsView({
+    webPreferences: chromeWebPreferences,
+  });
+  profileMenuView.setBackgroundColor('#292a2d');
+  profileMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  watchHiddenScrollbars(profileMenuView.webContents);
+  profileMenuView.webContents.on('blur', () => {
+    setTimeout(() => {
+      if (
+        profileOpen &&
+        profileViewAlive() &&
+        !profileMenuView.webContents.isFocused()
+      ) {
+        hideProfileMenu();
+      }
+    }, 0);
+  });
+  profileMenuReady = profileMenuView.webContents.loadFile(path.join(__dirname, 'profile-menu.html'));
+  return profileMenuReady;
+}
+
+function showProfileMenu(anchor, host) {
+  hideOverflowMenu({ notify: false });
+  hideShieldMenu({ notify: false });
+  hideSiteMenu({ notify: false });
+  hideToolsMenu({ notify: false });
+  hideShortcutsMenu({ notify: false });
+  hideProfileMenu({ notify: false });
+  if (!host || host.isDestroyed()) {
+    return;
+  }
+
+  const { width: contentWidth, height: contentHeight } = host.getContentBounds();
+  const width = MENU_DROPDOWN_WIDTH;
+  const btnBottom = Number(anchor && anchor.bottom);
+  const btnRight = Number(anchor && anchor.right);
+  const bottom = Number.isFinite(btnBottom) ? btnBottom : TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT;
+  const right = Number.isFinite(btnRight) ? btnRight : contentWidth - 8;
+  let x = Math.round(right - width);
+  let y = Math.round(bottom + 4);
+  x = Math.max(8, Math.min(x, Math.max(8, contentWidth - width - 8)));
+  if (y < 8) {
+    y = 8;
+  }
+  const maxH = Math.max(160, contentHeight - y - 8);
+  const initialH = Math.min(280, maxH);
+
+  profileHostWindow = host;
+  profileOpen = true;
+  profileHostDismiss = () => {
+    if (profileHostWindow === host) {
+      hideProfileMenu();
+    }
+  };
+  host.on('move', profileHostDismiss);
+  host.on('resize', profileHostDismiss);
+
+  ensureProfileMenuView()
+    .then(async () => {
+      if (!profileOpen || profileHostWindow !== host || host.isDestroyed() || !profileViewAlive()) {
+        return;
+      }
+      profileMenuView.setBounds({ x, y, width, height: Math.min(360, maxH) });
+      let measured = initialH;
+      try {
+        measured = await profileMenuView.webContents.executeJavaScript(`(() => {
+          const menu = document.getElementById('agent-profile-menu');
+          if (!menu) {
+            return 0;
+          }
+          return Math.ceil(Math.max(menu.scrollHeight, menu.getBoundingClientRect().height));
+        })()`);
+      } catch {
+        // Keep the initial height if measurement fails.
+      }
+      if (!profileOpen || profileHostWindow !== host || !profileViewAlive()) {
+        return;
+      }
+      const raw = Number(measured);
+      const height = Math.min(Math.max(raw >= 80 ? raw : initialH, 120), maxH);
+      profileMenuView.setBounds({ x, y, width, height });
+      host.contentView.addChildView(profileMenuView);
+      profileMenuView.webContents.focus();
+    })
+    .catch((error) => {
+      console.error('Failed to open profile menu:', error);
+      hideProfileMenu();
     });
 }
 
@@ -4984,15 +5462,18 @@ ipcMain.handle('agent:navigate', async (event, rawUrl) => {
   if (
     isDownloadsFile(guest.getURL()) ||
     isExtensionsFile(guest.getURL()) ||
+    isSettingsFile(guest.getURL()) ||
     isMemoryBridgeFile(guest.getURL()) ||
     views.get(activeTabId)?.kind === 'downloads' ||
     views.get(activeTabId)?.kind === 'extensions' ||
+    views.get(activeTabId)?.kind === 'settings' ||
     views.get(activeTabId)?.kind === 'memory'
   ) {
-    if (searchQuery) {
-      const tabId = createGuestTab(`${AGENT_SEARCH_PREFIX}${encodeURIComponent(searchQuery)}`);
-      return { ok: Boolean(tabId), url: searchQuery };
-    }
+  if (searchQuery) {
+    const nextUrl = searchUrlFor(searchQuery);
+    const tabId = createGuestTab(nextUrl);
+    return { ok: Boolean(tabId), url: nextUrl };
+  }
     const nextUrl = sanitizeUrl(rawUrl);
     if (!nextUrl) {
       return { ok: false };
@@ -5002,8 +5483,12 @@ ipcMain.handle('agent:navigate', async (event, rawUrl) => {
   }
 
   if (searchQuery) {
-    await loadSearchPage(guest, searchQuery);
-    return { ok: true, url: searchQuery };
+    const nextUrl = searchUrlFor(searchQuery);
+    if (!nextUrl) {
+      return { ok: false };
+    }
+    await guest.loadURL(nextUrl);
+    return { ok: true, url: nextUrl };
   }
 
   const url = sanitizeUrl(rawUrl);
@@ -5292,7 +5777,26 @@ ipcMain.handle('agent:extensions-open', async (event) => {
     return { ok: false };
   }
   hideToolsMenu({ notify: false });
+  hideShortcutsMenu({ notify: false });
+  hideProfileMenu({ notify: false });
   const tabId = openExtensionsTab();
+  return { ok: Boolean(tabId), tabId };
+});
+
+ipcMain.handle('agent:settings-open', async (event) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+  hideOverflowMenu({ notify: false });
+  hideShieldMenu({ notify: false });
+  hideSiteMenu({ notify: false });
+  hideToolsMenu({ notify: false });
+  hideShortcutsMenu({ notify: false });
+  hideProfileMenu({ notify: false });
+  utilityOpen = false;
+  settingsOpen = false;
+  const tabId = openSettingsTab();
+  fitBrowserView();
   return { ok: Boolean(tabId), tabId };
 });
 
@@ -5374,6 +5878,41 @@ ipcMain.handle('agent:tools-panel', async (event, payload) => {
   return { ok: true, open: toolsOpen };
 });
 
+ipcMain.handle('agent:shortcuts-panel', async (event, payload) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+
+  const open = typeof payload === 'object' && payload !== null ? Boolean(payload.open) : Boolean(payload);
+  const anchor = payload && typeof payload === 'object' ? payload.anchor : null;
+  const host = chromeWindowFromEvent(event) || mainWindow;
+  if (open) {
+    utilityOpen = false;
+    showShortcutsMenu(anchor, host);
+  } else {
+    hideShortcutsMenu();
+    hideProfileMenu();
+  }
+  return { ok: true, open: shortcutsOpen };
+});
+
+ipcMain.handle('agent:profile-panel', async (event, payload) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+
+  const open = typeof payload === 'object' && payload !== null ? Boolean(payload.open) : Boolean(payload);
+  const anchor = payload && typeof payload === 'object' ? payload.anchor : null;
+  const host = chromeWindowFromEvent(event) || mainWindow;
+  if (open) {
+    utilityOpen = false;
+    showProfileMenu(anchor, host);
+  } else {
+    hideProfileMenu();
+  }
+  return { ok: true, open: profileOpen };
+});
+
 ipcMain.handle('agent:tools-action', async (event, action) => {
   if ((!isChromeSender(event) && !isExtensionsSender(event)) || typeof action !== 'string') {
     return { ok: false };
@@ -5412,6 +5951,8 @@ ipcMain.handle('agent:utility-panel', async (event, open) => {
     hideShieldMenu({ notify: false });
     hideSiteMenu({ notify: false });
     hideToolsMenu({ notify: false });
+    hideShortcutsMenu({ notify: false });
+    hideProfileMenu({ notify: false });
   }
   fitBrowserView();
   return { ok: true, open: utilityOpen };
@@ -5479,6 +6020,10 @@ ipcMain.handle('agent:menu-action', async (event, action) => {
     case 'clear-data':
       await clearIsolatedBrowsingData();
       break;
+    case 'settings':
+      openSettingsTab();
+      hideOverflowMenu();
+      return { ok: true };
     case 'exit':
       triggerExcommunicado();
       return { ok: true };
@@ -5522,6 +6067,8 @@ ipcMain.handle('agent:ram-sheet', async (event, open) => {
     hideShieldMenu();
     hideSiteMenu();
     hideToolsMenu();
+    hideShortcutsMenu();
+    hideProfileMenu();
   }
   fitBrowserView();
   return { ok: true, open: ramSheetOpen };
@@ -5982,6 +6529,8 @@ function snapshotSettings() {
     spoofUserAgent: privacySettings.spoofUserAgent,
     searchEngine: privacySettings.searchEngine,
     searchBase: SEARCH_ENGINES[privacySettings.searchEngine] || SEARCH_ENGINES.duckduckgo,
+    searchEngines: SEARCH_ENGINE_LIST.map((item) => ({ id: item.id, name: item.name, base: item.base, icon: item.icon })),
+    extensionStates: Object.fromEntries(sessionExtensionState),
     panicShortcut: process.platform === 'darwin' ? 'Cmd+Shift+E' : 'Ctrl+Shift+E',
     agentBridge: privacySettings.agentBridge,
     agentBridgeUrl: listen ? `http://${listen.host}:${listen.port}/v1` : '',
@@ -6028,6 +6577,7 @@ function broadcastSettings() {
   const settings = snapshotSettings();
   sendToChrome('agent:settings', settings);
   sendToKind('extensions', 'agent:settings', settings);
+  sendToKind('settings', 'agent:settings', settings);
   return settings;
 }
 
@@ -6066,12 +6616,21 @@ const agentBridgeHandlers = {
   createTab: async (body, agentId) => {
     const owner = (typeof body?.owner === 'string' && body.owner.trim()) || agentId;
     const activate = body?.activate === true;
-    const requested = typeof body?.url === 'string' ? body.url : 'about:blank';
+    const query = typeof body?.query === 'string' ? body.query.trim() : '';
+    const engine = body?.searchEngine || searchEngineIdForAgent(agentId);
+    const requested = query
+      ? searchUrlFor(query, engine)
+      : typeof body?.url === 'string'
+        ? body.url
+        : 'about:blank';
+    if (query && !requested) {
+      return { ok: false, error: 'invalid-query' };
+    }
     const tabId = createGuestTab(requested, { activate, owner });
     if (!tabId) {
       return failTab('cannot-create-tab');
     }
-    return { ok: true, tab: serializeTab(tabId) };
+    return { ok: true, tab: serializeTab(tabId), searchEngine: normalizeSearchEngineId(engine) || searchEngineIdForAgent(agentId) };
   },
   getTab: async (tabId) => {
     const tab = serializeTab(tabId);
@@ -6090,19 +6649,64 @@ const agentBridgeHandlers = {
   navigate: async (tabId, body) => {
     const guest = getTabWebContents(tabId);
     const entry = views.get(tabId);
-    const url = sanitizeUrl(body?.url);
+    const query = typeof body?.query === 'string' ? body.query.trim() : '';
+    const engine = body?.searchEngine || searchEngineIdForAgent(entry?.owner);
+    const url = query ? searchUrlFor(query, engine) : sanitizeUrl(body?.url);
     if (!guest) {
       return failTab('tab-not-found');
     }
     if (!url) {
-      return { ok: false, error: 'invalid-url' };
+      return { ok: false, error: query ? 'invalid-query' : 'invalid-url' };
     }
-    if (entry?.kind === 'downloads' || entry?.kind === 'extensions' || entry?.kind === 'memory') {
+    if (entry?.kind === 'downloads' || entry?.kind === 'extensions' || entry?.kind === 'settings' || entry?.kind === 'memory') {
       const nextId = createGuestTab(url, { owner: entry.owner });
       return nextId ? { ok: true, tab: serializeTab(nextId) } : failTab('cannot-create-tab');
     }
     await guest.loadURL(url);
     return { ok: true, tab: serializeTab(tabId) };
+  },
+  getSettings: async (agentId) => ({
+    ok: true,
+    ...snapshotSearchSettings(agentId),
+  }),
+  setSettings: async (body, agentId) => {
+    const engine = normalizeSearchEngineId(body?.searchEngine);
+    if (!engine) {
+      return { ok: false, error: 'invalid-search-engine', ...snapshotSearchSettings(agentId) };
+    }
+    const scope = body?.scope === 'session' || !agentId ? 'session' : 'agent';
+    if (scope === 'agent') {
+      agentSearchEngines.set(agentId, engine);
+    } else {
+      privacySettings.searchEngine = engine;
+      broadcastSettings();
+    }
+    return { ok: true, scope, ...snapshotSearchSettings(agentId) };
+  },
+  search: async (body, agentId) => {
+    const query = typeof body?.query === 'string' ? body.query.trim() : '';
+    const engine = body?.searchEngine || searchEngineIdForAgent(agentId);
+    const url = searchUrlFor(query, engine);
+    if (!url) {
+      return { ok: false, error: 'invalid-query' };
+    }
+    const tabId = typeof body?.tabId === 'string' && views.has(body.tabId)
+      ? body.tabId
+      : createGuestTab(url, {
+          activate: body?.activate !== false,
+          owner: (typeof body?.owner === 'string' && body.owner.trim()) || agentId,
+        });
+    if (!tabId) {
+      return failTab('cannot-create-tab');
+    }
+    if (typeof body?.tabId === 'string' && views.has(body.tabId)) {
+      const guest = getTabWebContents(tabId);
+      if (!guest) {
+        return failTab('tab-not-found');
+      }
+      await guest.loadURL(url);
+    }
+    return { ok: true, tab: serializeTab(tabId), searchEngine: normalizeSearchEngineId(engine) || searchEngineIdForAgent(agentId) };
   },
   back: async (tabId) => runHistory(tabId, 'back'),
   forward: async (tabId) => runHistory(tabId, 'forward'),
@@ -6498,12 +7102,20 @@ ipcMain.handle('agent:settings-set', async (event, payload) => {
 });
 
 function applyAgentExtensionToggle(id, state) {
-  const key = EXTENSION_TOGGLE_IDS[id];
-  if (!key || !BOOLEAN_SETTINGS.has(key)) {
+  const token = String(id || '').trim();
+  if (!token || token.length > 80) {
     return { ok: false };
   }
-  privacySettings[key] = Boolean(state);
-  applyExtensionSideEffect(key);
+  const known = KNOWN_EXTENSION_IDS.has(token) || Object.hasOwn(EXTENSION_TOGGLE_IDS, token);
+  if (!known && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(token)) {
+    return { ok: false };
+  }
+  const key = EXTENSION_TOGGLE_IDS[token];
+  if (key && BOOLEAN_SETTINGS.has(key)) {
+    privacySettings[key] = Boolean(state);
+    applyExtensionSideEffect(key);
+  }
+  sessionExtensionState.set(token, Boolean(state));
   return { ok: true, settings: broadcastSettings() };
 }
 
@@ -6574,57 +7186,55 @@ function heuristicExpertToggles(message) {
     toggles.push({ id, on: Boolean(on) });
   };
 
-  if (/(reklam|izleyici|kalkan|tracker|adblock|block ads|ad blocker|shield)/.test(text)) {
-    add('shield', !wantsOff);
+  if (/(webrtc|ip s[iı]z|leak blocker)/.test(text)) {
+    add('webrtc-leak-blocker', !wantsOff);
   }
   if (/(hayalet a[gğ]|ghost network|socks|vekil|proxy|tor\b)/.test(text)) {
-    add('ghost', !wantsOff);
+    add('dynamic-proxy-swapper', !wantsOff);
+    add('doh-forcer', !wantsOff);
   }
-  if (/(kamera|mikrofon|webcam|camera|microphone|g[uü]venlik v1|security v1)/.test(text)) {
-    add('guvenlik', /(izin ver|allow|enable|a[cç]\b|etkin)/.test(text) && !wantsOff ? false : true);
-  }
-  if (/(video indir|download video|medya avc|media hunter|youtube|downloader)/.test(text)) {
-    add('hunter', !wantsOff);
-    add('media-source', !wantsOff);
+  if (/(video indir|download video|blob|media source|youtube|downloader)/.test(text)) {
+    add('media-source-blob-revealer', !wantsOff);
   }
   if (/([cç]erez|cookie)/.test(text)) {
-    add('cookies', !wantsOff);
+    add('third-party-cookie-annihilator', !wantsOff);
   }
-  if (/(do not track|\bdnt\b)/.test(text)) {
-    add('dnt', !wantsOff);
+  if (/(referrer|utm|fbclid|gclid|tracking param)/.test(text)) {
+    add('referrer-stripper-pro', !wantsOff);
+    add('link-tracking-parameter-remover', !wantsOff);
   }
-  if (/(kullan[iı]c[iı] ajan|kimlik mask|identity mask|user[- ]?agent|parmak izi|fingerprint)/.test(text)) {
-    add('ua', !wantsOff);
-    add('canvas-poisoner', !wantsOff);
+  if (/(kullan[iı]c[iı] ajan|kimlik mask|identity mask|user[- ]?agent|parmak izi|fingerprint|canvas)/.test(text)) {
+    add('user-agent-rotator', !wantsOff);
+    add('canvas-fingerprint-defender', !wantsOff);
+    add('audiocontext-spoofer', !wantsOff);
   }
-  if (/(haf[iı]za k[oö]pr|memory bridge|siyuan|mem0|obsidian|langgraph)/.test(text)) {
-    add('siyuan-bridge', !wantsOff);
-  }
-  if (/(web3|c[uü]zdan|wallet|metamask|kripto kalkan|crypto shield)/.test(text)) {
-    add('web3-shield', !wantsOff);
+  if (/(wayback|shodan|exif|osint|subdomain|onion|homograph)/.test(text)) {
+    add('wayback-machine-fast-fetcher', !wantsOff);
+    add('shodan-passive-ip-scanner', !wantsOff);
+    add('exif-metadata-viewer', !wantsOff);
   }
   if (/(kaz[iı]|scrape|markdown|shadow dom|tablo|table|xhr|websocket|sonsuz kayd[iı]r|infinite scroll)/.test(text)) {
-    add('markdown-dom', !wantsOff);
-    add('shadow-dom-pierce', !wantsOff);
-    add('table-parser', !wantsOff);
-    add('xhr-hunter', !wantsOff);
-    add('infinite-scroll', !wantsOff);
+    add('page-to-markdown-converter', !wantsOff);
+    add('shadow-dom-piercer', !wantsOff);
+    add('table-to-json-auto-parser', !wantsOff);
+    add('xhr-fetch-payload-catcher', !wantsOff);
+    add('infinite-scroll-autopilot', !wantsOff);
   }
-  if (/(form doldur|json form|fill form)/.test(text)) {
-    add('json-form-fill', !wantsOff);
+  if (/(form doldur|json form|fill form|honeypot)/.test(text)) {
+    add('hidden-form-field-revealer', !wantsOff);
   }
   if (/(headless|g[oö]r[uü]nmez mod|invisible mode)/.test(text)) {
-    add('headless-mode', !wantsOff);
+    add('headless-mode-resource-saver', !wantsOff);
   }
-  if (/(rate[- ]?limit|cloudflare bekle|pause agent|ajan[iı] duraklat)/.test(text)) {
-    add('rate-limit-guard', !wantsOff);
+  if (/(rate[- ]?limit|cloudflare bekle|pause agent|ajan[iı] duraklat|429)/.test(text)) {
+    add('rate-limit-auto-pauser', !wantsOff);
   }
   if (/(gizlilik|privacy|anonim|anonymous|izliyor|parmak izi azalt)/.test(text) && toggles.length === 0) {
-    add('shield', true);
-    add('cookies', true);
-    add('dnt', true);
-    add('ua', true);
-    add('canvas-poisoner', true);
+    add('webrtc-leak-blocker', true);
+    add('third-party-cookie-annihilator', true);
+    add('user-agent-rotator', true);
+    add('canvas-fingerprint-defender', true);
+    add('referrer-stripper-pro', true);
   }
   return toggles;
 }
@@ -6658,7 +7268,9 @@ function expertSystemPrompt() {
   const model = selectedLocalModel ? serializeLocalModel(selectedLocalModel) : null;
   const memory = snapshotMemoryBridge();
   const rows = EXT_EXPERT_CATALOG.map((item) => {
-    const on = Boolean(privacySettings[item.setting]);
+    const on = sessionExtensionState.has(item.id)
+      ? Boolean(sessionExtensionState.get(item.id))
+      : Boolean(privacySettings[EXTENSION_TOGGLE_IDS[item.id]]);
     return `${item.id}\t${item.name}\t${on ? 'on' : 'off'}`;
   }).join('\n');
   return [
@@ -6717,7 +7329,7 @@ ipcMain.handle('agent:ext-expert', async (event, payload) => {
   const applied = [];
   const notes = [];
   for (const toggle of toggles) {
-    const result = await applyBooleanSetting(toggle.setting, toggle.on);
+    const result = applyAgentExtensionToggle(toggle.id, toggle.on);
     if (result.ok) {
       applied.push(toggle);
     } else if (result.error) {
@@ -6815,6 +7427,8 @@ ipcMain.handle('agent:settings-panel', async (event, open) => {
     hideShieldMenu({ notify: false });
     hideSiteMenu({ notify: false });
     hideToolsMenu({ notify: false });
+    hideShortcutsMenu({ notify: false });
+    hideProfileMenu({ notify: false });
   }
   fitBrowserView();
   return { ok: true, open: settingsOpen };
@@ -6973,6 +7587,12 @@ function createAgentWindow() {
     }
     if (toolsHostWindow === win) {
       hideToolsMenu({ notify: false });
+    }
+    if (shortcutsHostWindow === win) {
+      hideShortcutsMenu({ notify: false });
+    }
+    if (profileHostWindow === win) {
+      hideProfileMenu({ notify: false });
     }
     chromeWindows.delete(win);
     for (const [tabId, entry] of [...views.entries()]) {
