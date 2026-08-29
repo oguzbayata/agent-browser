@@ -66,7 +66,7 @@ body {
 .ext-menu svg,
 .ext-nav-item svg,
 .ext-search svg,
-.ext-icon svg {
+.ext-icon:not(.is-color) svg {
   width: 20px;
   height: 20px;
   fill: none;
@@ -74,6 +74,12 @@ body {
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.ext-icon.is-color svg {
+  display: block;
+  width: 28px;
+  height: 28px;
 }
 
 .ext-logo {
@@ -414,6 +420,12 @@ body.is-nav-collapsed .ext-nav {
   color: var(--accent);
 }
 
+.ext-icon img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
 .ext-card.is-alert .ext-icon {
   color: #ff5a6a;
 }
@@ -508,6 +520,143 @@ kbd {
   color: var(--text);
   font: 12px/1 "Segoe UI", system-ui, sans-serif;
   text-align: center;
+}
+
+.ext-card-wide {
+  grid-column: 1 / -1;
+}
+
+.ext-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ext-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ext-field input,
+.ext-select {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0a0c0f;
+  color: var(--text);
+  font: 13px/1 "Segoe UI", system-ui, sans-serif;
+}
+
+.engine-picker {
+  position: relative;
+}
+
+.engine-picker-current {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0a0c0f;
+  color: var(--text);
+  font: 13px/1 "Segoe UI", system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.engine-picker-current::after {
+  content: "";
+  margin-left: auto;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--muted);
+}
+
+.engine-picker-current img,
+.engine-picker-list img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex: 0 0 18px;
+}
+
+.engine-picker-current:hover,
+.engine-picker-current[aria-expanded="true"] {
+  border-color: #2a333c;
+}
+
+.engine-picker-list {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #10141a;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+
+.engine-picker-list li {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+.engine-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: 13px/1 "Segoe UI", system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.engine-picker-option:hover,
+.engine-picker-option.is-active {
+  background: #1a2129;
+}
+
+.engine-picker-option.is-active::after {
+  content: "";
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.ext-zoom {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.ext-actions kbd {
+  margin-left: auto;
 }
 
 @media (max-width: 900px) {

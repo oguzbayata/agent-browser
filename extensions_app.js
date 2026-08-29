@@ -1,6 +1,7 @@
 'use strict';
 
 const CATEGORY_LABELS = Object.freeze({
+  core: 'Session tools',
   opsec: 'Advanced privacy and identity',
   osint: 'OSINT and open-source intelligence',
   scrape: 'Autonomous data scraping',
@@ -9,6 +10,7 @@ const CATEGORY_LABELS = Object.freeze({
 });
 
 const CATEGORY_ICONS = Object.freeze({
+  core: '<path d="M10 2.6 16.2 5.2v4.4c0 4.1-2.5 6.9-6.2 8.1C6.3 16.5 3.8 13.7 3.8 9.6V5.2Z" />',
   opsec: '<path d="M10 2.6 16.2 5.2v4.4c0 4.1-2.5 6.9-6.2 8.1C6.3 16.5 3.8 13.7 3.8 9.6V5.2Z" />',
   osint: '<circle cx="8.6" cy="8.6" r="4.4"/><path d="M11.8 11.8 16.2 16.2"/>',
   scrape: '<rect x="3.4" y="4.4" width="13.2" height="11.2" rx="1.2"/><path d="M3.4 8.2h13.2M8.2 4.4v11.2"/>',
@@ -30,6 +32,10 @@ function isActive(item) {
   const states = window.__extensionStates;
   if (states && typeof states === 'object' && Object.prototype.hasOwnProperty.call(states, item.id)) {
     return Boolean(states[item.id]);
+  }
+  const privacy = window.__privacySettings;
+  if (item.setting && privacy && typeof privacy === 'object' && typeof privacy[item.setting] === 'boolean') {
+    return privacy[item.setting];
   }
   return Boolean(item.active);
 }
@@ -86,12 +92,14 @@ function renderExtensions(data) {
     }
 
     const card = document.createElement('article');
-    card.className = 'ext-card';
+    card.className = item.alert ? 'ext-card is-alert' : 'ext-card';
     card.dataset.id = item.id;
 
     const icon = document.createElement('div');
-    icon.className = 'ext-icon';
-    icon.innerHTML = `<svg viewBox="0 0 20 20" aria-hidden="true">${CATEGORY_ICONS[item.category] || CATEGORY_ICONS.opsec}</svg>`;
+    icon.className = 'ext-icon is-color';
+    icon.innerHTML = typeof window.extensionIconSvg === 'function'
+      ? window.extensionIconSvg(item.id, catalog().findIndex((entry) => entry.id === item.id))
+      : `<svg viewBox="0 0 20 20" aria-hidden="true">${CATEGORY_ICONS[item.category] || CATEGORY_ICONS.opsec}</svg>`;
 
     const copy = document.createElement('div');
     copy.className = 'ext-copy';
@@ -111,6 +119,9 @@ function renderExtensions(data) {
     details.type = 'button';
     details.className = 'ext-btn';
     details.textContent = 'Details';
+    if (item.action) {
+      details.dataset.action = item.action;
+    }
 
     const remove = document.createElement('button');
     remove.type = 'button';
@@ -118,23 +129,28 @@ function renderExtensions(data) {
     remove.dataset.remove = item.id;
     remove.textContent = 'Remove';
 
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'ext-switch';
-    toggle.dataset.ext = item.id;
-    toggle.setAttribute('role', 'switch');
-    toggle.setAttribute('aria-checked', isActive(item) ? 'true' : 'false');
-    toggle.setAttribute('aria-label', `${item.name} on/off`);
-
-    actions.append(details, remove, toggle);
+    actions.append(details, remove);
+    if (!item.noToggle) {
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'ext-switch';
+      toggle.dataset.ext = item.id;
+      toggle.setAttribute('role', 'switch');
+      toggle.setAttribute('aria-checked', isActive(item) ? 'true' : 'false');
+      toggle.setAttribute('aria-label', `${item.name} on/off`);
+      actions.append(toggle);
+    }
     card.append(icon, copy, actions);
     grid.append(card);
   }
 }
 
 function applyExtensionStates(settings) {
-  if (settings && typeof settings.extensionStates === 'object' && settings.extensionStates) {
-    window.__extensionStates = settings.extensionStates;
+  if (settings && typeof settings === 'object') {
+    window.__privacySettings = settings;
+    if (settings.extensionStates && typeof settings.extensionStates === 'object') {
+      window.__extensionStates = settings.extensionStates;
+    }
     localActive.clear();
   }
   renderExtensions();
@@ -149,6 +165,12 @@ function bindExtensionGrid() {
   });
 
   grid?.addEventListener('click', (event) => {
+    const actionBtn = event.target.closest('[data-action]');
+    if (actionBtn) {
+      api?.toolsAction?.(actionBtn.dataset.action);
+      return;
+    }
+
     const removeBtn = event.target.closest('[data-remove]');
     if (removeBtn) {
       removed.add(removeBtn.dataset.remove);
