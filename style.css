@@ -1083,6 +1083,11 @@ body.is-purged .disk-warning {
   display: none;
 }
 
+.dropdown-menu.toolbar-pop-left {
+  right: auto;
+  left: 0;
+}
+
 .dropdown-menu hr {
   height: 1px;
   margin: 6px 0;
