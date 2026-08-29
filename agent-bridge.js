@@ -8,7 +8,8 @@ const CATALOG = Object.freeze({
   name: 'Agent Browser Control Plane',
   multiAgent: true,
   bind: '127.0.0.1',
-  hint: 'Have each agent open its own tab (POST /v1/tabs). Tag the job with X-Agent-Id. Send activate: true to bring a tab forward.',
+  hint: 'Have each agent open its own tab (POST /v1/tabs). Tag the job with X-Agent-Id. Send activate: true to bring a tab forward. Search engines: GET /v1/settings, POST /v1/settings, POST /v1/search, or POST /v1/tabs with query + searchEngine.',
+  searchEngines: ['duckduckgo', 'startpage', 'google', 'bing', 'baidu', 'yandex', 'yahoo', 'naver'],
   endpoints: [
     'GET /v1',
     'GET /v1/health',
@@ -26,6 +27,9 @@ const CATALOG = Object.freeze({
     'POST /v1/tabs/:id/evaluate',
     'POST /v1/tabs/:id/click',
     'POST /v1/tabs/:id/type',
+    'GET /v1/settings',
+    'POST /v1/settings',
+    'POST /v1/search',
   ],
 });
 
@@ -61,7 +65,7 @@ function applyCors(req, res) {
     res.setHeader('Vary', 'Origin');
   }
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Agent-Token, X-Agent-Id');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
 }
 
 function tokensEqual(left, right) {
@@ -134,6 +138,17 @@ async function route(method, parts, body, agentId, handlers) {
   }
   if (method === 'POST' && parts[0] === 'v1' && parts[1] === 'tabs' && parts.length === 2) {
     return { status: 201, payload: await handlers.createTab(body, agentId) };
+  }
+  if (parts[0] === 'v1' && parts[1] === 'settings' && parts.length === 2) {
+    if (method === 'GET') {
+      return { status: 200, payload: await handlers.getSettings(agentId) };
+    }
+    if (method === 'POST' || method === 'PATCH') {
+      return { status: 200, payload: await handlers.setSettings(body, agentId) };
+    }
+  }
+  if (method === 'POST' && parts[0] === 'v1' && parts[1] === 'search' && parts.length === 2) {
+    return { status: 200, payload: await handlers.search(body, agentId) };
   }
 
   if (parts[0] === 'v1' && parts[1] === 'tabs' && parts.length >= 3) {

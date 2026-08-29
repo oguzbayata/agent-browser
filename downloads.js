@@ -7,7 +7,7 @@ const STATE_LABELS = {
   paused: 'Paused',
   completed: 'Completed',
   cancelled: 'Cancelled',
-  interrupted: 'Kesildi',
+  interrupted: 'Interrupted',
 };
 
 function formatBytes(value) {
@@ -25,7 +25,18 @@ function formatBytes(value) {
 }
 
 function stateLabel(state) {
-  return STATE_LABELS[state] || String(state || 'bilinmiyor');
+  return STATE_LABELS[state] || String(state || 'Unknown');
+}
+
+function canPreviewOpen(item) {
+  return Boolean(item?.canOpen) && (item.kind === 'image' || item.kind === 'video' || item.kind === 'pdf');
+}
+
+function openSavedFile(downloadId) {
+  if (typeof downloadId !== 'string' || !downloadId) {
+    return;
+  }
+  api?.openDownload?.(downloadId);
 }
 
 function renderDownloads(payload) {
@@ -48,8 +59,18 @@ function renderDownloads(payload) {
 
     const copy = document.createElement('div');
     copy.className = 'row-copy';
-    const name = document.createElement('h2');
-    name.textContent = item.filename || 'indirilen';
+
+    const name = canPreviewOpen(item)
+      ? document.createElement('button')
+      : document.createElement('h2');
+    if (canPreviewOpen(item)) {
+      name.type = 'button';
+      name.className = 'row-name-open';
+      name.setAttribute('aria-label', `Open ${item.filename || 'file'}`);
+      name.addEventListener('click', () => openSavedFile(item.id));
+    }
+    name.textContent = item.filename || 'Download';
+
     const meta = document.createElement('p');
     const percent = Math.round((Number(item.progress) || 0) * 100);
     const size =
@@ -63,14 +84,42 @@ function renderDownloads(payload) {
     if (item.error && item.state !== 'progressing') {
       meta.textContent += ` · ${item.error}`;
     }
+
     copy.append(name, meta);
 
-    const cancel = document.createElement('button');
-    cancel.type = 'button';
-    cancel.textContent = 'Cancel';
-    cancel.setAttribute('aria-label', 'Cancel download');
-    cancel.disabled = item.state !== 'progressing';
-    cancel.addEventListener('click', () => api?.cancelDownload?.(item.id));
+    if (item.path) {
+      const filePath = item.canOpen
+        ? document.createElement('button')
+        : document.createElement('p');
+      filePath.className = item.canOpen ? 'row-path' : 'row-path is-static';
+      filePath.textContent = item.path;
+      filePath.title = item.path;
+      if (item.canOpen) {
+        filePath.type = 'button';
+        filePath.setAttribute('aria-label', `Open ${item.path}`);
+        filePath.addEventListener('click', () => openSavedFile(item.id));
+      }
+      copy.append(filePath);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'row-actions';
+
+    if (item.state === 'progressing') {
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.textContent = 'Cancel';
+      cancel.setAttribute('aria-label', 'Cancel download');
+      cancel.addEventListener('click', () => api?.cancelDownload?.(item.id));
+      actions.append(cancel);
+    } else if (item.canOpen) {
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.textContent = 'Open';
+      open.setAttribute('aria-label', `Open ${item.filename || 'file'}`);
+      open.addEventListener('click', () => openSavedFile(item.id));
+      actions.append(open);
+    }
 
     const bar = document.createElement('div');
     bar.className = 'bar';
@@ -79,7 +128,7 @@ function renderDownloads(payload) {
     fill.style.width = `${percent}%`;
     bar.append(fill);
 
-    row.append(copy, cancel, bar);
+    row.append(copy, actions, bar);
     list.appendChild(row);
   }
 }

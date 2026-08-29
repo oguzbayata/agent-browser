@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Baidu">
+  <rect width="32" height="32" rx="8" fill="#2932E1"/>
+  <circle cx="11.2" cy="11" r="3.1" fill="#fff"/>
+  <circle cx="20.8" cy="11" r="3.1" fill="#fff"/>
+  <ellipse cx="16" cy="20.4" rx="7.2" ry="5.2" fill="#fff"/>
+  <circle cx="13.2" cy="19.4" r="1.1" fill="#2932E1"/>
+  <circle cx="18.8" cy="19.4" r="1.1" fill="#2932E1"/>
+</svg>

@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings</title>
+    <link rel="stylesheet" href="extensions.css" />
+    <link rel="stylesheet" href="hide-scrollbars.css" />
+  </head>
+  <body>
+    <header class="ext-top">
+      <button type="button" class="ext-menu" id="nav-toggle" aria-label="Menu" aria-controls="ext-nav" aria-expanded="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+      </button>
+      <img class="ext-logo" src="assets/agent-browser-logo.svg" width="28" height="28" alt="" />
+      <h1>Settings</h1>
+      <label class="ext-search">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.4" cy="8.4" r="5.2" /><path d="M12.2 12.2 16.4 16.4" /></svg>
+        <input id="set-query" type="search" placeholder="Search settings" autocomplete="off" spellcheck="false" />
+      </label>
+      <p class="ext-dev">session · ram</p>
+    </header>
+
+    <div class="ext-shell">
+      <nav class="ext-nav" id="ext-nav" aria-label="Settings pages">
+        <button type="button" class="ext-nav-item is-active" data-view="privacy">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.6 16.2 5.2v4.4c0 4.1-2.5 6.9-6.2 8.1C6.3 16.5 3.8 13.7 3.8 9.6V5.2Z" /></svg>
+          <span>Privacy</span>
+        </button>
+        <button type="button" class="ext-nav-item" data-view="agents">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="8" r="2.2"/><circle cx="13" cy="8" r="2.2"/><path d="M3.6 15.2c.6-2.4 2.2-3.6 3.4-3.6s2.8 1.2 3.4 3.6M9.6 15.2c.6-2.4 2.2-3.6 3.4-3.6s2.8 1.2 3.4 3.6"/></svg>
+          <span>Agents</span>
+        </button>
+        <button type="button" class="ext-nav-item" data-view="search">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.6" cy="8.6" r="4.4"/><path d="M11.8 11.8 16.2 16.2"/></svg>
+          <span>Search</span>
+        </button>
+        <button type="button" class="ext-nav-item" data-view="session">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.4" y="5.2" width="13.2" height="9.6" rx="1.6"/><path d="M4 6.4 10 11l6-4.6"/></svg>
+          <span>Session</span>
+        </button>
+        <button type="button" class="ext-nav-item" data-view="browser">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.2" y="3.2" width="13.6" height="13.6" rx="2"/><path d="M10 6.6v6.8M6.6 10h6.8"/></svg>
+          <span>Browser</span>
+        </button>
+        <button type="button" class="ext-nav-item" data-view="you">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7.2" r="3"/><path d="M4.4 16.2c.8-3.2 2.8-4.8 5.6-4.8s4.8 1.6 5.6 4.8"/></svg>
+          <span>You</span>
+        </button>
+        <button type="button" class="ext-nav-item" data-view="shortcuts">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.4" y="5.2" width="15.2" height="10.4" rx="1.6"/><path d="M5 8.2h2.2M8.4 8.2h2.2M11.8 8.2H14M5 11.4h10"/></svg>
+          <span>Shortcuts</span>
+        </button>
+
+        <div class="ext-nav-store">
+          <img src="assets/agent-browser-logo.svg" width="28" height="28" alt="" />
+          <p>These controls stay in RAM. Close the window or run Excommunicado and they are gone.</p>
+        </div>
+      </nav>
+
+      <main class="ext-main">
+        <section id="view-privacy" class="ext-view" data-section="privacy">
+          <h2>Privacy</h2>
+          <div class="ext-grid">
+            <article class="ext-card" data-search="tracker blocker ads shield">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.6 16.2 5.2v4.4c0 4.1-2.5 6.9-6.2 8.1C6.3 16.5 3.8 13.7 3.8 9.6V5.2Z" /></svg></div>
+              <div class="ext-copy">
+                <h3>Tracker blocker</h3>
+                <p>Cut known trackers, ads, and adult-site ad networks.</p>
+              </div>
+              <div class="ext-actions">
+                <button type="button" class="ext-switch" data-setting="blockTrackers" role="switch" aria-checked="true" aria-label="Tracker blocker"></button>
+              </div>
+            </article>
+            <article class="ext-card" data-search="third-party cookies">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.2" cy="10" r="3"/><path d="M11.2 10h5.6M14.6 10v3"/></svg></div>
+              <div class="ext-copy">
+                <h3>Third-party cookies</h3>
+                <p>Drop cross-site cookies.</p>
+              </div>
+              <div class="ext-actions">
+                <button type="button" class="ext-switch" data-setting="stripThirdPartyCookies" role="switch" aria-checked="true" aria-label="Third-party cookies"></button>
+              </div>
+            </article>
+            <article class="ext-card" data-search="do not track dnt">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6.2"/><path d="M7.2 10.2 9.1 12l3.8-4.2"/></svg></div>
+              <div class="ext-copy">
+                <h3>Do Not Track</h3>
+                <p>Add DNT: 1 to requests.</p>
+              </div>
+              <div class="ext-actions">
+                <button type="button" class="ext-switch" data-setting="sendDnt" role="switch" aria-checked="true" aria-label="Do Not Track"></button>
+              </div>
+            </article>
+            <article class="ext-card" data-search="user agent identity chrome">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7.2" r="3"/><path d="M4.4 16.2c.8-3.2 2.8-4.8 5.6-4.8s4.8 1.6 5.6 4.8"/></svg></div>
+              <div class="ext-copy">
+                <h3>Common browser identity</h3>
+                <p>Present the User-Agent as ordinary Chrome.</p>
+              </div>
+              <div class="ext-actions">
+                <button type="button" class="ext-switch" data-setting="spoofUserAgent" role="switch" aria-checked="true" aria-label="Common browser identity"></button>
+              </div>
+            </article>
+            <article class="ext-card" data-search="ghost network socks tor proxy">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.2c-2.8 0-5 2-5 4.8v6.2l1.6-1.1 1.6 1.1 1.8-1.1 1.8 1.1 1.6-1.1 1.6 1.1V8c0-2.8-2.2-4.8-5-4.8z"/></svg></div>
+              <div class="ext-copy">
+                <h3>Ghost Network</h3>
+                <p>Send all traffic through SOCKS5 127.0.0.1:1080.</p>
+              </div>
+              <div class="ext-actions">
+                <button type="button" class="ext-switch" data-setting="ghostNetwork" role="switch" aria-checked="false" aria-label="Ghost Network"></button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-agents" class="ext-view" data-section="agents" hidden>
+          <h2>Agents</h2>
+          <div class="ext-grid">
+            <article class="ext-card ext-card-wide" data-search="multi-agent bridge token loopback">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="8" r="2.2"/><circle cx="13" cy="8" r="2.2"/><path d="M3.6 15.2c.6-2.4 2.2-3.6 3.4-3.6s2.8 1.2 3.4 3.6M9.6 15.2c.6-2.4 2.2-3.6 3.4-3.6s2.8 1.2 3.4 3.6"/></svg></div>
+              <div class="ext-copy">
+                <h3>Multi-agent bridge</h3>
+                <p>Let local agents drive the browser freely. Loopback only (127.0.0.1). The token stays in RAM.</p>
+                <p class="ext-note">Example: Authorization: Bearer &lt;token&gt; and POST /v1/tabs {"url":"https://duckduckgo.com","owner":"agent-1"}</p>
+                <p class="ext-note">Search: GET /v1/settings, POST /v1/settings {"searchEngine":"google"} or {"searchEngine":"bing","scope":"session"}, POST /v1/search {"query":"weather","searchEngine":"yahoo"}, POST /v1/tabs {"query":"maps","searchEngine":"naver"}</p>
+                <label class="ext-field">
+                  Endpoint
+                  <input id="agent-bridge-url" type="text" readonly spellcheck="false" />
+                </label>
+                <label class="ext-field">
+                  Session token
+                  <input id="agent-bridge-token" type="text" readonly spellcheck="false" />
+                </label>
+              </div>
+              <div class="ext-actions">
+                <button type="button" class="ext-switch" data-setting="agentBridge" role="switch" aria-checked="false" aria-label="Multi-agent bridge"></button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-search" class="ext-view" data-section="search" hidden>
+          <h2>Search</h2>
+          <div class="ext-grid">
+            <article class="ext-card ext-card-wide" data-search="search engine duckduckgo startpage google bing baidu yandex yahoo naver">
+              <div class="ext-icon">
+                <img id="engine-card-icon" src="assets/search-engines/duckduckgo.svg" width="28" height="28" alt="" />
+              </div>
+              <div class="ext-copy">
+                <h3>Search engine</h3>
+                <p>Address-bar searches use the engine selected here. Agents can read and change this via the bridge.</p>
+                <div class="ext-field">
+                  <span id="engine-picker-label">Engine</span>
+                  <div class="engine-picker" id="engine-picker">
+                    <button
+                      type="button"
+                      class="engine-picker-current"
+                      id="engine-picker-btn"
+                      aria-haspopup="listbox"
+                      aria-expanded="false"
+                      aria-labelledby="engine-picker-label"
+                    >
+                      <img id="engine-picker-icon" src="assets/search-engines/duckduckgo.svg" width="18" height="18" alt="" />
+                      <span id="engine-picker-name">DuckDuckGo</span>
+                    </button>
+                    <ul class="engine-picker-list" id="engine-picker-list" role="listbox" hidden></ul>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-session" class="ext-view" data-section="session" hidden>
+          <h2>Session</h2>
+          <div class="ext-grid">
+            <article class="ext-card" data-search="in-memory session ram disk">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.4" y="5.2" width="13.2" height="9.6" rx="1.6"/><path d="M4 6.4 10 11l6-4.6"/></svg></div>
+              <div class="ext-copy">
+                <h3>In-memory session</h3>
+                <p>Cookies and keys are not written to disk. This cannot be turned off.</p>
+              </div>
+              <div class="ext-actions">
+                <button type="button" class="ext-switch" role="switch" aria-checked="true" aria-disabled="true" disabled></button>
+              </div>
+            </article>
+            <article class="ext-card" data-search="excommunicado panic wipe">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6.2"/><path d="M10 6.2v4"/></svg></div>
+              <div class="ext-copy">
+                <h3>Excommunicado</h3>
+                <p>Purge the session immediately. Shortcut: <kbd id="setting-shortcut">Ctrl+Shift+E</kbd></p>
+              </div>
+              <div class="ext-actions">
+                <button type="button" class="ext-btn is-danger" data-action="exit">Run protocol</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-browser" class="ext-view" data-section="browser" hidden>
+          <h2>Browser</h2>
+          <div class="ext-grid">
+            <article class="ext-card" data-search="new tab">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.2" y="3.2" width="13.6" height="13.6" rx="2"/><path d="M10 6.6v6.8M6.6 10h6.8"/></svg></div>
+              <div class="ext-copy"><h3>New tab</h3><p>Open a blank RAM tab.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="new-tab">Open</button><kbd>Ctrl+T</kbd></div>
+            </article>
+            <article class="ext-card" data-search="new window">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5.4" y="5.4" width="11" height="11" rx="1.6"/><path d="M3.6 14.2V4.8A1.6 1.6 0 0 1 5.2 3.2h9.4"/></svg></div>
+              <div class="ext-copy"><h3>New window</h3><p>Open another Agent window.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="new-window">Open</button><kbd>Ctrl+N</kbd></div>
+            </article>
+            <article class="ext-card" data-search="incognito">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 12.4c.7-2.8 2.6-4.6 6-4.6s5.3 1.8 6 4.6"/><circle cx="7.2" cy="13.4" r="1.7"/><circle cx="12.8" cy="13.4" r="1.7"/></svg></div>
+              <div class="ext-copy"><h3>New Incognito window</h3><p>Another RAM-only window.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="new-incognito">Open</button><kbd>Ctrl+Shift+N</kbd></div>
+            </article>
+            <article class="ext-card" data-search="downloads">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.4v9.2M6.6 9.4 10 12.8l3.4-3.4M4 16.4h12"/></svg></div>
+              <div class="ext-copy"><h3>Downloads</h3><p>Session downloads only.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="downloads">Open</button><kbd>Ctrl+J</kbd></div>
+            </article>
+            <article class="ext-card" data-search="print">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6.2 5.2V3.4h7.6v1.8M5 8.4h10v6.4H5z"/></svg></div>
+              <div class="ext-copy"><h3>Print</h3><p>Print the current page.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="print">Print</button><kbd>Ctrl+P</kbd></div>
+            </article>
+            <article class="ext-card" data-search="find">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.4" cy="8.4" r="4.4"/><path d="m11.8 11.8 4 4"/></svg></div>
+              <div class="ext-copy"><h3>Find in page</h3><p>Search the current tab. Matches are not logged.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="find">Find</button><kbd>Ctrl+F</kbd></div>
+            </article>
+            <article class="ext-card" data-search="zoom fullscreen">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.6" cy="8.6" r="5"/><path d="m12.4 12.4 4 4"/></svg></div>
+              <div class="ext-copy"><h3>Zoom</h3><p>Scale the current page.</p></div>
+              <div class="ext-actions">
+                <div class="ext-zoom">
+                  <button type="button" class="ext-btn" id="zoom-out" aria-label="Zoom out">−</button>
+                  <span id="zoom-label">100%</span>
+                  <button type="button" class="ext-btn" id="zoom-in" aria-label="Zoom in">+</button>
+                  <button type="button" class="ext-btn" data-action="fullscreen">Full screen</button>
+                </div>
+              </div>
+            </article>
+            <article class="ext-card" data-search="delete browsing data clear">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.4 6.2h11.2M8 6.2V4.6h4v1.6M6.2 6.2l.8 9.2h6l.8-9.2"/></svg></div>
+              <div class="ext-copy"><h3>Delete browsing data</h3><p>Wipe isolated RAM cache and storage. Disk is not touched.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn is-danger" data-action="clear-data">Wipe RAM</button><kbd>Ctrl+Shift+Del</kbd></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-you" class="ext-view" data-section="you" hidden>
+          <h2>You</h2>
+          <div class="ext-grid">
+            <article class="ext-card" data-search="session account profile">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7.2" r="3"/><path d="M4.4 16.2c.8-3.2 2.8-4.8 5.6-4.8s4.8 1.6 5.6 4.8"/></svg></div>
+              <div class="ext-copy"><h3>Session (Agent)</h3><p>Signed in for this RAM session only. Nothing syncs.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="profile">Open</button></div>
+            </article>
+            <article class="ext-card" data-search="passwords autofill">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7.2" cy="10" r="3"/><path d="M10.2 10h6.2v2.4"/></svg></div>
+              <div class="ext-copy"><h3>Passwords and autofill</h3><p>No saved passwords. Autofill stays in RAM.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="passwords">Open</button></div>
+            </article>
+            <article class="ext-card" data-search="history">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10.2" r="6.2"/><path d="M10 6.8v3.7l2.6 1.5"/></svg></div>
+              <div class="ext-copy"><h3>History</h3><p>Visits from this session only.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="history">Open</button></div>
+            </article>
+            <article class="ext-card" data-search="bookmarks lists">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.6 12 8.2l5 .4-3.8 3.2 1.2 4.8L10 14.2 5.6 16.6l1.2-4.8L3 8.6l5-.4z"/></svg></div>
+              <div class="ext-copy"><h3>Bookmarks and lists</h3><p>Open the session bookmark list.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="bookmarks">Open</button></div>
+            </article>
+            <article class="ext-card" data-search="tab groups">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.2" y="3.2" width="6" height="6" rx="1"/><rect x="10.8" y="3.2" width="6" height="6" rx="1"/><rect x="3.2" y="10.8" width="6" height="6" rx="1"/><rect x="10.8" y="10.8" width="6" height="6" rx="1"/></svg></div>
+              <div class="ext-copy"><h3>Tab groups</h3><p>Groups are not persisted in this RAM session.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="tab-groups">Open</button></div>
+            </article>
+            <article class="ext-card" data-search="extensions">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.4 3.4h2.2v2.4h2.6a2 2 0 0 1 2 2v2.4h2.4v2.2h-2.4V15a2 2 0 0 1-2 2H9.6v2.2H7.4V17H5a2 2 0 0 1-2-2v-2.6H.8V10.2H3V7.8a2 2 0 0 1 2-2h2.4z"/></svg></div>
+              <div class="ext-copy"><h3>Extensions</h3><p>Permanent extensions are blocked. Session tools live on the Extensions page.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="extensions-page">Open</button></div>
+            </article>
+            <article class="ext-card" data-search="translate">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.4 5.2h7.2M8 5.2v1.6A6 6 0 0 1 4.6 12M8 6.8A6 6 0 0 0 11.4 12"/></svg></div>
+              <div class="ext-copy"><h3>Translate</h3><p>No translation memory is stored.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="translate">Open</button></div>
+            </article>
+            <article class="ext-card" data-search="cast share">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.4" y="4.2" width="13.2" height="9.2" rx="1.4"/><path d="M3.6 16.6a4.4 4.4 0 0 1 4.4-4.4"/></svg></div>
+              <div class="ext-copy"><h3>Cast, save, and share</h3><p>Casting is disabled. Nothing is sent to a remote display.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="cast">Open</button></div>
+            </article>
+            <article class="ext-card" data-search="more tools">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.2" y="6.2" width="13.6" height="9.2" rx="1.4"/><path d="M7 6.2V4.8h6v1.4"/></svg></div>
+              <div class="ext-copy"><h3>More tools</h3><p>Task manager and install hooks stay out of this RAM session.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="more-tools">Open</button></div>
+            </article>
+            <article class="ext-card" data-search="help">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M7.8 7.8a2.2 2.2 0 1 1 2.6 2.2v1.2M10 14.4h.02"/></svg></div>
+              <div class="ext-copy"><h3>Help</h3><p>Keyboard map and session notes.</p></div>
+              <div class="ext-actions"><button type="button" class="ext-btn" data-action="help">Open</button></div>
+            </article>
+            <article class="ext-card" data-search="gemini lens summarize">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8 11.4 8l5.2.2-4.2 3.2 1.4 5.2L10 13.6 6.2 16.6l1.4-5.2-4.2-3.2L8.6 8z"/></svg></div>
+              <div class="ext-copy"><h3>Local models</h3><p>Open the session model panel, or summarize this tab.</p></div>
+              <div class="ext-actions">
+                <button type="button" class="ext-btn" data-action="gemini">Models</button>
+                <button type="button" class="ext-btn" data-action="lens">Summarize</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-shortcuts" class="ext-view" data-section="shortcuts" hidden>
+          <h2>Keyboard shortcuts</h2>
+          <ul class="ext-keys">
+            <li><span>New tab</span><kbd>Ctrl</kbd><kbd>T</kbd></li>
+            <li><span>New window</span><kbd>Ctrl</kbd><kbd>N</kbd></li>
+            <li><span>Incognito window</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></li>
+            <li><span>Downloads</span><kbd>Ctrl</kbd><kbd>J</kbd></li>
+            <li><span>Find in page</span><kbd>Ctrl</kbd><kbd>F</kbd></li>
+            <li><span>Print</span><kbd>Ctrl</kbd><kbd>P</kbd></li>
+            <li><span>Clear session data</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Del</kbd></li>
+            <li><span>Excommunicado</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd></li>
+            <li><span>Back / Forward</span><kbd>Alt</kbd><kbd>←</kbd><kbd>→</kbd></li>
+          </ul>
+        </section>
+      </main>
+    </div>
+    <script src="settings.js"></script>
+  </body>
+</html>

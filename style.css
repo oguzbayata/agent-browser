@@ -611,8 +611,28 @@ body.ghost-network #adres-cubugu-konteynir:focus-within {
   flex: 0 0 22px;
   width: 22px;
   height: 22px;
+  margin-right: 6px;
+  pointer-events: none;
+}
+
+.omni-engine {
+  display: grid;
+  place-items: center;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
   margin-right: 8px;
   pointer-events: none;
+}
+
+.omni-engine img {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  border-radius: 3px;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .omni-scheme .omni-logo,
@@ -1081,11 +1101,6 @@ body.is-purged .disk-warning {
 
 .dropdown-menu.hidden {
   display: none;
-}
-
-.dropdown-menu.toolbar-pop-left {
-  right: auto;
-  left: 0;
 }
 
 .dropdown-menu hr {

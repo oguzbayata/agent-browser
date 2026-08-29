@@ -119,6 +119,7 @@ contextBridge.exposeInMainWorld(
     setDownloadsOpen: (open) => ipcRenderer.invoke('agent:downloads-panel', Boolean(open)),
     openDownloadsTab: () => ipcRenderer.invoke('agent:downloads-open'),
     openExtensionsTab: () => ipcRenderer.invoke('agent:extensions-open'),
+    openSettingsTab: () => ipcRenderer.invoke('agent:settings-open'),
     setMenuOpen: (open, anchor) =>
       ipcRenderer.invoke('agent:menu-panel', {
         open: Boolean(open),
@@ -173,6 +174,32 @@ contextBridge.exposeInMainWorld(
         } : null,
       }),
     onToolsClosed: (callback) => subscribePayload('agent:tools-closed', callback),
+    setShortcutsOpen: (open, anchor) =>
+      ipcRenderer.invoke('agent:shortcuts-panel', {
+        open: Boolean(open),
+        anchor: anchor && typeof anchor === 'object' ? {
+          left: Number(anchor.left),
+          top: Number(anchor.top),
+          right: Number(anchor.right),
+          bottom: Number(anchor.bottom),
+          width: Number(anchor.width),
+          height: Number(anchor.height),
+        } : null,
+      }),
+    onShortcutsClosed: (callback) => subscribePayload('agent:shortcuts-closed', callback),
+    setProfileOpen: (open, anchor) =>
+      ipcRenderer.invoke('agent:profile-panel', {
+        open: Boolean(open),
+        anchor: anchor && typeof anchor === 'object' ? {
+          left: Number(anchor.left),
+          top: Number(anchor.top),
+          right: Number(anchor.right),
+          bottom: Number(anchor.bottom),
+          width: Number(anchor.width),
+          height: Number(anchor.height),
+        } : null,
+      }),
+    onProfileClosed: (callback) => subscribePayload('agent:profile-closed', callback),
     toolsAction: (action) => {
       if (typeof action !== 'string') {
         return Promise.resolve({ ok: false });

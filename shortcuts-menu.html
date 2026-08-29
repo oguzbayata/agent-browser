@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en" class="overflow-surface">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'none'; connect-src 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shortcuts</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="hide-scrollbars.css" />
+  </head>
+  <body class="overflow-surface">
+    <div id="agent-shortcuts-menu" class="dropdown-menu" role="menu" aria-label="Shortcuts">
+      <div class="menu-heading">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.2" y="3.2" width="5.2" height="5.2" rx="1"/><rect x="11.6" y="3.2" width="5.2" height="5.2" rx="1"/><rect x="3.2" y="11.6" width="5.2" height="5.2" rx="1"/><rect x="11.6" y="11.6" width="5.2" height="5.2" rx="1"/></svg>
+        <span class="menu-profile-copy">
+          <strong>Shortcuts</strong>
+        </span>
+        <em class="menu-signed">session · ram</em>
+      </div>
+      <hr />
+      <button type="button" class="menu-item" data-url="https://duckduckgo.com" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6.2"/><path d="M3.8 10h12.4M10 3.8c1.8 1.8 2.6 3.8 2.6 6.2S11.8 14.4 10 16.2C8.2 14.4 7.4 12.4 7.4 10S8.2 5.6 10 3.8Z"/></svg>
+        <span>DuckDuckGo</span>
+      </button>
+      <button type="button" class="menu-item" data-url="https://www.startpage.com" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.6" cy="8.6" r="4.4"/><path d="M11.8 11.8 16.2 16.2"/></svg>
+        <span>Startpage</span>
+      </button>
+      <button type="button" class="menu-item" data-url="https://www.wikipedia.org" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.2 5.2h11.6M6.4 5.2 10 14.8 13.6 5.2M8.2 5.2 5.6 14.8M11.8 5.2 14.4 14.8"/></svg>
+        <span>Wikipedia</span>
+      </button>
+      <button type="button" class="menu-item" data-url="https://proton.me" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.4" y="5.2" width="13.2" height="9.6" rx="1.6"/><path d="M4 6.4 10 11l6-4.6"/></svg>
+        <span>Proton</span>
+      </button>
+      <hr />
+      <button type="button" class="menu-item" data-action="new-tab" role="menuitem">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.2" y="3.2" width="13.6" height="13.6" rx="2"/><path d="M10 6.6v6.8M6.6 10h6.8"/></svg>
+        <span>New tab</span>
+        <kbd>Ctrl+T</kbd>
+      </button>
+      <p class="menu-caption">Session shortcuts. They are not written to disk.</p>
+    </div>
+    <script src="shortcuts-menu.js"></script>
+  </body>
+</html>

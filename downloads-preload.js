@@ -23,6 +23,12 @@ contextBridge.exposeInMainWorld(
       }
       return ipcRenderer.invoke('agent:download-cancel', downloadId);
     },
+    openDownload: (downloadId) => {
+      if (typeof downloadId !== 'string') {
+        return Promise.resolve({ ok: false });
+      }
+      return ipcRenderer.invoke('agent:download-open', downloadId);
+    },
     onDownloads: (callback) => subscribePayload('agent:downloads', callback),
     onDiskWarning: (callback) => subscribePayload('agent:disk-warning', callback),
     onToast: (callback) => subscribePayload('agent:toast', callback),

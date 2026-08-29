@@ -1,7 +1,18 @@
 'use strict';
 
 let searchEngineBase = 'https://duckduckgo.com/?q=';
+let searchEngineId = 'duckduckgo';
 const AGENT_SEARCH_PREFIX = 'agent-search:';
+const SEARCH_ENGINE_ICONS = Object.freeze({
+  duckduckgo: 'assets/search-engines/duckduckgo.svg',
+  startpage: 'assets/search-engines/startpage.svg',
+  google: 'assets/search-engines/google.svg',
+  bing: 'assets/search-engines/bing.svg',
+  baidu: 'assets/search-engines/baidu.svg',
+  yandex: 'assets/search-engines/yandex.svg',
+  yahoo: 'assets/search-engines/yahoo.svg',
+  naver: 'assets/search-engines/naver.svg',
+});
 const sessionVisits = [];
 let currentPageUrl = '';
 let sessionBookmarkItems = [];
@@ -69,7 +80,7 @@ function resolveDestination(raw) {
   }
 
   if (!isUrlLike(value)) {
-    return `${AGENT_SEARCH_PREFIX}${encodeURIComponent(value)}`;
+    return `${searchEngineBase}${encodeURIComponent(value)}`;
   }
 
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) {
@@ -193,6 +204,19 @@ function setOmniScheme(raw) {
   const scheme = schemeFromUrl(raw);
   mark.dataset.scheme = scheme;
   mark.title = scheme === 'https' ? 'HTTPS' : scheme === 'http' ? 'HTTP' : 'Agent Browser';
+}
+
+function setOmniEngine(id, name, icon) {
+  const badge = document.getElementById('omni-engine');
+  const mark = document.getElementById('omni-engine-icon');
+  if (!badge || !mark) {
+    return;
+  }
+  const key = Object.hasOwn(SEARCH_ENGINE_ICONS, id) ? id : 'duckduckgo';
+  searchEngineId = key;
+  mark.src = icon || SEARCH_ENGINE_ICONS[key];
+  const label = name || key;
+  badge.title = `Search with ${label}`;
 }
 
 function bindChrome() {
@@ -353,10 +377,7 @@ function refreshSecurityStats() {
   });
 }
 
-const UTILITY_POPS = [
-  { pop: 'profile-pop', toggle: 'profile-toggle' },
-  { pop: 'apps-pop', toggle: 'apps-toggle' },
-];
+const UTILITY_POPS = [];
 
 function hideUtilityPops() {
   for (const item of UTILITY_POPS) {
@@ -382,6 +403,8 @@ function showUtilityPop(popId) {
   window.electronAPI?.setShieldOpen?.(false);
   window.electronAPI?.setSiteOpen?.(false);
   window.electronAPI?.setToolsOpen?.(false);
+  window.electronAPI?.setShortcutsOpen?.(false);
+  window.electronAPI?.setProfileOpen?.(false);
   if (alreadyOpen) {
     return;
   }
@@ -591,6 +614,8 @@ function setBookmarksBarVisible(visible) {
   }
   if (wasVisible && !visible) {
     hideUtilityPops();
+    window.electronAPI?.setShortcutsOpen?.(false);
+    window.electronAPI?.setProfileOpen?.(false);
     const panel = document.getElementById('bookmarks-panel');
     if (panel && !panel.hidden) {
       setBookmarksPanelOpen(false);
@@ -600,17 +625,21 @@ function setBookmarksBarVisible(visible) {
 
 function setSettingsPanelOpen(open) {
   const panel = document.getElementById('settings-panel');
-  if (!panel) {
-    return;
+  if (panel) {
+    panel.hidden = true;
   }
-  panel.hidden = !open;
   if (open) {
     window.electronAPI?.setMenuOpen?.(false);
     window.electronAPI?.setShieldOpen?.(false);
     window.electronAPI?.setSiteOpen?.(false);
     window.electronAPI?.setToolsOpen?.(false);
+    window.electronAPI?.setShortcutsOpen?.(false);
+    window.electronAPI?.setProfileOpen?.(false);
+    window.electronAPI?.setSettingsOpen?.(false);
+    window.electronAPI?.openSettingsTab?.();
+    return;
   }
-  window.electronAPI?.setSettingsOpen?.(open);
+  window.electronAPI?.setSettingsOpen?.(false);
 }
 
 function sessionApiKey() {
@@ -1203,6 +1232,8 @@ bindAppMenu();
 bindShield();
 bindSite();
 bindTools();
+bindShortcuts();
+bindProfile();
 bindToolbarControls();
 
 function bindShield() {
@@ -1237,6 +1268,8 @@ function bindShield() {
       api?.setMenuOpen?.(false);
       api?.setSiteOpen?.(false);
       api?.setToolsOpen?.(false);
+      api?.setShortcutsOpen?.(false);
+      api?.setProfileOpen?.(false);
       ignoreToggleUntil = Date.now() + 280;
     }
     api?.setShieldOpen?.(open, open ? shieldAnchor() : null)?.then((result) => {
@@ -1304,6 +1337,8 @@ function bindSite() {
       api?.setMenuOpen?.(false);
       api?.setShieldOpen?.(false);
       api?.setToolsOpen?.(false);
+      api?.setShortcutsOpen?.(false);
+      api?.setProfileOpen?.(false);
       ignoreToggleUntil = Date.now() + 280;
     }
     api?.setSiteOpen?.(open, open ? siteAnchor() : null);
@@ -1325,6 +1360,130 @@ function bindSite() {
 
   api?.onSiteClosed?.(() => {
     siteVisible = false;
+    ignoreToggleUntil = Date.now() + 280;
+    toggle.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function bindShortcuts() {
+  const api = window.electronAPI;
+  const toggle = document.getElementById('apps-toggle');
+  if (!toggle) {
+    return;
+  }
+
+  let shortcutsVisible = false;
+  let ignoreToggleUntil = 0;
+
+  function shortcutsAnchor() {
+    const box = toggle.getBoundingClientRect();
+    return {
+      left: box.left,
+      top: box.top,
+      right: box.right,
+      bottom: box.bottom,
+      width: box.width,
+      height: box.height,
+    };
+  }
+
+  function setShortcutsVisible(open) {
+    shortcutsVisible = open;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      hideUtilityPops();
+      document.getElementById('settings-toggle')?.setAttribute('aria-expanded', 'false');
+      document.getElementById('shield-toggle')?.setAttribute('aria-expanded', 'false');
+      document.getElementById('site-toggle')?.setAttribute('aria-expanded', 'false');
+      document.body.classList.remove('menu-open');
+      api?.setMenuOpen?.(false);
+      api?.setShieldOpen?.(false);
+      api?.setSiteOpen?.(false);
+      api?.setToolsOpen?.(false);
+      api?.setProfileOpen?.(false);
+      ignoreToggleUntil = Date.now() + 280;
+    }
+    api?.setShortcutsOpen?.(open, open ? shortcutsAnchor() : null);
+  }
+
+  toggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (Date.now() < ignoreToggleUntil) {
+      return;
+    }
+    setShortcutsVisible(!shortcutsVisible);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && shortcutsVisible) {
+      setShortcutsVisible(false);
+    }
+  });
+
+  api?.onShortcutsClosed?.(() => {
+    shortcutsVisible = false;
+    ignoreToggleUntil = Date.now() + 280;
+    toggle.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function bindProfile() {
+  const api = window.electronAPI;
+  const toggle = document.getElementById('profile-toggle');
+  if (!toggle) {
+    return;
+  }
+
+  let profileVisible = false;
+  let ignoreToggleUntil = 0;
+
+  function profileAnchor() {
+    const box = toggle.getBoundingClientRect();
+    return {
+      left: box.left,
+      top: box.top,
+      right: box.right,
+      bottom: box.bottom,
+      width: box.width,
+      height: box.height,
+    };
+  }
+
+  function setProfileVisible(open) {
+    profileVisible = open;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      hideUtilityPops();
+      document.getElementById('settings-toggle')?.setAttribute('aria-expanded', 'false');
+      document.getElementById('shield-toggle')?.setAttribute('aria-expanded', 'false');
+      document.getElementById('site-toggle')?.setAttribute('aria-expanded', 'false');
+      document.body.classList.remove('menu-open');
+      api?.setMenuOpen?.(false);
+      api?.setShieldOpen?.(false);
+      api?.setSiteOpen?.(false);
+      api?.setToolsOpen?.(false);
+      api?.setShortcutsOpen?.(false);
+      ignoreToggleUntil = Date.now() + 280;
+    }
+    api?.setProfileOpen?.(open, open ? profileAnchor() : null);
+  }
+
+  toggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (Date.now() < ignoreToggleUntil) {
+      return;
+    }
+    setProfileVisible(!profileVisible);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && profileVisible) {
+      setProfileVisible(false);
+    }
+  });
+
+  api?.onProfileClosed?.(() => {
+    profileVisible = false;
     ignoreToggleUntil = Date.now() + 280;
     toggle.setAttribute('aria-expanded', 'false');
   });
@@ -1374,40 +1533,6 @@ function bindToolbarControls() {
         applyPrivacyChrome(result.settings);
       }
     });
-  });
-
-  document.getElementById('profile-toggle')?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    showUtilityPop('profile-pop');
-  });
-
-  document.getElementById('profile-settings')?.addEventListener('click', () => {
-    hideUtilityPops();
-    setSettingsPanelOpen(true);
-  });
-
-  document.getElementById('profile-panic')?.addEventListener('click', () => {
-    document.getElementById('panic-btn')?.click();
-  });
-
-  document.getElementById('apps-toggle')?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    showUtilityPop('apps-pop');
-  });
-
-  document.getElementById('apps-pop')?.addEventListener('click', (event) => {
-    const item = event.target.closest('[data-url], [data-action]');
-    if (!item) {
-      return;
-    }
-    hideUtilityPops();
-    if (item.dataset.action === 'new-tab') {
-      api?.createTab?.();
-      return;
-    }
-    if (item.dataset.url) {
-      api?.navigate?.(item.dataset.url);
-    }
   });
 
   for (const item of UTILITY_POPS) {
@@ -1492,7 +1617,13 @@ function bindAppMenu() {
       api?.setShieldOpen?.(false);
       api?.setSiteOpen?.(false);
       api?.setToolsOpen?.(false);
-      api?.setMenuOpen?.(true, kebabAnchor());
+      api?.setShortcutsOpen?.(false);
+      api?.setProfileOpen?.(false);
+      api?.setMenuOpen?.(false);
+      api?.openSettingsTab?.();
+      menuVisible = false;
+      toggle.setAttribute('aria-expanded', 'false');
+      document.body.classList.remove('menu-open');
       return;
     }
     api?.setMenuOpen?.(false);
@@ -1762,11 +1893,30 @@ function bindSettings() {
     }
 
     const engine = document.getElementById('setting-searchEngine');
-    if (engine && typeof settings.searchEngine === 'string') {
-      engine.value = settings.searchEngine;
+    if (engine) {
+      const catalog = Array.isArray(settings.searchEngines) ? settings.searchEngines : [];
+      if (catalog.length) {
+        const current = engine.value;
+        engine.replaceChildren();
+        for (const item of catalog) {
+          const option = document.createElement('option');
+          option.value = item.id;
+          option.textContent = item.name;
+          engine.append(option);
+        }
+        engine.value = settings.searchEngine || current;
+      } else if (typeof settings.searchEngine === 'string') {
+        engine.value = settings.searchEngine;
+      }
     }
     if (typeof settings.searchBase === 'string' && settings.searchBase) {
       searchEngineBase = settings.searchBase;
+    }
+    if (typeof settings.searchEngine === 'string' && settings.searchEngine) {
+      const match = Array.isArray(settings.searchEngines)
+        ? settings.searchEngines.find((item) => item.id === settings.searchEngine)
+        : null;
+      setOmniEngine(settings.searchEngine, match?.name, match?.icon);
     }
     const shortcut = document.getElementById('setting-shortcut');
     if (shortcut && typeof settings.panicShortcut === 'string') {

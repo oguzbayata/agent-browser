@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, WebContentsView, session, ipcMain, globalShortcut, Menu, nativeImage, dialog, clipboard } = require('electron');
+const { app, BrowserWindow, WebContentsView, session, ipcMain, globalShortcut, Menu, nativeImage, dialog, clipboard, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -140,6 +140,13 @@ const NETWORK_FILTER = Object.freeze({ urls: ['http://*/*', 'https://*/*'] });
 const GHOST_DENIED_PERMISSIONS = new Set(['media', 'geolocation', 'display-capture']);
 const MEDIA_DENIED_PERMISSIONS = new Set(['media', 'display-capture', 'speaker-selection']);
 const EXTENSION_TOGGLE_IDS = Object.freeze({
+  shield: 'blockTrackers',
+  ghost: 'ghostNetwork',
+  guvenlik: 'blockMedia',
+  hunter: 'mediaHunter',
+  cookies: 'stripThirdPartyCookies',
+  dnt: 'sendDnt',
+  ua: 'spoofUserAgent',
   'canvas-poisoner': 'canvasPoisoner',
   'canvas-fingerprint-defender': 'canvasPoisoner',
   'siyuan-bridge': 'siyuanBridge',
@@ -251,17 +258,33 @@ const imageDownloadWaiters = [];
 let expectImageDownload = false;
 const IMAGE_MIME_EXT = Object.freeze({
   'image/png': 'png',
+  'image/x-png': 'png',
+  'image/apng': 'apng',
   'image/jpeg': 'jpg',
   'image/jpg': 'jpg',
+  'image/pjpeg': 'jpg',
   'image/webp': 'webp',
   'image/gif': 'gif',
   'image/bmp': 'bmp',
+  'image/x-bmp': 'bmp',
+  'image/x-ms-bmp': 'bmp',
   'image/svg+xml': 'svg',
+  'image/svg': 'svg',
   'image/x-icon': 'ico',
   'image/vnd.microsoft.icon': 'ico',
+  'image/ico': 'ico',
   'image/avif': 'avif',
-  'image/apng': 'png',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+  'image/jxl': 'jxl',
+  'image/tiff': 'tiff',
+  'image/tif': 'tiff',
+  'image/x-tiff': 'tiff',
+  'image/jp2': 'jp2',
+  'image/jpx': 'jpx',
+  'image/vnd.wap.wbmp': 'wbmp',
 });
+const IMAGE_URL_EXT = /\.(avif|apng|bmp|gif|heic|heif|ico|jfif|jpe|jpeg|jpg|jxl|jp2|png|svg|tif|tiff|webp|wbmp)(?:$|[?#])/i;
 let cachedPython = null;
 let activeTabId = null;
 let nextTabId = 1;
@@ -1318,11 +1341,11 @@ function parseYtDlpProgress(line, record) {
   }
   const destination = line.match(/Destination:\s+(.+)\s*$/);
   if (destination) {
-    record.filename = path.basename(destination[1].trim());
+    applyDownloadPath(record, destination[1].trim());
   }
   const merged = line.match(/Merging formats into "(.+)"/);
   if (merged) {
-    record.filename = path.basename(merged[1]);
+    applyDownloadPath(record, merged[1]);
   }
 }
 
@@ -1445,15 +1468,81 @@ function notifyImageDownloadSettled() {
   }
 }
 
+function looksLikeImageUrl(rawUrl) {
+  if (typeof rawUrl !== 'string' || !rawUrl) {
+    return false;
+  }
+  if (rawUrl.startsWith('data:image/') || rawUrl.startsWith('blob:')) {
+    return true;
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    return IMAGE_URL_EXT.test(parsed.pathname) || IMAGE_URL_EXT.test(parsed.href);
+  } catch {
+    return false;
+  }
+}
+
+function extensionFromImageMime(mime) {
+  const mapped = IMAGE_MIME_EXT[mime];
+  if (mapped) {
+    return mapped;
+  }
+  const subtype = String(mime || '').split('/')[1] || '';
+  const token = subtype.split('+')[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+  return token || '';
+}
+
+function sniffImageExt(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 4) {
+    return '';
+  }
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+    return 'png';
+  }
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+    return 'jpg';
+  }
+  if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+    return 'gif';
+  }
+  if (buffer[0] === 0x42 && buffer[1] === 0x4D) {
+    return 'bmp';
+  }
+  if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
+    return 'webp';
+  }
+  if (buffer.length >= 12 && buffer.toString('ascii', 4, 8) === 'ftyp') {
+    const brand = buffer.toString('ascii', 8, 12);
+    if (brand.startsWith('avif') || brand === 'avis') {
+      return 'avif';
+    }
+    if (brand.startsWith('heic') || brand.startsWith('heif') || brand === 'mif1') {
+      return 'heic';
+    }
+  }
+  if (buffer[0] === 0x00 && buffer[1] === 0x00 && buffer[2] === 0x01 && buffer[3] === 0x00) {
+    return 'ico';
+  }
+  const head = buffer.toString('utf8', 0, Math.min(buffer.length, 160)).trimStart();
+  if (head.startsWith('<svg') || head.startsWith('<?xml')) {
+    return 'svg';
+  }
+  return '';
+}
+
 function parseDataImageUrl(rawUrl) {
-  if (typeof rawUrl !== 'string' || !rawUrl.startsWith('data:image/')) {
+  if (typeof rawUrl !== 'string' || !rawUrl.startsWith('data:')) {
     return null;
   }
-  const match = rawUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+)(;[^,]*)?,(.*)$/s);
+  const match = rawUrl.match(/^data:([^;,]+)?(;[^,]*)?,(.*)$/s);
   if (!match) {
     return null;
   }
-  const mime = match[1].toLowerCase();
+  const mime = String(match[1] || '').toLowerCase();
   const params = match[2] || '';
   const payload = match[3] || '';
   if (!payload || payload.length > 12_000_000) {
@@ -1466,7 +1555,10 @@ function parseDataImageUrl(rawUrl) {
     if (!buffer.length) {
       return null;
     }
-    const ext = IMAGE_MIME_EXT[mime] || 'png';
+    const ext = (mime.startsWith('image/') ? extensionFromImageMime(mime) : '') || sniffImageExt(buffer);
+    if (!ext) {
+      return null;
+    }
     return { buffer, ext };
   } catch {
     return null;
@@ -1481,7 +1573,7 @@ function saveDataImageToDownloads(rawUrl) {
   const filename = `agent_img_${Date.now()}.${parsed.ext}`;
   const savePath = uniqueSavePath(app.getPath('downloads'), filename);
   fs.writeFileSync(savePath, parsed.buffer);
-  const record = createHunterRecord(path.basename(savePath));
+  const record = createHunterRecord(path.basename(savePath), savePath);
   record.state = 'completed';
   record.progress = 1;
   record.received = parsed.buffer.length;
@@ -1585,11 +1677,97 @@ async function downloadOneImage(webContents, srcUrl) {
   await downloadHttpImageSerial(webContents, srcUrl);
 }
 
+function isUsableImageSrc(src) {
+  return (
+    typeof src === 'string' &&
+    Boolean(src) &&
+    src !== 'about:blank' &&
+    (
+      src.startsWith('http://') ||
+      src.startsWith('https://') ||
+      src.startsWith('data:') ||
+      src.startsWith('blob:')
+    )
+  );
+}
+
+async function findImageAtPoint(webContents, x, y) {
+  if (!webContents || webContents.isDestroyed()) {
+    return '';
+  }
+  const px = Number(x) || 0;
+  const py = Number(y) || 0;
+  try {
+    const found = await webContents.executeJavaScript(`(() => {
+      const pickUrl = (value) => {
+        if (typeof value !== 'string') return '';
+        const trimmed = value.trim().replace(/^url\\((['"]?)(.*)\\1\\)$/i, '$2').replace(/^['"]|['"]$/g, '');
+        if (!trimmed || trimmed === 'none') return '';
+        try { return new URL(trimmed, document.baseURI).href; } catch { return trimmed; }
+      };
+      const fromImg = (img) => pickUrl(img.currentSrc || img.src || img.getAttribute('src') || '');
+      const el = document.elementFromPoint(${px}, ${py});
+      if (!el) return '';
+      if (el.tagName === 'IMG' || el.tagName === 'IMAGE') return fromImg(el);
+      if (el.tagName === 'SOURCE' && el.parentElement && el.parentElement.tagName === 'PICTURE') {
+        const img = el.parentElement.querySelector('img');
+        if (img) return fromImg(img);
+      }
+      if (el.tagName === 'CANVAS') {
+        try { return el.toDataURL('image/png'); } catch { return ''; }
+      }
+      const svg = el.closest && el.closest('svg');
+      if (svg) {
+        try {
+          const xml = new XMLSerializer().serializeToString(svg);
+          return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+        } catch { return ''; }
+      }
+      const picture = el.closest && el.closest('picture');
+      if (picture) {
+        const img = picture.querySelector('img');
+        if (img) return fromImg(img);
+      }
+      const video = el.tagName === 'VIDEO' ? el : (el.closest && el.closest('video'));
+      if (video && video.poster) return pickUrl(video.poster);
+      let node = el;
+      for (let i = 0; i < 6 && node; i += 1) {
+        const style = getComputedStyle(node);
+        const bg = pickUrl(style.backgroundImage);
+        if (bg) return bg;
+        const srcset = node.getAttribute && node.getAttribute('srcset');
+        if (srcset) {
+          const first = srcset.split(',')[0].trim().split(/\\s+/)[0];
+          const resolved = pickUrl(first);
+          if (resolved) return resolved;
+        }
+        node = node.parentElement;
+      }
+      return '';
+    })()`, true);
+    return typeof found === 'string' ? found : '';
+  } catch (error) {
+    console.error('findImageAtPoint failed:', error);
+    return '';
+  }
+}
+
+async function downloadContextImage(webContents, params) {
+  let src = params.srcURL || params.linkURL || '';
+  if (!isUsableImageSrc(src) || (params.mediaType === 'canvas' && !src.startsWith('data:'))) {
+    const found = await findImageAtPoint(webContents, params.x, params.y);
+    if (found) {
+      src = found;
+    }
+  }
+  startImageDownload(webContents, src);
+}
+
 function startImageDownload(webContents, srcUrl) {
   if (panicInProgress || typeof srcUrl !== 'string' || !srcUrl) {
     return;
   }
-  if (srcUrl.startsWith('data:image/')) {
+  if (srcUrl.startsWith('data:')) {
     try {
       saveDataImageToDownloads(srcUrl);
     } catch (error) {
@@ -1599,7 +1777,7 @@ function startImageDownload(webContents, srcUrl) {
   }
   if (srcUrl.startsWith('blob:')) {
     resolveBlobImage(webContents, srcUrl).then((dataUrl) => {
-      if (dataUrl.startsWith('data:image/')) {
+      if (dataUrl.startsWith('data:')) {
         saveDataImageToDownloads(dataUrl);
       }
     }).catch((error) => {
@@ -1754,18 +1932,69 @@ async function scrapePageImages(webContents) {
   }
 }
 
-function createHunterRecord(filename) {
+const DOWNLOAD_IMAGE_EXTS = new Set([
+  '.apng', '.avif', '.bmp', '.gif', '.heic', '.heif', '.ico', '.jfif', '.jpe', '.jpeg',
+  '.jpg', '.jxl', '.jp2', '.png', '.svg', '.tif', '.tiff', '.webp', '.wbmp',
+]);
+const DOWNLOAD_VIDEO_EXTS = new Set([
+  '.avi', '.m4v', '.mkv', '.mov', '.mp4', '.mpeg', '.mpg', '.ogv', '.webm', '.wmv',
+]);
+
+function applyDownloadPath(record, filePath) {
+  if (!record || typeof filePath !== 'string') {
+    return;
+  }
+  const trimmed = filePath.trim().replace(/^["']|["']$/g, '');
+  if (!trimmed) {
+    return;
+  }
+  const resolved = path.isAbsolute(trimmed)
+    ? path.normalize(trimmed)
+    : path.join(app.getPath('downloads'), trimmed);
+  record.savePath = resolved;
+  record.filename = path.basename(resolved);
+}
+
+function downloadOpenKind(filename) {
+  const ext = path.extname(String(filename || '')).toLowerCase();
+  if (DOWNLOAD_IMAGE_EXTS.has(ext)) {
+    return 'image';
+  }
+  if (DOWNLOAD_VIDEO_EXTS.has(ext)) {
+    return 'video';
+  }
+  if (ext === '.pdf') {
+    return 'pdf';
+  }
+  return 'file';
+}
+
+function isPathInsideDownloads(filePath) {
+  if (typeof filePath !== 'string' || !filePath) {
+    return false;
+  }
+  const root = path.resolve(app.getPath('downloads'));
+  const resolved = path.resolve(filePath);
+  const relative = path.relative(root, resolved);
+  return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function createHunterRecord(filename, savePath) {
   const id = String(nextDownloadId);
   nextDownloadId += 1;
   const record = {
     id,
     filename,
+    savePath: '',
     received: 0,
     total: 0,
     progress: 0,
     speed: '',
     state: 'progressing',
   };
+  if (savePath) {
+    applyDownloadPath(record, savePath);
+  }
   sessionDownloads.set(id, record);
   return record;
 }
@@ -1878,7 +2107,7 @@ function spawnYtDlpDownload(pageUrl, record, savePath) {
             current.progress = 1;
             current.speed = '';
             current.error = '';
-            current.filename = path.basename(output);
+            applyDownloadPath(current, output);
             current.received = fs.statSync(output).size;
             current.total = current.received;
             broadcastDownloads();
@@ -1996,7 +2225,7 @@ async function downloadWithYtdlCore(pageUrl, record, savePath) {
         if (current && current.state !== 'cancelled') {
           current.state = 'completed';
           current.progress = 1;
-          current.filename = path.basename(savePath);
+          applyDownloadPath(current, savePath);
           current.speed = '';
           broadcastDownloads();
           emitDiskWarning();
@@ -2031,7 +2260,7 @@ function startMediaHunterDownload(pageUrl, srcUrl) {
   }
 
   const savePath = uniqueSavePath(app.getPath('downloads'), 'agent-video.mp4');
-  const record = createHunterRecord(path.basename(savePath));
+  const record = createHunterRecord(path.basename(savePath), savePath);
   openDownloadsTab();
   broadcastDownloads();
   spawnYtDlpDownload(extractUrl, record, savePath).catch((error) => {
@@ -2046,9 +2275,14 @@ function serializeDownload(record) {
       : typeof record.progress === 'number'
         ? Math.min(1, Math.max(0, record.progress))
         : 0;
+  const savePath = typeof record.savePath === 'string' ? record.savePath : '';
+  const kind = downloadOpenKind(record.filename);
   return {
     id: record.id,
     filename: record.filename,
+    path: savePath,
+    kind,
+    canOpen: record.state === 'completed' && Boolean(savePath),
     received: record.received,
     total: record.total,
     state: record.state,
@@ -2093,6 +2327,7 @@ function attachDownloadManager(isolatedSession) {
     const record = {
       id,
       filename: path.basename(savePath),
+      savePath,
       received: 0,
       total: item.getTotalBytes() || 0,
       state: 'progressing',
@@ -2117,6 +2352,10 @@ function attachDownloadManager(isolatedSession) {
       record.received = item.getReceivedBytes();
       record.total = item.getTotalBytes() || record.total;
       record.state = state;
+      const finalPath = typeof item.getSavePath === 'function' ? item.getSavePath() : '';
+      if (finalPath) {
+        applyDownloadPath(record, finalPath);
+      }
       activeDownloadItems.delete(id);
       broadcastDownloads();
       if (record.imageHunter) {
@@ -2140,25 +2379,28 @@ function attachGuestContextMenu(webContents) {
     const canPaste = Boolean(params.isEditable) || Boolean(params.editFlags?.canPaste);
     const hasImage = params.mediaType === 'image' || Boolean(params.hasImageContents);
     const pageUrl = webContents.getURL();
-    const showImageHunter = params.mediaType === 'image';
+    const showDownloadImage =
+      hasImage ||
+      params.mediaType === 'canvas' ||
+      looksLikeImageUrl(params.srcURL) ||
+      looksLikeImageUrl(params.linkURL);
     const showMediaHunter =
       Boolean(global.isDownloaderEnabled) &&
       (params.mediaType === 'video' || isYoutubeWatchUrl(pageUrl));
 
     const template = [];
-    if (showImageHunter) {
-      const hunterIcon = mediaHunterMenuIcon();
+    if (showDownloadImage) {
       template.push(
         {
-          label: '[Agent] Download this image',
-          ...(hunterIcon ? { icon: hunterIcon } : {}),
+          label: 'Download image',
           click: () => {
-            startImageDownload(webContents, params.srcURL || params.linkURL || '');
+            downloadContextImage(webContents, params).catch((error) => {
+              console.error('Image download failed:', error);
+            });
           },
         },
         {
-          label: '[Agent] Grab all images on this page',
-          ...(hunterIcon ? { icon: hunterIcon } : {}),
+          label: 'Grab all images on this page',
           click: () => {
             scrapePageImages(webContents).catch((error) => {
               console.error('Bulk image scrape failed:', error);
@@ -5808,6 +6050,22 @@ ipcMain.handle('agent:downloads-get', async (event) => {
     ok: true,
     items: [...sessionDownloads.values()].map(serializeDownload),
   };
+});
+
+ipcMain.handle('agent:download-open', async (event, downloadId) => {
+  if ((!isChromeSender(event) && !isDownloadsSender(event)) || typeof downloadId !== 'string') {
+    return { ok: false };
+  }
+  const record = sessionDownloads.get(downloadId);
+  const savePath = record && typeof record.savePath === 'string' ? record.savePath : '';
+  if (!record || record.state !== 'completed' || !savePath || !isPathInsideDownloads(savePath)) {
+    return { ok: false };
+  }
+  if (!fs.existsSync(savePath)) {
+    return { ok: false, error: 'File is missing.' };
+  }
+  const error = await shell.openPath(savePath);
+  return { ok: !error, error: error || '' };
 });
 
 ipcMain.handle('agent:menu-panel', async (event, payload) => {
