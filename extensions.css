@@ -526,11 +526,63 @@ kbd {
   grid-column: 1 / -1;
 }
 
+.ext-kicker {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ext-selected {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .ext-note {
   margin: 8px 0 0;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.brain-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.brain-option {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #0a0c0f;
+  color: var(--text);
+  font: 600 12px/1 "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.brain-option.is-active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.ext-model-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.ext-model-row .ext-select {
+  flex: 1 1 220px;
+  min-width: 0;
 }
 
 .ext-field {

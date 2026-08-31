@@ -21,9 +21,9 @@ function updateExpertMeta() {
   const models = Array.isArray(intel?.models) ? intel.models : [];
   const selected = models.find((item) => item.id === intel?.selectedId) || models.find((item) => item.live && item.ready);
   const modelLine = selected ? selected.name : 'no model selected';
-  const memoryLine = settings?.memoryBridge?.providerName
-    ? `memory: ${settings.memoryBridge.providerName}${settings.siyuanBridge ? '' : ' · off'}`
-    : 'no memory bridge selected';
+  const brainOn = settings?.brain === 'siyuan' || settings?.brain === 'obsidian' || Boolean(settings?.siyuanBridge);
+  const memoryName = settings?.memoryBridge?.providerName || 'none';
+  const memoryLine = brainOn ? `agent memory: ${memoryName}` : `memory: ${memoryName} · off`;
   meta.textContent = `${modelLine} · ${memoryLine}`;
 }
 

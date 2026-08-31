@@ -25,7 +25,7 @@ function applyBoundAgent(intel) {
       .join(' · ');
   } else {
     modelName.textContent = 'No language model bound';
-    modelMeta.textContent = 'Bind one from the Local models panel';
+    modelMeta.textContent = 'Bind one in Settings → Agents';
   }
 
   if (running.length) {

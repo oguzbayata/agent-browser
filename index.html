@@ -348,32 +348,9 @@
       <aside class="ai-sidebar" id="ai-sidebar" aria-label="AI panel" hidden>
         <header class="ai-head">
           <p class="ai-kicker">session only · ram</p>
-          <h1 class="ai-title">Local models</h1>
-          <p class="ai-selected" id="ai-selected">no model selected</p>
-          <label class="ai-key-label" for="ai-key" id="ai-key-label">API key (cloud only · session)</label>
-          <input
-            id="ai-key"
-            class="ai-key"
-            type="text"
-            spellcheck="false"
-            autocomplete="off"
-            autocapitalize="off"
-            placeholder="sk-················"
-          />
+          <h1 class="ai-title" id="ai-title">Local models</h1>
+          <p class="ai-selected" id="ai-mode-note">Set the model, API key, and Brain in Settings → Agents.</p>
         </header>
-
-        <section class="ai-intel" aria-label="Local scan">
-          <div class="ai-intel-toolbar">
-            <p>Models</p>
-            <div class="ai-intel-actions">
-              <button class="ai-mini" id="ai-model-pick" type="button">File</button>
-              <button class="ai-mini" id="ai-model-dir" type="button">Folder</button>
-            </div>
-          </div>
-          <p class="ai-intel-status" id="ai-intel-status">scanning…</p>
-          <label class="sr-only" for="ai-model-select">Language model</label>
-          <select class="ai-model-select" id="ai-model-select"></select>
-        </section>
 
         <section class="ai-chat" id="ai-chat" aria-live="polite"></section>
 

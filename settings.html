@@ -122,6 +122,57 @@
         <section id="view-agents" class="ext-view" data-section="agents" hidden>
           <h2>Agents</h2>
           <div class="ext-grid">
+            <article class="ext-card ext-card-wide" data-search="local models api key openai language llm hermes brain siyuan obsidian memory agent">
+              <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.2" y="3.4" width="13.6" height="13.2" rx="1.6"/><path d="M12 3.4v13.2"/></svg></div>
+              <div class="ext-copy">
+                <p class="ext-kicker">session only · ram</p>
+                <h3 id="models-card-title">Local models</h3>
+                <p id="ai-selected" class="ext-selected">no model selected · OpenAI key or a local model</p>
+                <label class="ext-field" for="session-api-key">
+                  <span id="ai-key-label">API key (cloud only · session)</span>
+                  <input
+                    id="session-api-key"
+                    type="text"
+                    spellcheck="false"
+                    autocomplete="off"
+                    autocapitalize="off"
+                    placeholder="sk-················"
+                  />
+                </label>
+                <div class="ext-field">
+                  <span>Language model</span>
+                  <div class="ext-model-row">
+                    <select class="ext-select" id="ai-model-select" aria-label="Language model"></select>
+                    <button type="button" class="ext-btn" id="ai-model-pick">File</button>
+                    <button type="button" class="ext-btn" id="ai-model-dir">Folder</button>
+                  </div>
+                  <p class="ext-note" id="ai-intel-status">scanning…</p>
+                </div>
+                <div class="ext-field">
+                  <span>Brain</span>
+                  <p class="ext-note">Select SiYuan or Obsidian to give this model memory. It then becomes an agent in the chat panels.</p>
+                  <div class="brain-picker" id="brain-picker" role="group" aria-label="Brain">
+                    <button type="button" class="brain-option" data-brain="off">Off</button>
+                    <button type="button" class="brain-option" data-brain="siyuan">SiYuan</button>
+                    <button type="button" class="brain-option" data-brain="obsidian">Obsidian</button>
+                  </div>
+                  <div id="brain-siyuan" hidden>
+                    <label class="ext-field">
+                      Endpoint
+                      <input id="brain-endpoint" type="text" spellcheck="false" placeholder="http://127.0.0.1:6806/api/block/insertBlock" />
+                    </label>
+                    <label class="ext-field">
+                      Session token
+                      <input id="brain-token" type="password" spellcheck="false" placeholder="this session only · not written to disk" />
+                    </label>
+                  </div>
+                  <div id="brain-obsidian" hidden>
+                    <p id="brain-vault-path" class="ext-note">no folder selected</p>
+                    <button type="button" class="ext-btn" id="brain-pick-vault">Choose vault</button>
+                  </div>
+                </div>
+              </div>
+            </article>
             <article class="ext-card ext-card-wide" data-search="multi-agent bridge token loopback">
               <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="8" r="2.2"/><circle cx="13" cy="8" r="2.2"/><path d="M3.6 15.2c.6-2.4 2.2-3.6 3.4-3.6s2.8 1.2 3.4 3.6M9.6 15.2c.6-2.4 2.2-3.6 3.4-3.6s2.8 1.2 3.4 3.6"/></svg></div>
               <div class="ext-copy">
@@ -311,7 +362,7 @@
             </article>
             <article class="ext-card" data-search="gemini lens summarize">
               <div class="ext-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8 11.4 8l5.2.2-4.2 3.2 1.4 5.2L10 13.6 6.2 16.6l1.4-5.2-4.2-3.2L8.6 8z"/></svg></div>
-              <div class="ext-copy"><h3>Local models</h3><p>Open the session model panel, or summarize this tab.</p></div>
+              <div class="ext-copy"><h3>Local models</h3><p>Chat from the square icon. Set the model and API key under Agents.</p></div>
               <div class="ext-actions">
                 <button type="button" class="ext-btn" data-action="gemini">Models</button>
                 <button type="button" class="ext-btn" data-action="lens">Summarize</button>

@@ -460,6 +460,7 @@ let blockedRequestCount = 0;
 const tabSecurityStats = new Map();
 let securityStatsFlush = null;
 let agentBridgeToken = '';
+let sessionApiKeyValue = '';
 let agentControlKey = '';
 let agentCdpPort = 0;
 let agentApiPort = 0;
@@ -1242,6 +1243,8 @@ function purgeSessionChromeState() {
   sessionLocalFiles.length = 0;
   sessionLocalDirs.length = 0;
   selectedLocalModel = null;
+  sessionApiKeyValue = '';
+  sessionMemoryBlocks.length = 0;
   lastIntelModels = [];
   lastIntelAgents = [];
   sendToChrome('agent:downloads', { items: [], open: false });
@@ -3792,14 +3795,16 @@ function memoryBridgeSpec(id) {
 
 function snapshotMemoryBridge() {
   const spec = memoryBridgeSpec(memoryBridge.provider);
+  const enabled = Boolean(privacySettings.siyuanBridge) && (spec.id === 'siyuan' || spec.id === 'obsidian');
   return {
-    enabled: Boolean(privacySettings.siyuanBridge),
+    enabled,
     provider: spec.id,
     providerName: spec.name,
     endpoint: memoryBridge.endpoint || spec.defaultUrl,
     hasToken: Boolean(memoryBridge.token),
     vaultPath: memoryBridge.vaultPath,
-    catalog: MEMORY_BRIDGE_CATALOG.map((item) => ({
+    notes: sessionMemoryBlocks.length,
+    catalog: MEMORY_BRIDGE_CATALOG.filter((item) => item.id === 'siyuan' || item.id === 'obsidian').map((item) => ({
       id: item.id,
       name: item.name,
       hint: item.hint,
@@ -3807,6 +3812,176 @@ function snapshotMemoryBridge() {
       kind: item.kind,
     })),
   };
+}
+
+function brainChoice() {
+  if (!privacySettings.siyuanBridge) {
+    return 'off';
+  }
+  const id = memoryBridgeSpec(memoryBridge.provider).id;
+  return id === 'siyuan' || id === 'obsidian' ? id : 'off';
+}
+
+function applyBrainChoice(value) {
+  if (value === 'off' || value === '' || value === 'none' || value === false) {
+    privacySettings.siyuanBridge = false;
+    sessionExtensionState.set('siyuan-bridge', false);
+    sendToKind('memory', 'agent:memory-bridge', snapshotMemoryBridge());
+    return true;
+  }
+  if (value !== 'siyuan' && value !== 'obsidian') {
+    return false;
+  }
+  applyMemoryBridgePatch({ provider: value });
+  privacySettings.siyuanBridge = true;
+  sessionExtensionState.set('siyuan-bridge', true);
+  sendToKind('memory', 'agent:memory-bridge', snapshotMemoryBridge());
+  return true;
+}
+
+function rememberAgentThought(text) {
+  if (!privacySettings.siyuanBridge || typeof text !== 'string' || !text.trim()) {
+    return;
+  }
+  const entry = { text: text.trim().slice(0, 8000), at: Date.now() };
+  sessionMemoryBlocks.push(entry);
+  if (sessionMemoryBlocks.length > 40) {
+    sessionMemoryBlocks.shift();
+  }
+  postToMemoryBridge(entry.text);
+}
+
+function formatMemoryEntry(item) {
+  if (!item) {
+    return '';
+  }
+  if (typeof item === 'string') {
+    return item;
+  }
+  if (typeof item.text === 'string' && item.text) {
+    return item.text;
+  }
+  if (item.event) {
+    return `${item.event}${item.tabId ? ` · tab ${item.tabId}` : ''}`;
+  }
+  return '';
+}
+
+function readObsidianNotes() {
+  const vault = memoryBridge.vaultPath;
+  if (!vault) {
+    return '';
+  }
+  try {
+    const file = path.join(vault, 'Agent Browser', 'oturum.md');
+    if (!fs.existsSync(file)) {
+      return '';
+    }
+    return fs.readFileSync(file, 'utf8').slice(-6000);
+  } catch {
+    return '';
+  }
+}
+
+function siyuanOrigin() {
+  try {
+    const parsed = new URL(memoryBridge.endpoint || 'http://127.0.0.1:6806/api/block/insertBlock');
+    if (parsed.hostname !== '127.0.0.1' && parsed.hostname !== 'localhost') {
+      return '';
+    }
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return 'http://127.0.0.1:6806';
+  }
+}
+
+function postJsonLoopback(targetUrl, body, headers) {
+  return new Promise((resolve) => {
+    try {
+      if (!isLoopbackHttpUrl(targetUrl)) {
+        resolve(null);
+        return;
+      }
+      const raw = JSON.stringify(body);
+      const req = http.request(
+        targetUrl,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(raw),
+            ...headers,
+          },
+        },
+        (res) => {
+          const chunks = [];
+          res.on('data', (chunk) => chunks.push(chunk));
+          res.on('end', () => {
+            try {
+              resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+            } catch {
+              resolve(null);
+            }
+          });
+        },
+      );
+      req.setTimeout(800, () => {
+        req.destroy();
+        resolve(null);
+      });
+      req.on('error', () => resolve(null));
+      req.end(raw);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function readSiyuanNotes() {
+  const origin = siyuanOrigin();
+  if (!origin) {
+    return '';
+  }
+  const headers = {};
+  if (memoryBridge.token) {
+    headers.Authorization = `Token ${memoryBridge.token}`;
+  }
+  const payload = await postJsonLoopback(`${origin}/api/query/sql`, {
+    stmt: "SELECT content FROM blocks WHERE content != '' ORDER BY updated DESC LIMIT 12",
+  }, headers);
+  const rows = Array.isArray(payload?.data) ? payload.data : [];
+  return rows
+    .map((row) => (typeof row?.content === 'string' ? row.content : ''))
+    .filter(Boolean)
+    .join('\n')
+    .slice(-6000);
+}
+
+async function recalledMemoryText() {
+  if (!privacySettings.siyuanBridge) {
+    return '';
+  }
+  const spec = memoryBridgeSpec(memoryBridge.provider);
+  let external = '';
+  if (spec.id === 'obsidian') {
+    external = readObsidianNotes();
+  } else if (spec.id === 'siyuan') {
+    external = await readSiyuanNotes();
+  }
+  const session = sessionMemoryBlocks.map(formatMemoryEntry).filter(Boolean).join('\n---\n').slice(-4000);
+  return [external, session].filter(Boolean).join('\n---\n').slice(-8000);
+}
+
+async function withAgentMemory(messages) {
+  if (!privacySettings.siyuanBridge || !Array.isArray(messages)) {
+    return messages;
+  }
+  const spec = memoryBridgeSpec(memoryBridge.provider);
+  const recalled = await recalledMemoryText();
+  const preface = recalled
+    ? `You are an agent with persistent ${spec.name} memory. Use these recalled notes when they help:\n${recalled}`
+    : `You are an agent with a ${spec.name} memory bridge. Persist useful facts. No notes have been recalled yet.`;
+  return [{ role: 'system', content: preface }, ...messages];
 }
 
 function resetMemoryBridge() {
@@ -4426,6 +4601,7 @@ function triggerExcommunicado() {
     stopAgentApiServer();
     removeAgentPortFiles();
     agentBridgeToken = '';
+    sessionApiKeyValue = '';
     agentControlKey = '';
     privacySettings.agentBridge = false;
     privacySettings.ghostNetwork = false;
@@ -4433,6 +4609,7 @@ function triggerExcommunicado() {
     privacySettings.blockMedia = true;
     privacySettings.canvasPoisoner = false;
     privacySettings.siyuanBridge = false;
+    sessionMemoryBlocks.length = 0;
     resetMemoryBridge();
     privacySettings.humanJitter = false;
     privacySettings.deadManSwitch = false;
@@ -6504,6 +6681,7 @@ async function pushLocalIntel() {
       snapshot = await buildLocalIntelSnapshot();
       sendToChrome('agent:local-intel', snapshot);
       sendToKind('extensions', 'agent:local-intel', snapshot);
+      sendToKind('settings', 'agent:local-intel', snapshot);
     } while (localIntelPending);
     return snapshot;
   } catch {
@@ -6595,6 +6773,7 @@ async function requestLocalOpenAiChat(model, messages) {
 }
 
 async function requestChat(apiKey, messages) {
+  const keyed = await withAgentMemory(messages);
   if (!lastIntelModels.length) {
     await pushLocalIntel();
   }
@@ -6604,15 +6783,15 @@ async function requestChat(apiKey, messages) {
     ? resolveLocalChatTarget(selected, lastIntelModels, lastIntelAgents)
     : null;
   if (target?.kind === 'ollama' && target.chatUrl) {
-    return requestOllamaChat(target, messages);
+    return requestOllamaChat(target, keyed);
   }
   if (target?.kind === 'openai-compat' && target.chatUrl) {
-    return requestLocalOpenAiChat(target, messages);
+    return requestLocalOpenAiChat(target, keyed);
   }
   if (!apiKey) {
     throw new Error('Select a local model or enter a session API key.');
   }
-  return requestOpenAiChat(apiKey, messages);
+  return requestOpenAiChat(apiKey, keyed);
 }
 
 async function extractVisiblePageText() {
@@ -6737,6 +6916,7 @@ ipcMain.handle('agent:local-intel-select', async (event, id) => {
   selectedLocalModel = match;
   snapshot.selectedId = match.id;
   sendToChrome('agent:local-intel', snapshot);
+  sendToKind('settings', 'agent:local-intel', snapshot);
   return { ok: true, intel: snapshot };
 });
 
@@ -6773,6 +6953,7 @@ ipcMain.handle('agent:local-intel-pick', async (event, kind) => {
       selectedLocalModel = match;
       snapshot.selectedId = match.id;
       sendToChrome('agent:local-intel', snapshot);
+      sendToKind('settings', 'agent:local-intel', snapshot);
     }
   }
   return { ok: true, intel: snapshot };
@@ -6793,15 +6974,14 @@ function snapshotSettings() {
     agentBridge: privacySettings.agentBridge,
     agentBridgeUrl: listen ? `http://${listen.host}:${listen.port}/v1` : '',
     agentBridgeToken: privacySettings.agentBridge ? agentBridgeToken : '',
+    sessionApiKey: sessionApiKeyValue,
     ghostNetwork: privacySettings.ghostNetwork,
     mediaHunter: Boolean(privacySettings.mediaHunter),
     blockMedia: privacySettings.blockMedia !== false,
     canvasPoisoner: Boolean(privacySettings.canvasPoisoner),
     siyuanBridge: Boolean(privacySettings.siyuanBridge),
-    memoryBridge: {
-      provider: snapshotMemoryBridge().provider,
-      providerName: snapshotMemoryBridge().providerName,
-    },
+    brain: brainChoice(),
+    memoryBridge: snapshotMemoryBridge(),
     humanJitter: Boolean(privacySettings.humanJitter),
     deadManSwitch: Boolean(privacySettings.deadManSwitch),
     web3Shield: Boolean(privacySettings.web3Shield),
@@ -7352,6 +7532,15 @@ ipcMain.handle('agent:settings-set', async (event, payload) => {
     }
   } else if (key === 'searchEngine' && Object.hasOwn(SEARCH_ENGINES, payload.value)) {
     privacySettings.searchEngine = payload.value;
+  } else if (key === 'sessionApiKey') {
+    if (typeof payload.value !== 'string' || payload.value.length > 256 || /[\r\n]/.test(payload.value)) {
+      return { ok: false, settings: snapshotSettings() };
+    }
+    sessionApiKeyValue = payload.value.trim();
+  } else if (key === 'brain') {
+    if (!applyBrainChoice(payload.value)) {
+      return { ok: false, settings: snapshotSettings() };
+    }
   } else {
     return { ok: false, settings: snapshotSettings() };
   }
@@ -7620,7 +7809,7 @@ ipcMain.handle('agent:ext-expert', async (event, payload) => {
     const appliedLine = applied.length
       ? applied.map((item) => `${item.name}: ${item.on ? 'on' : 'off'}`).join(', ')
       : 'none';
-    postToMemoryBridge(`Extension expert\nQuestion: ${message}\nReply: ${reply}\nApplied: ${appliedLine}`);
+    rememberAgentThought(`Extension expert\nQuestion: ${message}\nReply: ${reply}\nApplied: ${appliedLine}`);
   }
 
   return { ok: true, reply, applied: applied.map((item) => ({ id: item.id, on: item.on })), settings };
@@ -7641,18 +7830,17 @@ ipcMain.handle('agent:memory-bridge-get', async (event) => {
 });
 
 ipcMain.handle('agent:memory-bridge-set', async (event, payload) => {
-  if (!isMemoryBridgeSender(event) || !payload || typeof payload !== 'object') {
+  if ((!isMemoryBridgeSender(event) && !isChromeSender(event)) || !payload || typeof payload !== 'object') {
     return { ok: false };
   }
   applyMemoryBridgePatch(payload);
   const bridge = snapshotMemoryBridge();
   sendToKind('memory', 'agent:memory-bridge', bridge);
-  broadcastSettings();
-  return { ok: true, bridge };
+  return { ok: true, bridge, settings: broadcastSettings() };
 });
 
 ipcMain.handle('agent:memory-bridge-pick-vault', async (event) => {
-  if (!isMemoryBridgeSender(event) || !mainWindow || mainWindow.isDestroyed()) {
+  if ((!isMemoryBridgeSender(event) && !isChromeSender(event)) || !mainWindow || mainWindow.isDestroyed()) {
     return { ok: false };
   }
   applyMemoryBridgePatch({ provider: 'obsidian' });
@@ -7668,10 +7856,11 @@ ipcMain.handle('agent:memory-bridge-pick-vault', async (event) => {
     return { ok: false, error: 'invalid path', bridge: snapshotMemoryBridge() };
   }
   memoryBridge.vaultPath = picked;
+  privacySettings.siyuanBridge = true;
+  sessionExtensionState.set('siyuan-bridge', true);
   const bridge = snapshotMemoryBridge();
   sendToKind('memory', 'agent:memory-bridge', bridge);
-  broadcastSettings();
-  return { ok: true, bridge };
+  return { ok: true, bridge, settings: broadcastSettings() };
 });
 
 ipcMain.handle('agent:settings-panel', async (event, open) => {
@@ -7697,7 +7886,7 @@ ipcMain.handle('agent:ai-message', async (event, payload) => {
     return emitAiResponse({ ok: false, error: 'unauthorized' });
   }
 
-  const apiKey = readSessionApiKey(payload?.apiKey);
+  const apiKey = readSessionApiKey(payload?.apiKey) || readSessionApiKey(sessionApiKeyValue);
   const message = typeof payload?.message === 'string' ? payload.message.trim() : '';
   if (!message || message.length > 8000) {
     return emitAiResponse({ ok: false, error: 'Invalid message.' });
@@ -7714,6 +7903,7 @@ ipcMain.handle('agent:ai-message', async (event, payload) => {
       },
       { role: 'user', content: message },
     ]);
+    rememberAgentThought(`Chat\nQuestion: ${message}\nReply: ${content}`);
     return emitAiResponse({ ok: true, type: 'chat', content });
   } catch (error) {
     return emitAiResponse({
@@ -7746,7 +7936,7 @@ ipcMain.handle('agent:ai-summarize', async (event, payload) => {
     return emitAiResponse({ ok: false, error: 'unauthorized' });
   }
 
-  const apiKey = readSessionApiKey(payload?.apiKey);
+  const apiKey = readSessionApiKey(payload?.apiKey) || readSessionApiKey(sessionApiKeyValue);
 
   emitAiResponse({ ok: true, type: 'status', content: 'reading page text' });
 
@@ -7766,6 +7956,7 @@ ipcMain.handle('agent:ai-summarize', async (event, payload) => {
       { role: 'system', content: SUMMARIZE_SYSTEM_PROMPT },
       { role: 'user', content: pageText },
     ]);
+    rememberAgentThought(`Summary\n${content}`);
     return emitAiResponse({ ok: true, type: 'summary', content });
   } catch (error) {
     return emitAiResponse({

@@ -642,9 +642,10 @@ function setSettingsPanelOpen(open) {
   window.electronAPI?.setSettingsOpen?.(false);
 }
 
+let cachedSessionApiKey = '';
+
 function sessionApiKey() {
-  const field = document.getElementById('ai-key');
-  return field ? field.value.trim() : '';
+  return cachedSessionApiKey;
 }
 
 function localRuntimeReady(intel) {
@@ -663,32 +664,30 @@ function localRuntimeReady(intel) {
 }
 
 function renderLocalIntel(intel) {
+  const models = Array.isArray(intel?.models) ? intel.models : [];
+  const selectedId = intel?.selectedId || null;
+  const selected = models.find((item) => item.id === selectedId) || null;
   const modelSelect = document.getElementById('ai-model-select');
   const status = document.getElementById('ai-intel-status');
   const selectedLabel = document.getElementById('ai-selected');
   const keyLabel = document.getElementById('ai-key-label');
-  if (!modelSelect) {
-    return;
+
+  if (modelSelect) {
+    modelSelect.replaceChildren();
+    const cloud = document.createElement('option');
+    cloud.value = '';
+    cloud.textContent = 'OpenAI (session key) · cloud';
+    modelSelect.appendChild(cloud);
+
+    for (const model of models) {
+      const option = document.createElement('option');
+      option.value = model.id;
+      const state = model.live ? 'live' : model.kind === 'file' ? 'file' : 'saved';
+      option.textContent = [model.name, model.source, state, model.sizeLabel].filter(Boolean).join(' · ');
+      modelSelect.appendChild(option);
+    }
+    modelSelect.value = selectedId || '';
   }
-
-  const models = Array.isArray(intel?.models) ? intel.models : [];
-  const selectedId = intel?.selectedId || null;
-  const selected = models.find((item) => item.id === selectedId) || null;
-
-  modelSelect.replaceChildren();
-  const cloud = document.createElement('option');
-  cloud.value = '';
-  cloud.textContent = 'OpenAI (session key) · cloud';
-  modelSelect.appendChild(cloud);
-
-  for (const model of models) {
-    const option = document.createElement('option');
-    option.value = model.id;
-    const state = model.live ? 'live' : model.kind === 'file' ? 'file' : 'saved';
-    option.textContent = [model.name, model.source, state, model.sizeLabel].filter(Boolean).join(' · ');
-    modelSelect.appendChild(option);
-  }
-  modelSelect.value = selectedId || '';
 
   if (status) {
     const liveCount = models.filter((item) => item.live).length;
@@ -743,12 +742,9 @@ function bindAiSidebar() {
   const form = document.getElementById('ai-form');
   const prompt = document.getElementById('ai-prompt');
   const summarizeBtn = document.getElementById('ai-summarize');
-  const keyField = document.getElementById('ai-key');
-  const pickFile = document.getElementById('ai-model-pick');
-  const pickDir = document.getElementById('ai-model-dir');
   let intelState = { models: [], agents: [], selectedId: null };
 
-  if (!sidebar || !toggle || !form || !prompt || !summarizeBtn || !keyField) {
+  if (!sidebar || !toggle || !form || !prompt || !summarizeBtn) {
     return;
   }
 
@@ -776,18 +772,6 @@ function bindAiSidebar() {
       }
     }
     api?.setSidebarOpen?.(open);
-  });
-
-  pickFile?.addEventListener('click', () => {
-    api?.pickLocalModel?.('file');
-  });
-  pickDir?.addEventListener('click', () => {
-    api?.pickLocalModel?.('dir');
-  });
-
-  document.getElementById('ai-model-select')?.addEventListener('change', (event) => {
-    const value = event.target.value;
-    api?.selectLocalModel?.(value || null);
   });
 
   api?.onLocalIntel?.(applyIntel);
@@ -1908,6 +1892,21 @@ function bindSettings() {
       } else if (typeof settings.searchEngine === 'string') {
         engine.value = settings.searchEngine;
       }
+    }
+    if (typeof settings.sessionApiKey === 'string') {
+      cachedSessionApiKey = settings.sessionApiKey;
+    }
+    const aiTitle = document.getElementById('ai-title');
+    const aiNote = document.getElementById('ai-mode-note');
+    const brainOn = settings.brain === 'siyuan' || settings.brain === 'obsidian';
+    if (aiTitle) {
+      aiTitle.textContent = brainOn ? 'Agent' : 'Local models';
+    }
+    if (aiNote) {
+      const name = settings.memoryBridge?.providerName || (settings.brain === 'obsidian' ? 'Obsidian' : 'SiYuan');
+      aiNote.textContent = brainOn
+        ? `Agent mode · ${name} memory. Model and key stay in Settings → Agents.`
+        : 'Set the model, API key, and Brain in Settings → Agents.';
     }
     if (typeof settings.searchBase === 'string' && settings.searchBase) {
       searchEngineBase = settings.searchBase;

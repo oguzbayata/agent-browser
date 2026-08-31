@@ -12,6 +12,9 @@ const ENGINE_FALLBACK = Object.freeze([
   { id: 'naver', name: 'Naver', icon: 'assets/search-engines/naver.svg' },
 ]);
 
+let lastIntel = null;
+let lastSettings = {};
+
 function engineIcon(item) {
   return item?.icon || `assets/search-engines/${item?.id || 'duckduckgo'}.svg`;
 }
@@ -92,10 +95,107 @@ function filterCards() {
   }
 }
 
+function localRuntimeReady(intel) {
+  const models = Array.isArray(intel?.models) ? intel.models : [];
+  if (models.some((item) => item.live && item.ready && (item.kind === 'ollama' || item.kind === 'openai-compat'))) {
+    return true;
+  }
+  const selectedId = intel?.selectedId;
+  const model = selectedId ? models.find((item) => item.id === selectedId) : null;
+  if (model && model.ready && (model.kind === 'ollama' || model.kind === 'openai-compat')) {
+    return true;
+  }
+  return (Array.isArray(intel?.agents) ? intel.agents : []).some(
+    (agent) => agent.status === 'running' && agent.id !== 'agent-bridge',
+  );
+}
+
+function renderLocalIntel(intel) {
+  const modelSelect = document.getElementById('ai-model-select');
+  const status = document.getElementById('ai-intel-status');
+  const selectedLabel = document.getElementById('ai-selected');
+  const keyLabel = document.getElementById('ai-key-label');
+  const models = Array.isArray(intel?.models) ? intel.models : [];
+  const selectedId = intel?.selectedId || null;
+  const selected = models.find((item) => item.id === selectedId) || null;
+
+  if (modelSelect) {
+    modelSelect.replaceChildren();
+    const cloud = document.createElement('option');
+    cloud.value = '';
+    cloud.textContent = 'OpenAI (session key) · cloud';
+    modelSelect.appendChild(cloud);
+    for (const model of models) {
+      const option = document.createElement('option');
+      option.value = model.id;
+      const state = model.live ? 'live' : model.kind === 'file' ? 'file' : 'saved';
+      option.textContent = [model.name, model.source, state, model.sizeLabel].filter(Boolean).join(' · ');
+      modelSelect.appendChild(option);
+    }
+    modelSelect.value = selectedId || '';
+  }
+  if (status) {
+    const liveCount = models.filter((item) => item.live).length;
+    status.textContent = models.length
+      ? `${models.length} model · ${liveCount} live`
+      : 'no models in known folders — pick a file or folder';
+  }
+  if (selectedLabel) {
+    const modelLine = selected
+      ? `${selected.name}${selected.live ? ' · live' : ' · file'}`
+      : 'no model selected · OpenAI key or a local model';
+    const brain = lastSettings.brain === 'siyuan' || lastSettings.brain === 'obsidian' ? lastSettings.brain : 'off';
+    selectedLabel.textContent =
+      brain === 'off'
+        ? modelLine
+        : `Agent · ${brain === 'siyuan' ? 'SiYuan' : 'Obsidian'} · ${modelLine}`;
+  }
+  if (keyLabel) {
+    keyLabel.textContent = localRuntimeReady(intel)
+      ? 'API key (local model selected · not required)'
+      : 'API key (cloud only · session)';
+  }
+}
+
+function applyBrainUi(settings) {
+  const brain = settings?.brain === 'siyuan' || settings?.brain === 'obsidian' ? settings.brain : 'off';
+  const title = document.getElementById('models-card-title');
+  const siyuan = document.getElementById('brain-siyuan');
+  const obsidian = document.getElementById('brain-obsidian');
+  const endpoint = document.getElementById('brain-endpoint');
+  const token = document.getElementById('brain-token');
+  const vault = document.getElementById('brain-vault-path');
+  const bridge = settings?.memoryBridge || {};
+  if (title) {
+    title.textContent = brain === 'off' ? 'Local models' : 'Agent';
+  }
+  document.querySelectorAll('.brain-option[data-brain]').forEach((button) => {
+    button.classList.toggle('is-active', button.dataset.brain === brain);
+  });
+  if (siyuan) {
+    siyuan.hidden = brain !== 'siyuan';
+  }
+  if (obsidian) {
+    obsidian.hidden = brain !== 'obsidian';
+  }
+  if (endpoint && document.activeElement !== endpoint) {
+    endpoint.value = bridge.endpoint || 'http://127.0.0.1:6806/api/block/insertBlock';
+  }
+  if (token && document.activeElement !== token && !token.value) {
+    token.placeholder = bridge.hasToken
+      ? 'a session key is stored · type to replace it'
+      : 'this session only · not written to disk';
+  }
+  if (vault) {
+    vault.textContent = bridge.vaultPath || 'no folder selected';
+  }
+}
+
 function applySettings(settings) {
   if (!settings || typeof settings !== 'object') {
     return;
   }
+  lastSettings = settings;
   for (const toggle of document.querySelectorAll('.ext-switch[data-setting]')) {
     const key = toggle.dataset.setting;
     if (typeof settings[key] === 'boolean') {
@@ -117,6 +217,14 @@ function applySettings(settings) {
   }
   if (bridgeToken) {
     bridgeToken.value = settings.agentBridgeToken || '';
+  }
+  const apiKey = document.getElementById('session-api-key');
+  if (apiKey && document.activeElement !== apiKey && typeof settings.sessionApiKey === 'string') {
+    apiKey.value = settings.sessionApiKey;
+  }
+  applyBrainUi(settings);
+  if (lastIntel) {
+    renderLocalIntel(lastIntel);
   }
 }
 
@@ -189,6 +297,78 @@ function bindPage() {
     }
   });
   renderEnginePicker(ENGINE_FALLBACK, 'duckduckgo');
+
+  const apiKey = document.getElementById('session-api-key');
+  let apiKeyTimer = 0;
+  const saveApiKey = () => {
+    if (!apiKey) {
+      return;
+    }
+    setSetting('sessionApiKey', apiKey.value);
+  };
+  apiKey?.addEventListener('input', () => {
+    window.clearTimeout(apiKeyTimer);
+    apiKeyTimer = window.setTimeout(saveApiKey, 250);
+  });
+  apiKey?.addEventListener('change', saveApiKey);
+  apiKey?.addEventListener('blur', saveApiKey);
+
+  document.getElementById('ai-model-select')?.addEventListener('change', (event) => {
+    api?.selectLocalModel?.(event.target.value || null);
+  });
+  document.getElementById('ai-model-pick')?.addEventListener('click', () => {
+    api?.pickLocalModel?.('file');
+  });
+  document.getElementById('ai-model-dir')?.addEventListener('click', () => {
+    api?.pickLocalModel?.('dir');
+  });
+  api?.onLocalIntel?.((payload) => {
+    lastIntel = payload;
+    renderLocalIntel(payload);
+  });
+  api?.getLocalIntel?.()?.then((result) => {
+    if (result?.ok && result.intel) {
+      lastIntel = result.intel;
+      renderLocalIntel(result.intel);
+    }
+  });
+  api?.watchLocalIntel?.(true);
+
+  document.getElementById('brain-picker')?.addEventListener('click', (event) => {
+    const option = event.target.closest('[data-brain]');
+    if (!option) {
+      return;
+    }
+    setSetting('brain', option.dataset.brain);
+  });
+  const saveBrainHttp = () => {
+    api?.setMemoryBridge?.({
+      provider: 'siyuan',
+      endpoint: document.getElementById('brain-endpoint')?.value || '',
+      token: document.getElementById('brain-token')?.value || undefined,
+    })?.then((result) => {
+      if (result?.ok && result.settings) {
+        applySettings(result.settings);
+      } else if (result?.bridge) {
+        applyBrainUi({ brain: 'siyuan', memoryBridge: result.bridge });
+      }
+      const token = document.getElementById('brain-token');
+      if (token) {
+        token.value = '';
+      }
+    });
+  };
+  document.getElementById('brain-endpoint')?.addEventListener('change', saveBrainHttp);
+  document.getElementById('brain-token')?.addEventListener('change', saveBrainHttp);
+  document.getElementById('brain-pick-vault')?.addEventListener('click', () => {
+    api?.pickMemoryVault?.()?.then((result) => {
+      if (result?.ok && result.settings) {
+        applySettings(result.settings);
+      } else if (result?.bridge) {
+        applyBrainUi({ brain: 'obsidian', memoryBridge: result.bridge, siyuanBridge: true });
+      }
+    });
+  });
 
   async function applyZoom(action) {
     const result = await api?.setZoom?.(action);

@@ -52,7 +52,16 @@ contextBridge.exposeInMainWorld(
     reload: () => ipcRenderer.invoke('agent:reload'),
     stop: () => ipcRenderer.invoke('agent:stop'),
     setSidebarOpen: (open) => ipcRenderer.invoke('agent:sidebar', Boolean(open)),
+    getLocalIntel: () => ipcRenderer.invoke('agent:local-intel-get'),
     watchLocalIntel: (open) => ipcRenderer.invoke('agent:local-intel-watch', Boolean(open)),
+    getMemoryBridge: () => ipcRenderer.invoke('agent:memory-bridge-get'),
+    setMemoryBridge: (payload) => {
+      if (!payload || typeof payload !== 'object') {
+        return Promise.resolve({ ok: false });
+      }
+      return ipcRenderer.invoke('agent:memory-bridge-set', payload);
+    },
+    pickMemoryVault: () => ipcRenderer.invoke('agent:memory-bridge-pick-vault'),
     selectLocalModel: (id) => {
       if (id !== null && typeof id !== 'string') {
         return Promise.resolve({ ok: false });
