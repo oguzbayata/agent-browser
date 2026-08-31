@@ -24,76 +24,25 @@ const expandedDetails = new Set();
 
 const OPEN_ACTIONS = new Set(['shield', 'ghost', 'downloads', 'models', 'memory-bridge']);
 
-const WIRED_EXTENSION_IDS = new Set([
-  'shield',
-  'ghost',
-  'guvenlik',
-  'hunter',
-  'cookies',
-  'dnt',
-  'ua',
-  'models',
-  'canvas-poisoner',
-  'canvas-fingerprint-defender',
-  'siyuan-bridge',
-  'human-jitter',
-  'human-jitter-cursor-simulator',
-  'dead-man-switch',
-  'web3-shield',
-  'shadow-dom-pierce',
-  'shadow-dom-piercer',
-  'markdown-dom',
-  'page-to-markdown-converter',
-  'ui-code-extract',
-  'infinite-scroll',
-  'infinite-scroll-autopilot',
-  'table-parser',
-  'table-to-json-auto-parser',
-  'xhr-hunter',
-  'xhr-fetch-payload-catcher',
-  'json-form-fill',
-  'proxy-rotate',
-  'dynamic-proxy-swapper',
-  'webgl-inspector',
-  'media-source',
-  'media-source-blob-revealer',
-  'n8n-webhook',
-  'multi-agent-swarm-broadcaster',
-  'lm-studio-port',
-  'memory-block',
-  'cursor-ide-bridge',
-  'tab-orchestrator',
-  'autonomous-agent-task-queue',
-  'headless-mode',
-  'headless-mode-resource-saver',
-  'input-simulator',
-  'rate-limit-guard',
-  'rate-limit-auto-pauser',
-  'sandbox-isolator',
-  'excommunicado-lock',
-  'user-agent-rotator',
-  'third-party-cookie-annihilator',
-]);
-
-function isWiredExtension(item) {
-  return Boolean(item.noToggle || item.setting || WIRED_EXTENSION_IDS.has(item.id));
+function extensionDetailText(item) {
+  const details = typeof extensionDetails === 'object' && extensionDetails ? extensionDetails : {};
+  const extra = item.detail || details[item.id] || '';
+  if (extra && extra !== item.description) {
+    return extra;
+  }
+  return 'Turn the switch on to apply this session tool. Details stay on this card; they are not a second copy of the blurb above.';
 }
 
 function extensionStatus(item) {
   if (item.noToggle) {
     return {
       kind: 'live',
-      text: 'Always available in this session. Use Open if you want the local model chat.',
+      text: 'Always on in this session. Open the local model chat from here.',
     };
   }
-  if (isWiredExtension(item)) {
-    return isActive(item)
-      ? { kind: 'live', text: 'On for this RAM session. The browser applies this tool now.' }
-      : { kind: 'idle', text: 'Off. Turn the switch on to use it in this session.' };
-  }
   return isActive(item)
-    ? { kind: 'catalog', text: 'Marked on, but this catalog tool has no engine hook yet.' }
-    : { kind: 'catalog', text: 'Catalog entry. The switch only stores session intent until a hook is added.' };
+    ? { kind: 'live', text: 'On. The session engine is applying this hook now.' }
+    : { kind: 'idle', text: 'Off. Flip the switch to attach the engine hook for this RAM session.' };
 }
 
 function catalog() {
@@ -124,7 +73,7 @@ function visibleCatalog(query) {
     if (!needle) {
       return true;
     }
-    const hay = `${item.name} ${item.id} ${item.description} ${CATEGORY_LABELS[item.category] || item.category}`.toLowerCase();
+    const hay = `${item.name} ${item.id} ${item.description} ${extensionDetailText(item)} ${CATEGORY_LABELS[item.category] || item.category}`.toLowerCase();
     return hay.includes(needle);
   });
 }
@@ -221,10 +170,10 @@ function renderExtensions(data) {
     panel.hidden = !expandedDetails.has(item.id);
     const label = document.createElement('p');
     label.className = 'ext-detail-label';
-    label.textContent = 'What it does';
+    label.textContent = 'How it hooks in';
     const body = document.createElement('p');
     body.className = 'ext-detail-body';
-    body.textContent = item.description || 'No description for this session tool.';
+    body.textContent = extensionDetailText(item);
     const status = document.createElement('p');
     const statusInfo = extensionStatus(item);
     status.className = `ext-detail-status is-${statusInfo.kind}`;

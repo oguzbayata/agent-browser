@@ -72,10 +72,94 @@ h1 {
 
 .lede {
   margin: 0;
-  max-width: 520px;
+  max-width: 560px;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.65;
+}
+
+.status {
+  min-height: 1.2em;
+  margin: 10px 0 0;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.intel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.intel-btn,
+.intel-add-section button,
+.card-add button {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgba(61, 255, 200, 0.45);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font: 13px/1 "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.intel-btn:hover,
+.intel-add-section button:hover,
+.card-add button:hover,
+.intel-btn:focus-visible {
+  background: rgba(61, 255, 200, 0.08);
+  outline: none;
+}
+
+.intel-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.intel-add-section,
+.card-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.intel-add-section input,
+.card-add input {
+  height: 34px;
+  width: 180px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0a0c0f;
+  color: var(--text);
+  font: 13px/1 "Segoe UI", system-ui, sans-serif;
+}
+
+.card-add {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.card-add input {
+  width: 120px;
+}
+
+.card.is-live {
+  border-color: rgba(61, 255, 200, 0.35);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
 }
 
 .catalog {

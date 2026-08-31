@@ -13,6 +13,9 @@ const { collectIntel, knownModelRoots, isLoopbackHttpUrl, resolveLocalChatTarget
 const { AD_HIDE_CSS, shouldBlockUrl } = require('./tracker-block');
 const { findFfmpeg, findYtDlp, hunterPathEnv, isWindowsStoreStub } = require('./hunter-tools');
 const agentExtensionCatalog = require('./extensions_data');
+const catalogTools = require('./session-catalog-tools');
+const usefulLinkSeed = require('./useful-links-seed');
+const usefulLinksLive = require('./useful-links-live');
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('oguzbayata.agent-browser');
@@ -61,6 +64,7 @@ const DOWNLOADS_PATH = path.join(__dirname, 'downloads.html');
 const DOWNLOADS_FILE_URL = pathToFileURL(DOWNLOADS_PATH).href;
 const DOWNLOADS_PRELOAD_PATH = path.join(__dirname, 'downloads-preload.js');
 const USEFUL_LINKS_PATH = path.join(__dirname, 'useful-links.html');
+const USEFUL_LINKS_PRELOAD_PATH = path.join(__dirname, 'useful-links-preload.js');
 const USEFUL_LINKS_FILE_URL = pathToFileURL(USEFUL_LINKS_PATH).href;
 const EXTENSIONS_PATH = path.join(__dirname, 'extensions.html');
 const EXTENSIONS_FILE_URL = pathToFileURL(EXTENSIONS_PATH).href;
@@ -126,6 +130,7 @@ const BOOLEAN_SETTINGS = new Set([
   'rateLimitGuard',
   'sandboxIsolator',
   'excommunicadoLock',
+  ...catalogTools.SETTING_KEYS,
 ]);
 const AGENT_BRIDGE_HOST = '127.0.0.1';
 const AGENT_BRIDGE_PORT = 17331;
@@ -187,6 +192,7 @@ const EXTENSION_TOGGLE_IDS = Object.freeze({
   'excommunicado-lock': 'excommunicadoLock',
   'user-agent-rotator': 'spoofUserAgent',
   'third-party-cookie-annihilator': 'stripThirdPartyCookies',
+  ...catalogTools.TOGGLE_IDS,
 });
 const EXT_EXPERT_DANGEROUS_IDS = new Set(['dead-man-switch', 'excommunicado-lock']);
 const EXT_EXPERT_CATALOG = Object.freeze(
@@ -249,6 +255,11 @@ const memoryBridgeWebPreferences = Object.freeze({
   preload: MEMORY_BRIDGE_PRELOAD_PATH,
 });
 
+const usefulLinksWebPreferences = Object.freeze({
+  ...sharedSessionPrefs,
+  preload: USEFUL_LINKS_PRELOAD_PATH,
+});
+
 let mainWindow = null;
 const views = new Map();
 const scraperChildren = new Set();
@@ -298,6 +309,10 @@ const sessionCodeSnippets = [];
 const agentFailCounts = new Map();
 const agentSearchEngines = new Map();
 const sessionExtensionState = new Map();
+const sessionUsefulUserSections = [];
+const sessionUsefulExtraLinks = new Map();
+let usefulLinksLiveCache = { signature: '', fetchedAt: 0, sections: [], error: '' };
+let lastUsefulIntelSig = '';
 const agentLockedTabs = new Set();
 const XHR_CAPTURE_LIMIT = 80;
 const N8N_WEBHOOK_URL = 'http://127.0.0.1:5678/webhook/agent-browser';
@@ -343,6 +358,10 @@ let profileMenuView = null;
 let profileMenuReady = Promise.resolve();
 let profileHostWindow = null;
 let profileHostDismiss = null;
+let downloadsMenuView = null;
+let downloadsMenuReady = Promise.resolve();
+let downloadsHostWindow = null;
+let downloadsHostDismiss = null;
 const sessionLocalFiles = [];
 const sessionLocalDirs = [];
 let selectedLocalModel = null;
@@ -454,10 +473,33 @@ const privacySettings = {
   rateLimitGuard: false,
   sandboxIsolator: false,
   excommunicadoLock: false,
+  ...catalogTools.defaultSettings(),
 };
 global.isDownloaderEnabled = false;
 let blockedRequestCount = 0;
 const tabSecurityStats = new Map();
+const lastSecurityHeaders = new Map();
+const tabIdleAt = new Map();
+let idleRamTimer = null;
+
+function summarizeSecurityHeaders(headers) {
+  const pick = (name) => {
+    for (const key of Object.keys(headers || {})) {
+      if (key.toLowerCase() === name) {
+        const value = headers[key];
+        return Array.isArray(value) ? String(value[0] || '') : String(value || '');
+      }
+    }
+    return '';
+  };
+  return {
+    csp: Boolean(pick('content-security-policy')),
+    hsts: Boolean(pick('strict-transport-security')),
+    xfo: Boolean(pick('x-frame-options')),
+    referrerPolicy: Boolean(pick('referrer-policy')),
+    at: Date.now(),
+  };
+}
 let securityStatsFlush = null;
 let agentBridgeToken = '';
 let sessionApiKeyValue = '';
@@ -704,6 +746,10 @@ function applySessionPermissions(isolatedSession) {
       callback(false);
       return;
     }
+    if (privacySettings.geolocationShift && permission === 'geolocation') {
+      callback(false);
+      return;
+    }
     callback(true);
   });
 
@@ -712,6 +758,9 @@ function applySessionPermissions(isolatedSession) {
       return false;
     }
     if (mediaPermissionBlocked(permission)) {
+      return false;
+    }
+    if (privacySettings.geolocationShift && permission === 'geolocation') {
       return false;
     }
     return true;
@@ -795,6 +844,16 @@ function attachPrivacyNetworkGuards(isolatedSession) {
       return;
     }
 
+    const catalogHit = catalogTools.beforeRequest(details, privacySettings);
+    if (catalogHit?.cancel) {
+      callback({ cancel: true });
+      return;
+    }
+    if (catalogHit?.redirectURL) {
+      callback({ redirectURL: catalogHit.redirectURL });
+      return;
+    }
+
     const upgraded = httpsUpgradeUrl(details.url);
     if (upgraded) {
       bumpSecurityStat(tabId, 'upgrades');
@@ -813,6 +872,14 @@ function attachPrivacyNetworkGuards(isolatedSession) {
     if (privacySettings.sendDnt) {
       setHeader(requestHeaders, 'DNT', '1');
     }
+    if (privacySettings.referrerStrip) {
+      deleteHeader(requestHeaders, 'Referer');
+      deleteHeader(requestHeaders, 'Referrer');
+    }
+    if (privacySettings.etagCacheClean) {
+      deleteHeader(requestHeaders, 'If-None-Match');
+      deleteHeader(requestHeaders, 'If-Modified-Since');
+    }
 
     if (privacySettings.stripThirdPartyCookies && isThirdPartyRequest(details)) {
       if (headerPresent(requestHeaders, 'Cookie')) {
@@ -825,22 +892,32 @@ function attachPrivacyNetworkGuards(isolatedSession) {
   });
 
   isolatedSession.webRequest.onHeadersReceived(NETWORK_FILTER, (details, callback) => {
+    const headers = details.responseHeaders ? { ...details.responseHeaders } : {};
+    if (privacySettings.httpHeaderAnalyze && details.resourceType === 'mainFrame') {
+      lastSecurityHeaders.set(tabIdFromDetails(details) || 'session', summarizeSecurityHeaders(headers));
+    }
+    if (privacySettings.etagCacheClean && headers) {
+      deleteHeader(headers, 'ETag');
+      deleteHeader(headers, 'Last-Modified');
+    }
     if (
-      !privacySettings.stripThirdPartyCookies ||
-      !isThirdPartyRequest(details) ||
-      !details.responseHeaders
+      privacySettings.stripThirdPartyCookies &&
+      isThirdPartyRequest(details) &&
+      details.responseHeaders
     ) {
-      callback({});
+      if (headerPresent(details.responseHeaders, 'Set-Cookie')) {
+        bumpSecurityStat(tabIdFromDetails(details), 'cookies');
+      }
+      callback({
+        responseHeaders: stripSetCookieHeaders(privacySettings.etagCacheClean ? headers : details.responseHeaders),
+      });
       return;
     }
-
-    if (headerPresent(details.responseHeaders, 'Set-Cookie')) {
-      bumpSecurityStat(tabIdFromDetails(details), 'cookies');
+    if (privacySettings.etagCacheClean) {
+      callback({ responseHeaders: headers });
+      return;
     }
-
-    callback({
-      responseHeaders: stripSetCookieHeaders(details.responseHeaders),
-    });
+    callback({});
   });
 
   isolatedSession.webRequest.onCompleted(NETWORK_FILTER, (details) => {
@@ -1200,6 +1277,7 @@ function purgeSessionChromeState() {
   }
   hideShortcutsMenu({ notify: false });
   hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   if (shortcutsMenuView) {
     try {
       if (!shortcutsMenuView.webContents.isDestroyed()) {
@@ -1212,6 +1290,7 @@ function purgeSessionChromeState() {
     shortcutsMenuReady = Promise.resolve();
   }
   hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   if (profileMenuView) {
     try {
       if (!profileMenuView.webContents.isDestroyed()) {
@@ -1223,12 +1302,29 @@ function purgeSessionChromeState() {
     profileMenuView = null;
     profileMenuReady = Promise.resolve();
   }
+  hideDownloadsMenu({ notify: false });
+  if (downloadsMenuView) {
+    try {
+      if (!downloadsMenuView.webContents.isDestroyed()) {
+        downloadsMenuView.webContents.close();
+      }
+    } catch {
+      // Wipe still proceeds if the popup view is already gone.
+    }
+    downloadsMenuView = null;
+    downloadsMenuReady = Promise.resolve();
+  }
   siteOpen = false;
   toolsOpen = false;
   shortcutsOpen = false;
   profileOpen = false;
+  downloadsOpen = false;
   agentSearchEngines.clear();
   sessionExtensionState.clear();
+  sessionUsefulUserSections.length = 0;
+  sessionUsefulExtraLinks.clear();
+  usefulLinksLiveCache = { signature: '', fetchedAt: 0, sections: [], error: '' };
+  lastUsefulIntelSig = '';
   tabSecurityStats.clear();
   blockedRequestCount = 0;
   if (securityStatsFlush) {
@@ -1582,7 +1678,7 @@ function saveDataImageToDownloads(rawUrl) {
   record.received = parsed.buffer.length;
   record.total = parsed.buffer.length;
   record.speed = '';
-  openDownloadsTab();
+  revealDownloadsMenu();
   broadcastDownloads();
   emitDiskWarning();
   return true;
@@ -1922,7 +2018,7 @@ async function scrapePageImages(webContents) {
   if (!sources.length) {
     return;
   }
-  openDownloadsTab();
+  revealDownloadsMenu();
   for (const src of sources) {
     if (panicInProgress || webContents.isDestroyed()) {
       break;
@@ -2264,7 +2360,7 @@ function startMediaHunterDownload(pageUrl, srcUrl) {
 
   const savePath = uniqueSavePath(app.getPath('downloads'), 'agent-video.mp4');
   const record = createHunterRecord(path.basename(savePath), savePath);
-  openDownloadsTab();
+  revealDownloadsMenu();
   broadcastDownloads();
   spawnYtDlpDownload(extractUrl, record, savePath).catch((error) => {
     currentFail(record, 'interrupted', error?.message);
@@ -2301,6 +2397,9 @@ function broadcastDownloads() {
     items: [...sessionDownloads.values()].map(serializeDownload),
   };
   sendToChrome('agent:downloads', payload);
+  if (downloadsViewAlive() && !downloadsMenuView.webContents.isDestroyed()) {
+    downloadsMenuView.webContents.send('agent:downloads', payload);
+  }
   for (const entry of views.values()) {
     const webContents = entry.view?.webContents;
     if (entry.kind === 'downloads' && webContents && !webContents.isDestroyed()) {
@@ -2341,7 +2440,7 @@ function attachDownloadManager(isolatedSession) {
     }
     sessionDownloads.set(id, record);
     activeDownloadItems.set(id, item);
-    openDownloadsTab();
+    revealDownloadsMenu();
     broadcastDownloads();
 
     item.on('updated', (_updatedEvent, state) => {
@@ -2392,6 +2491,41 @@ function attachGuestContextMenu(webContents) {
       (params.mediaType === 'video' || isYoutubeWatchUrl(pageUrl));
 
     const template = [];
+    if (showDownloadImage && privacySettings.reverseImage) {
+      const imageUrl = params.srcURL || params.linkURL || '';
+      template.push(
+        {
+          label: 'Reverse image search',
+          click: () => {
+            if (!imageUrl) {
+              return;
+            }
+            createGuestTab(`https://lens.google.com/uploadbyurl?url=${encodeURIComponent(imageUrl)}`);
+            createGuestTab(`https://yandex.com/images/search?rpt=imageview&url=${encodeURIComponent(imageUrl)}`);
+            createGuestTab(`https://tineye.com/search?url=${encodeURIComponent(imageUrl)}`);
+          },
+        },
+        { type: 'separator' },
+      );
+    }
+    if (privacySettings.base64Decode && params.selectionText) {
+      template.push({
+        label: 'Decode selection',
+        click: () => {
+          webContents
+            .executeJavaScript(
+              `typeof window.__agentDecode === 'function' ? window.__agentDecode(${JSON.stringify(params.selectionText)}) : null`,
+              true,
+            )
+            .then((result) => {
+              if (result && result.value) {
+                clipboard.writeText(String(result.value));
+              }
+            })
+            .catch(() => {});
+        },
+      });
+    }
     if (showDownloadImage) {
       template.push(
         {
@@ -2956,8 +3090,26 @@ function loadMemoryBridgePage(webContents) {
   return webContents.loadFile(MEMORY_BRIDGE_PATH);
 }
 
+function findUsefulLinksTabId() {
+  for (const [tabId, entry] of views.entries()) {
+    const webContents = entry.view?.webContents;
+    if (entry.kind === 'useful' && webContents && !webContents.isDestroyed()) {
+      return tabId;
+    }
+  }
+  return null;
+}
+
 function openUsefulLinksTab() {
-  return createGuestTab(USEFUL_LINKS_FILE_URL);
+  const existing = findUsefulLinksTabId();
+  if (existing) {
+    switchToTab(existing);
+    refreshUsefulLinksCatalog({ force: false }).catch(() => {});
+    return existing;
+  }
+  const tabId = createGuestTab(USEFUL_LINKS_FILE_URL);
+  refreshUsefulLinksCatalog({ force: false }).catch(() => {});
+  return tabId;
 }
 
 function findExtensionsTabId() {
@@ -3706,6 +3858,8 @@ function injectSessionGuards(webContents) {
     injectGuestScript(webContents, WEB3_SHIELD_SOURCE);
   }
   injectGuestScript(webContents, `(${agentPageTools.toString()})(${JSON.stringify(pageToolFlags())});`);
+  injectGuestScript(webContents, catalogTools.pageToolSource(privacySettings));
+  refreshCatalogLookups(webContents);
 }
 
 function injectSessionGuardsIntoGuests() {
@@ -3714,7 +3868,7 @@ function injectSessionGuardsIntoGuests() {
     if (!webContents || webContents.isDestroyed()) {
       continue;
     }
-    if (entry.kind === 'downloads' || entry.kind === 'extensions' || entry.kind === 'settings' || entry.kind === 'memory') {
+    if (entry.kind === 'downloads' || entry.kind === 'extensions' || entry.kind === 'settings' || entry.kind === 'memory' || entry.kind === 'useful') {
       continue;
     }
     injectSessionGuards(webContents);
@@ -3973,6 +4127,29 @@ async function recalledMemoryText() {
 }
 
 async function withAgentMemory(messages) {
+  if (!Array.isArray(messages)) {
+    return messages;
+  }
+  let next = messages;
+  if (privacySettings.systemPromptInject) {
+    next = [
+      {
+        role: 'system',
+        content: 'Session system prompt: stay with facts from this RAM session and the current page. Do not invent sources.',
+      },
+      ...next,
+    ];
+  }
+  if (privacySettings.genericLlmBridge) {
+    const page = await extractVisiblePageText();
+    if (page) {
+      next = [{ role: 'system', content: `Current page text:\n${page.slice(0, 8000)}` }, ...next];
+    }
+  }
+  if (!privacySettings.siyuanBridge) {
+    return next;
+  }
+  messages = next;
   if (!privacySettings.siyuanBridge || !Array.isArray(messages)) {
     return messages;
   }
@@ -4156,6 +4333,207 @@ function noteAgentSuccess(tabId) {
   }
 }
 
+function applyDohMode() {
+  if (typeof app.configureHostResolver !== 'function') {
+    return;
+  }
+  if (privacySettings.dohForcer) {
+    app.configureHostResolver({
+      enableBuiltInResolver: true,
+      secureDnsMode: 'secure',
+      secureDnsServers: ['https://cloudflare-dns.com/dns-query'],
+    });
+    return;
+  }
+  app.configureHostResolver({
+    enableBuiltInResolver: true,
+    secureDnsMode: 'automatic',
+    secureDnsServers: [],
+  });
+}
+
+function applyNetworkThrottle() {
+  const isolated = getIsolatedSession();
+  if (privacySettings.networkThrottle && typeof isolated.enableNetworkEmulation === 'function') {
+    isolated.enableNetworkEmulation({
+      latency: 400,
+      downloadThroughput: 50 * 1024,
+      uploadThroughput: 20 * 1024,
+    });
+    return;
+  }
+  if (typeof isolated.disableNetworkEmulation === 'function') {
+    isolated.disableNetworkEmulation();
+  }
+}
+
+function touchTabIdle(tabId) {
+  if (tabId) {
+    tabIdleAt.set(tabId, Date.now());
+  }
+}
+
+function applyIdleRamPurge() {
+  if (idleRamTimer) {
+    clearInterval(idleRamTimer);
+    idleRamTimer = null;
+  }
+  if (!privacySettings.idleRamPurge) {
+    return;
+  }
+  idleRamTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [tabId, entry] of views) {
+      if (entry.kind !== 'guest' || tabId === activeTabId) {
+        continue;
+      }
+      const last = tabIdleAt.get(tabId) || 0;
+      if (now - last < 120000) {
+        continue;
+      }
+      const webContents = entry.view?.webContents;
+      if (!webContents || webContents.isDestroyed()) {
+        continue;
+      }
+      if (typeof webContents.setBackgroundThrottling === 'function') {
+        webContents.setBackgroundThrottling(true);
+      }
+    }
+    const isolated = getIsolatedSession();
+    if (isolated && typeof isolated.clearCache === 'function') {
+      isolated.clearCache().catch(() => {});
+    }
+  }, 30000);
+}
+
+function applyCatalogSideEffect(key) {
+  if (!catalogTools.isCatalogSetting(key)) {
+    return;
+  }
+  if (key === 'dohForcer') {
+    applyDohMode();
+    return;
+  }
+  if (key === 'networkThrottle') {
+    applyNetworkThrottle();
+    return;
+  }
+  if (key === 'idleRamPurge') {
+    applyIdleRamPurge();
+    return;
+  }
+  if (key === 'webrtcLeakBlock') {
+    applyWebRtcPolicyToAll();
+    injectSessionGuardsIntoGuests();
+    return;
+  }
+  if (key === 'geolocationShift') {
+    applySessionPermissions(getIsolatedSession());
+    injectSessionGuardsIntoGuests();
+    return;
+  }
+  injectSessionGuardsIntoGuests();
+}
+
+function refreshCatalogLookups(webContents) {
+  if (!webContents || webContents.isDestroyed() || isInternalGuestUrl(webContents.getURL())) {
+    return;
+  }
+  const pageUrl = webContents.getURL();
+  let host = '';
+  try {
+    host = new URL(pageUrl).hostname;
+  } catch {
+    host = '';
+  }
+  const inject = (key, value) => {
+    injectGuestScript(
+      webContents,
+      `window.__agentCatalog=window.__agentCatalog||{};window.__agentCatalog[${JSON.stringify(key)}]=${JSON.stringify(value)};`,
+    );
+  };
+  if (privacySettings.httpHeaderAnalyze) {
+    inject('headers', lastSecurityHeaders.get(activeTabId) || lastSecurityHeaders.get('session') || null);
+  }
+  if (privacySettings.waybackFetch && pageUrl.startsWith('http')) {
+    fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(pageUrl)}`)
+      .then((res) => res.json())
+      .then((body) => inject('wayback', body?.archived_snapshots?.closest || null))
+      .catch(() => inject('wayback', null));
+  }
+  if (privacySettings.shodanPassive && host) {
+    dnsLookup(host)
+      .then((ip) => fetch(`https://internetdb.shodan.io/${ip}`).then((res) => (res.ok ? res.json() : null)))
+      .then((body) => inject('shodan', body))
+      .catch(() => inject('shodan', null));
+  }
+  if (privacySettings.bgpVisualize && host) {
+    fetch(`https://stat.ripe.net/data/prefix-overview/data.json?resource=${encodeURIComponent(host)}`)
+      .then((res) => res.json())
+      .then((body) => inject('bgp', body?.data || null))
+      .catch(() => inject('bgp', null));
+  }
+  if (privacySettings.localhostScan) {
+    scanLocalhostPorts().then((ports) => inject('localhost', ports)).catch(() => inject('localhost', []));
+  }
+  if (privacySettings.sslInspect && host) {
+    inspectTlsCertificate(host).then((cert) => inject('tls', cert)).catch(() => inject('tls', null));
+  }
+}
+
+function dnsLookup(host) {
+  return new Promise((resolve, reject) => {
+    require('node:dns').lookup(host, (error, address) => {
+      if (error || !address) {
+        reject(error || new Error('no address'));
+        return;
+      }
+      resolve(address);
+    });
+  });
+}
+
+function scanLocalhostPorts() {
+  const ports = [3000, 3001, 4173, 5173, 8000, 8080, 4200, 5000, 9222];
+  return Promise.all(
+    ports.map(
+      (port) =>
+        new Promise((resolve) => {
+          const socket = net.connect({ host: '127.0.0.1', port }, () => {
+            socket.end();
+            resolve(port);
+          });
+          socket.setTimeout(250);
+          socket.on('timeout', () => {
+            socket.destroy();
+            resolve(0);
+          });
+          socket.on('error', () => resolve(0));
+        }),
+    ),
+  ).then((found) => found.filter(Boolean));
+}
+
+function inspectTlsCertificate(host) {
+  return new Promise((resolve) => {
+    const tls = require('node:tls');
+    const socket = tls.connect({ host, port: 443, servername: host, timeout: 4000 }, () => {
+      const cert = socket.getPeerCertificate();
+      socket.end();
+      resolve({
+        subject: cert?.subject?.CN || host,
+        issuer: cert?.issuer?.CN || '',
+        validTo: cert?.valid_to || '',
+      });
+    });
+    socket.on('error', () => resolve(null));
+    socket.on('timeout', () => {
+      socket.destroy();
+      resolve(null);
+    });
+  });
+}
+
 function applyExtensionSideEffect(key) {
   switch (key) {
     case 'canvasPoisoner':
@@ -4196,6 +4574,7 @@ function applyExtensionSideEffect(key) {
     case 'excommunicadoLock':
       break;
     default:
+      applyCatalogSideEffect(key);
       break;
   }
 }
@@ -4239,6 +4618,12 @@ function attachTabListeners(tabId, webContents) {
     }
     if (entry?.kind === 'memory') {
       if (!isMemoryBridgeFile(url)) {
+        event.preventDefault();
+      }
+      return;
+    }
+    if (entry?.kind === 'useful') {
+      if (!isUsefulLinksFile(url)) {
         event.preventDefault();
       }
       return;
@@ -4338,6 +4723,7 @@ function switchToTab(tabId) {
   }
 
   activeTabId = tabId;
+  touchTabIdle(tabId);
   entry.view.setBounds(viewBounds());
   bringViewToFront(entry.view);
   applyViewPerformanceMode();
@@ -4371,6 +4757,8 @@ function createGuestTab(initialUrl, options = {}) {
           ? settingsWebPreferences
         : memory
           ? memoryBridgeWebPreferences
+        : usefulLinks
+          ? usefulLinksWebPreferences
           : webPreferencesForGuest(owner),
   });
   view.setBackgroundColor('#070809');
@@ -4380,7 +4768,7 @@ function createGuestTab(initialUrl, options = {}) {
     owner,
     pinned: false,
     window: host,
-    kind: downloads ? 'downloads' : extensions ? 'extensions' : settingsPage ? 'settings' : memory ? 'memory' : 'guest',
+    kind: downloads ? 'downloads' : extensions ? 'extensions' : settingsPage ? 'settings' : memory ? 'memory' : usefulLinks ? 'useful' : 'guest',
   });
   tabSecurityStats.set(tabId, emptySecurityStats());
   attachTabListeners(tabId, view.webContents);
@@ -4594,6 +4982,7 @@ function triggerExcommunicado() {
   hideToolsMenu({ notify: false });
   hideShortcutsMenu({ notify: false });
   hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   setTimeout(forcePanicQuit, PANIC_QUIT_MS);
 
   try {
@@ -4634,6 +5023,7 @@ function triggerExcommunicado() {
     privacySettings.rateLimitGuard = false;
     privacySettings.sandboxIsolator = false;
     privacySettings.excommunicadoLock = false;
+    catalogTools.resetSettings(privacySettings);
     extExpertHistory.length = 0;
     stopDeadManWatch();
     global.isDownloaderEnabled = false;
@@ -4758,6 +5148,13 @@ function isDownloadsSender(event) {
   if (!contents || contents.isDestroyed()) {
     return false;
   }
+  if (
+    downloadsMenuView &&
+    !downloadsMenuView.webContents.isDestroyed() &&
+    downloadsMenuView.webContents === contents
+  ) {
+    return true;
+  }
   for (const entry of views.values()) {
     if (
       entry.kind === 'downloads' &&
@@ -4787,6 +5184,24 @@ function isExtensionsSender(event) {
     }
   }
   return isExtensionsFile(contents.getURL());
+}
+
+function isUsefulLinksSender(event) {
+  const contents = event?.sender;
+  if (!contents || contents.isDestroyed()) {
+    return false;
+  }
+  for (const entry of views.values()) {
+    if (
+      entry.kind === 'useful' &&
+      entry.view?.webContents &&
+      !entry.view.webContents.isDestroyed() &&
+      entry.view.webContents === contents
+    ) {
+      return true;
+    }
+  }
+  return isUsefulLinksFile(contents.getURL());
 }
 
 function isMemoryBridgeSender(event) {
@@ -4884,6 +5299,7 @@ function showOverflowMenu(anchor, host) {
   hideToolsMenu({ notify: false });
   hideShortcutsMenu({ notify: false });
   hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   hideOverflowMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
@@ -5024,6 +5440,7 @@ function showShieldMenu(anchor, host) {
   hideToolsMenu({ notify: false });
   hideShortcutsMenu({ notify: false });
   hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   hideShieldMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
@@ -5164,6 +5581,7 @@ function showSiteMenu(anchor, host) {
   hideToolsMenu({ notify: false });
   hideShortcutsMenu({ notify: false });
   hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   hideSiteMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
@@ -5308,6 +5726,7 @@ function showToolsMenu(anchor, host) {
   hideSiteMenu({ notify: false });
   hideShortcutsMenu({ notify: false });
   hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   hideToolsMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
@@ -5457,6 +5876,7 @@ function showShortcutsMenu(anchor, host) {
   hideToolsMenu({ notify: false });
   hideShortcutsMenu({ notify: false });
   hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
   }
@@ -5601,6 +6021,7 @@ function showProfileMenu(anchor, host) {
   hideToolsMenu({ notify: false });
   hideShortcutsMenu({ notify: false });
   hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   if (!host || host.isDestroyed()) {
     return;
   }
@@ -5661,6 +6082,153 @@ function showProfileMenu(anchor, host) {
       console.error('Failed to open profile menu:', error);
       hideProfileMenu();
     });
+}
+
+function downloadsViewAlive() {
+  return Boolean(downloadsMenuView && !downloadsMenuView.webContents.isDestroyed());
+}
+
+function detachDownloadsHost() {
+  if (downloadsHostWindow && !downloadsHostWindow.isDestroyed() && downloadsHostDismiss) {
+    downloadsHostWindow.removeListener('move', downloadsHostDismiss);
+    downloadsHostWindow.removeListener('resize', downloadsHostDismiss);
+  }
+  downloadsHostWindow = null;
+  downloadsHostDismiss = null;
+}
+
+function notifyChromeDownloadsClosed() {
+  for (const win of chromeWindows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('agent:downloads-closed');
+    }
+  }
+}
+
+function hideDownloadsMenu(options = {}) {
+  const notify = options.notify !== false;
+  downloadsOpen = false;
+  const host = downloadsHostWindow;
+  detachDownloadsHost();
+  if (downloadsViewAlive() && host && !host.isDestroyed()) {
+    try {
+      host.contentView.removeChildView(downloadsMenuView);
+    } catch {
+      // View may already have been detached.
+    }
+  }
+  if (notify) {
+    notifyChromeDownloadsClosed();
+  }
+}
+
+function ensureDownloadsMenuView() {
+  if (downloadsViewAlive()) {
+    return downloadsMenuReady;
+  }
+
+  downloadsMenuView = new WebContentsView({
+    webPreferences: downloadsWebPreferences,
+  });
+  downloadsMenuView.setBackgroundColor('#292a2d');
+  downloadsMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  watchHiddenScrollbars(downloadsMenuView.webContents);
+  downloadsMenuView.webContents.on('blur', () => {
+    setTimeout(() => {
+      if (
+        downloadsOpen &&
+        downloadsViewAlive() &&
+        !downloadsMenuView.webContents.isFocused()
+      ) {
+        hideDownloadsMenu();
+      }
+    }, 0);
+  });
+  downloadsMenuReady = downloadsMenuView.webContents.loadFile(path.join(__dirname, 'downloads-menu.html'));
+  return downloadsMenuReady;
+}
+
+function showDownloadsMenu(anchor, host) {
+  hideOverflowMenu({ notify: false });
+  hideShieldMenu({ notify: false });
+  hideSiteMenu({ notify: false });
+  hideToolsMenu({ notify: false });
+  hideShortcutsMenu({ notify: false });
+  hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
+  if (!host || host.isDestroyed()) {
+    return;
+  }
+
+  const { width: contentWidth, height: contentHeight } = host.getContentBounds();
+  const width = Math.min(400, Math.max(MENU_DROPDOWN_WIDTH, contentWidth - 16));
+  const btnBottom = Number(anchor && anchor.bottom);
+  const btnRight = Number(anchor && anchor.right);
+  const bottom = Number.isFinite(btnBottom) ? btnBottom : TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT;
+  const right = Number.isFinite(btnRight) ? btnRight : contentWidth - 8;
+  let x = Math.round(right - width);
+  let y = Math.round(bottom + 4);
+  x = Math.max(8, Math.min(x, Math.max(8, contentWidth - width - 8)));
+  if (y < 8) {
+    y = 8;
+  }
+  const maxH = Math.max(180, contentHeight - y - 8);
+  const initialH = Math.min(420, maxH);
+
+  downloadsHostWindow = host;
+  downloadsOpen = true;
+  downloadsHostDismiss = () => {
+    if (downloadsHostWindow === host) {
+      hideDownloadsMenu();
+    }
+  };
+  host.on('move', downloadsHostDismiss);
+  host.on('resize', downloadsHostDismiss);
+
+  ensureDownloadsMenuView()
+    .then(async () => {
+      if (!downloadsOpen || downloadsHostWindow !== host || host.isDestroyed() || !downloadsViewAlive()) {
+        return;
+      }
+      broadcastDownloads();
+      downloadsMenuView.setBounds({ x, y, width, height: Math.min(480, maxH) });
+      let measured = initialH;
+      try {
+        measured = await downloadsMenuView.webContents.executeJavaScript(`(() => {
+          const menu = document.getElementById('agent-downloads-menu');
+          if (!menu) {
+            return 0;
+          }
+          return Math.ceil(Math.max(menu.scrollHeight, menu.getBoundingClientRect().height));
+        })()`);
+      } catch {
+        // Keep the initial height if measurement fails.
+      }
+      if (!downloadsOpen || downloadsHostWindow !== host || !downloadsViewAlive()) {
+        return;
+      }
+      const raw = Number(measured);
+      const height = Math.min(Math.max(raw >= 80 ? raw : initialH, 160), maxH);
+      downloadsMenuView.setBounds({ x, y, width, height });
+      host.contentView.addChildView(downloadsMenuView);
+      downloadsMenuView.webContents.focus();
+    })
+    .catch((error) => {
+      console.error('Failed to open downloads menu:', error);
+      hideDownloadsMenu();
+    });
+}
+
+function revealDownloadsMenu(anchor) {
+  const host = mainWindow;
+  if (!host || host.isDestroyed()) {
+    return;
+  }
+  if (downloadsOpen && downloadsViewAlive()) {
+    broadcastDownloads();
+    return;
+  }
+  showDownloadsMenu(anchor || null, host);
 }
 
 function sanitizeUrl(raw) {
@@ -5775,7 +6343,7 @@ function handleAppShortcut(event, input) {
   }
   if (lower === 'j' && !shift) {
     event.preventDefault();
-    openDownloadsTab();
+    revealDownloadsMenu();
     return;
   }
   if (lower === 'p' && !shift) {
@@ -6170,25 +6738,30 @@ ipcMain.handle('agent:download-cancel', async (event, downloadId) => {
   return { ok: true };
 });
 
-ipcMain.handle('agent:downloads-panel', async (event, open) => {
+ipcMain.handle('agent:downloads-panel', async (event, payload) => {
   if (!isChromeSender(event)) {
     return { ok: false };
   }
 
-  downloadsOpen = false;
+  const open = typeof payload === 'object' && payload !== null ? Boolean(payload.open) : Boolean(payload);
+  const anchor = payload && typeof payload === 'object' ? payload.anchor : null;
+  const host = chromeWindowFromEvent(event) || mainWindow;
   if (open) {
-    openDownloadsTab();
+    utilityOpen = false;
+    showDownloadsMenu(anchor, host);
+  } else {
+    hideDownloadsMenu();
   }
-  fitBrowserView();
-  return { ok: true, open: Boolean(findDownloadsTabId()) };
+  return { ok: true, open: downloadsOpen };
 });
 
 ipcMain.handle('agent:downloads-open', async (event) => {
   if (!isChromeSender(event)) {
     return { ok: false };
   }
-  const tabId = openDownloadsTab();
-  return { ok: Boolean(tabId), tabId };
+  const host = chromeWindowFromEvent(event) || mainWindow;
+  showDownloadsMenu(null, host);
+  return { ok: true, open: downloadsOpen };
 });
 
 ipcMain.handle('agent:extensions-open', async (event) => {
@@ -6198,6 +6771,7 @@ ipcMain.handle('agent:extensions-open', async (event) => {
   hideToolsMenu({ notify: false });
   hideShortcutsMenu({ notify: false });
   hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   const tabId = openExtensionsTab();
   return { ok: Boolean(tabId), tabId };
 });
@@ -6212,6 +6786,7 @@ ipcMain.handle('agent:settings-open', async (event) => {
   hideToolsMenu({ notify: false });
   hideShortcutsMenu({ notify: false });
   hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   utilityOpen = false;
   settingsOpen = false;
   const tabId = openSettingsTab();
@@ -6354,7 +6929,7 @@ ipcMain.handle('agent:tools-action', async (event, action) => {
   }
   hideToolsMenu();
   if (action === 'downloads') {
-    openDownloadsTab();
+    revealDownloadsMenu();
     return { ok: true };
   }
   if (action === 'memory-bridge') {
@@ -6388,6 +6963,7 @@ ipcMain.handle('agent:utility-panel', async (event, open) => {
     hideToolsMenu({ notify: false });
     hideShortcutsMenu({ notify: false });
     hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   }
   fitBrowserView();
   return { ok: true, open: utilityOpen };
@@ -6682,6 +7258,12 @@ async function pushLocalIntel() {
       sendToChrome('agent:local-intel', snapshot);
       sendToKind('extensions', 'agent:local-intel', snapshot);
       sendToKind('settings', 'agent:local-intel', snapshot);
+      sendToKind('useful', 'agent:local-intel', snapshot);
+      const sig = usefulLinksLive.intelSignature(snapshot);
+      if (sig && sig !== lastUsefulIntelSig && findUsefulLinksTabId()) {
+        lastUsefulIntelSig = sig;
+        refreshUsefulLinksCatalog({ force: true, intel: snapshot }).catch(() => {});
+      }
     } while (localIntelPending);
     return snapshot;
   } catch {
@@ -6875,12 +7457,173 @@ ipcMain.handle('agent:bookmarks-panel', async (event, open) => {
   return { ok: true, open: bookmarksPanelOpen };
 });
 
+function currentUsefulIntel() {
+  return {
+    models: lastIntelModels,
+    agents: lastIntelAgents,
+    selectedId: selectedLocalModel?.id || null,
+  };
+}
+
+function snapshotUsefulLinks(intel, extra = {}) {
+  const merged = usefulLinksLive.mergeCatalog(usefulLinkSeed, usefulLinksLiveCache.sections, sessionUsefulUserSections);
+  const sections = merged.map((section) => {
+    const extras = sessionUsefulExtraLinks.get(section.id) || [];
+    return extras.length ? { ...section, links: [...extras, ...section.links].slice(0, 40) } : section;
+  });
+  return {
+    ok: true,
+    bound: usefulLinksLive.boundLine(intel || currentUsefulIntel()),
+    status: extra.status || usefulLinksLiveCache.error || '',
+    fetchedAt: usefulLinksLiveCache.fetchedAt || 0,
+    sections,
+  };
+}
+
+async function searchGithubRepos(query, limit) {
+  const url = new URL('https://api.github.com/search/repositories');
+  url.searchParams.set('q', String(query || 'local llm'));
+  url.searchParams.set('sort', 'updated');
+  url.searchParams.set('order', 'desc');
+  url.searchParams.set('per_page', String(Math.min(8, Math.max(3, Number(limit) || 6))));
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'Agent-Browser',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!response.ok) {
+    throw new Error(`GitHub ${response.status}`);
+  }
+  const body = await response.json();
+  return (Array.isArray(body.items) ? body.items : [])
+    .map((item) =>
+      usefulLinksLive.normalizeLink({
+        name: item.full_name,
+        url: item.html_url,
+        note: String(item.description || '').slice(0, 180),
+      }),
+    )
+    .filter(Boolean);
+}
+
+async function refreshUsefulLinksCatalog(options = {}) {
+  const intel = options.intel || currentUsefulIntel();
+  const signature = usefulLinksLive.intelSignature(intel);
+  const fresh = Date.now() - (usefulLinksLiveCache.fetchedAt || 0) < 180000;
+  if (!options.force && fresh && usefulLinksLiveCache.signature === signature) {
+    const snapshot = snapshotUsefulLinks(intel);
+    sendToKind('useful', 'agent:useful-links', snapshot);
+    return snapshot;
+  }
+  const queries = usefulLinksLive.inferQueries(intel);
+  const live = [];
+  let error = '';
+  try {
+    for (const item of queries) {
+      const links = await searchGithubRepos(item.query, item.perPage);
+      if (links.length) {
+        live.push({
+          id: item.id,
+          title: item.title,
+          source: 'live',
+          links,
+        });
+      }
+    }
+    usefulLinksLiveCache = { signature, fetchedAt: Date.now(), sections: live, error: '' };
+  } catch (caught) {
+    error = caught instanceof Error ? caught.message : 'GitHub search failed.';
+    usefulLinksLiveCache = {
+      signature,
+      fetchedAt: usefulLinksLiveCache.fetchedAt || Date.now(),
+      sections: usefulLinksLiveCache.sections || [],
+      error,
+    };
+  }
+  const snapshot = snapshotUsefulLinks(intel, {
+    status: error
+      ? `Live fetch failed (${error}). Seed and your added links stay.`
+      : `Updated from GitHub for this bound model/agent.`,
+  });
+  sendToKind('useful', 'agent:useful-links', snapshot);
+  return snapshot;
+}
+
 ipcMain.handle('agent:local-intel-get', async (event) => {
-  if (!isChromeSender(event) && !isExtensionsSender(event)) {
+  if (!isChromeSender(event) && !isExtensionsSender(event) && !isUsefulLinksSender(event)) {
     return { ok: false };
   }
   const snapshot = await pushLocalIntel();
   return { ok: true, intel: snapshot };
+});
+
+ipcMain.handle('agent:useful-links-get', async (event) => {
+  if (!isUsefulLinksSender(event)) {
+    return { ok: false };
+  }
+  return snapshotUsefulLinks(currentUsefulIntel());
+});
+
+ipcMain.handle('agent:useful-links-refresh', async (event) => {
+  if (!isUsefulLinksSender(event)) {
+    return { ok: false };
+  }
+  return refreshUsefulLinksCatalog({ force: true });
+});
+
+ipcMain.handle('agent:useful-links-add-section', async (event, payload) => {
+  if (!isUsefulLinksSender(event) || !payload || typeof payload !== 'object') {
+    return { ok: false };
+  }
+  const section = usefulLinksLive.normalizeSection(
+    { id: `user-${Date.now()}`, title: payload.title, source: 'user', links: [] },
+    `user-${sessionUsefulUserSections.length + 1}`,
+  );
+  if (!section) {
+    return { ok: false, error: 'invalid-section', ...snapshotUsefulLinks(currentUsefulIntel()) };
+  }
+  sessionUsefulUserSections.unshift(section);
+  const snapshot = snapshotUsefulLinks(currentUsefulIntel(), { status: 'Section added for this RAM session.' });
+  sendToKind('useful', 'agent:useful-links', snapshot);
+  return snapshot;
+});
+
+ipcMain.handle('agent:useful-links-add-link', async (event, payload) => {
+  if (!isUsefulLinksSender(event) || !payload || typeof payload !== 'object') {
+    return { ok: false };
+  }
+  const link = usefulLinksLive.normalizeLink({
+    name: payload.name,
+    url: payload.url,
+    note: payload.note,
+  });
+  if (!link) {
+    return { ok: false, error: 'invalid-link', ...snapshotUsefulLinks(currentUsefulIntel()) };
+  }
+  const sectionId = String(payload.sectionId || '');
+  if (!sectionId) {
+    return { ok: false, error: 'invalid-section', ...snapshotUsefulLinks(currentUsefulIntel()) };
+  }
+  const extras = sessionUsefulExtraLinks.get(sectionId) || [];
+  sessionUsefulExtraLinks.set(sectionId, [link, ...extras].slice(0, 40));
+  const snapshot = snapshotUsefulLinks(currentUsefulIntel(), { status: 'Link added for this RAM session.' });
+  sendToKind('useful', 'agent:useful-links', snapshot);
+  return snapshot;
+});
+
+ipcMain.handle('agent:useful-links-open', async (event, payload) => {
+  if (!isUsefulLinksSender(event) || !payload || typeof payload !== 'object') {
+    return { ok: false };
+  }
+  const safeUrl = sanitizeUrl(payload.url);
+  if (!safeUrl) {
+    return { ok: false };
+  }
+  const tabId = createGuestTab(safeUrl);
+  return { ok: Boolean(tabId), tabId };
 });
 
 ipcMain.handle('agent:local-intel-watch', async (event, open) => {
@@ -7005,6 +7748,7 @@ function snapshotSettings() {
     rateLimitGuard: Boolean(privacySettings.rateLimitGuard),
     sandboxIsolator: Boolean(privacySettings.sandboxIsolator),
     excommunicadoLock: Boolean(privacySettings.excommunicadoLock),
+    ...catalogTools.snapshot(privacySettings),
     proxyUrl: privacySettings.ghostNetwork ? SOCKS5_PROXY : '',
     blockedRequestCount,
     securityStats: snapshotSecurityStats(),
@@ -7176,6 +7920,22 @@ const agentBridgeHandlers = {
       })()`;
     let text = await guest.executeJavaScript(source, true);
     text = typeof text === 'string' ? text.slice(0, PAGE_TEXT_LIMIT) : '';
+    if (privacySettings.semanticHtml) {
+      const semantic = await guest.executeJavaScript(
+        `(function () { return window.__agentCatalog && window.__agentCatalog.semantic ? window.__agentCatalog.semantic : ''; })()`,
+        true,
+      );
+      if (typeof semantic === 'string' && semantic.trim()) {
+        text = semantic.slice(0, PAGE_TEXT_LIMIT);
+      }
+    }
+    if (privacySettings.contextSplitter && text.length > 1800) {
+      const chunks = [];
+      for (let i = 0; i < text.length && chunks.length < 8; i += 1800) {
+        chunks.push(text.slice(i, i + 1800));
+      }
+      text = chunks.map((chunk, index) => `[chunk ${index + 1}/${chunks.length}]\n${chunk}`).join('\n\n');
+    }
     if (privacySettings.lmStudioPort && text.length > 6000) {
       try {
         text = await requestChat('', [
@@ -7876,6 +8636,7 @@ ipcMain.handle('agent:settings-panel', async (event, open) => {
     hideToolsMenu({ notify: false });
     hideShortcutsMenu({ notify: false });
     hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
   }
   fitBrowserView();
   return { ok: true, open: settingsOpen };
@@ -8042,6 +8803,7 @@ function createAgentWindow() {
     }
     if (profileHostWindow === win) {
       hideProfileMenu({ notify: false });
+  hideDownloadsMenu({ notify: false });
     }
     chromeWindows.delete(win);
     for (const [tabId, entry] of [...views.entries()]) {
