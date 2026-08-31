@@ -20,6 +20,81 @@ const CATEGORY_ICONS = Object.freeze({
 
 const removed = new Set();
 const localActive = new Map();
+const expandedDetails = new Set();
+
+const OPEN_ACTIONS = new Set(['shield', 'ghost', 'downloads', 'models', 'memory-bridge']);
+
+const WIRED_EXTENSION_IDS = new Set([
+  'shield',
+  'ghost',
+  'guvenlik',
+  'hunter',
+  'cookies',
+  'dnt',
+  'ua',
+  'models',
+  'canvas-poisoner',
+  'canvas-fingerprint-defender',
+  'siyuan-bridge',
+  'human-jitter',
+  'human-jitter-cursor-simulator',
+  'dead-man-switch',
+  'web3-shield',
+  'shadow-dom-pierce',
+  'shadow-dom-piercer',
+  'markdown-dom',
+  'page-to-markdown-converter',
+  'ui-code-extract',
+  'infinite-scroll',
+  'infinite-scroll-autopilot',
+  'table-parser',
+  'table-to-json-auto-parser',
+  'xhr-hunter',
+  'xhr-fetch-payload-catcher',
+  'json-form-fill',
+  'proxy-rotate',
+  'dynamic-proxy-swapper',
+  'webgl-inspector',
+  'media-source',
+  'media-source-blob-revealer',
+  'n8n-webhook',
+  'multi-agent-swarm-broadcaster',
+  'lm-studio-port',
+  'memory-block',
+  'cursor-ide-bridge',
+  'tab-orchestrator',
+  'autonomous-agent-task-queue',
+  'headless-mode',
+  'headless-mode-resource-saver',
+  'input-simulator',
+  'rate-limit-guard',
+  'rate-limit-auto-pauser',
+  'sandbox-isolator',
+  'excommunicado-lock',
+  'user-agent-rotator',
+  'third-party-cookie-annihilator',
+]);
+
+function isWiredExtension(item) {
+  return Boolean(item.noToggle || item.setting || WIRED_EXTENSION_IDS.has(item.id));
+}
+
+function extensionStatus(item) {
+  if (item.noToggle) {
+    return {
+      kind: 'live',
+      text: 'Always available in this session. Use Open if you want the local model chat.',
+    };
+  }
+  if (isWiredExtension(item)) {
+    return isActive(item)
+      ? { kind: 'live', text: 'On for this RAM session. The browser applies this tool now.' }
+      : { kind: 'idle', text: 'Off. Turn the switch on to use it in this session.' };
+  }
+  return isActive(item)
+    ? { kind: 'catalog', text: 'Marked on, but this catalog tool has no engine hook yet.' }
+    : { kind: 'catalog', text: 'Catalog entry. The switch only stores session intent until a hook is added.' };
+}
 
 function catalog() {
   return Array.isArray(typeof agentExtensions !== 'undefined' ? agentExtensions : null) ? agentExtensions : [];
@@ -106,6 +181,7 @@ function renderExtensions(data) {
     const title = document.createElement('h3');
     title.textContent = item.name;
     const desc = document.createElement('p');
+    desc.className = 'ext-preview';
     desc.textContent = item.description;
     const idLine = document.createElement('p');
     idLine.className = 'ext-id';
@@ -118,10 +194,9 @@ function renderExtensions(data) {
     const details = document.createElement('button');
     details.type = 'button';
     details.className = 'ext-btn';
+    details.dataset.details = item.id;
+    details.setAttribute('aria-expanded', expandedDetails.has(item.id) ? 'true' : 'false');
     details.textContent = 'Details';
-    if (item.action) {
-      details.dataset.action = item.action;
-    }
 
     const remove = document.createElement('button');
     remove.type = 'button';
@@ -140,7 +215,33 @@ function renderExtensions(data) {
       toggle.setAttribute('aria-label', `${item.name} on/off`);
       actions.append(toggle);
     }
-    card.append(icon, copy, actions);
+
+    const panel = document.createElement('div');
+    panel.className = 'ext-detail';
+    panel.hidden = !expandedDetails.has(item.id);
+    const label = document.createElement('p');
+    label.className = 'ext-detail-label';
+    label.textContent = 'What it does';
+    const body = document.createElement('p');
+    body.className = 'ext-detail-body';
+    body.textContent = item.description || 'No description for this session tool.';
+    const status = document.createElement('p');
+    const statusInfo = extensionStatus(item);
+    status.className = `ext-detail-status is-${statusInfo.kind}`;
+    status.textContent = statusInfo.text;
+    panel.append(label, body, status);
+    if (item.action && OPEN_ACTIONS.has(item.action)) {
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'ext-btn ext-detail-open';
+      open.dataset.action = item.action;
+      open.textContent = 'Open';
+      panel.append(open);
+    }
+    if (expandedDetails.has(item.id)) {
+      card.dataset.open = 'true';
+    }
+    card.append(icon, copy, actions, panel);
     grid.append(card);
   }
 }
@@ -165,6 +266,31 @@ function bindExtensionGrid() {
   });
 
   grid?.addEventListener('click', (event) => {
+    const detailsBtn = event.target.closest('[data-details]');
+    if (detailsBtn) {
+      const id = detailsBtn.dataset.details;
+      const card = detailsBtn.closest('.ext-card');
+      const panel = card?.querySelector('.ext-detail');
+      const open = !expandedDetails.has(id);
+      if (open) {
+        expandedDetails.add(id);
+      } else {
+        expandedDetails.delete(id);
+      }
+      detailsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (card) {
+        if (open) {
+          card.dataset.open = 'true';
+        } else {
+          delete card.dataset.open;
+        }
+      }
+      if (panel) {
+        panel.hidden = !open;
+      }
+      return;
+    }
+
     const actionBtn = event.target.closest('[data-action]');
     if (actionBtn) {
       api?.toolsAction?.(actionBtn.dataset.action);
@@ -175,6 +301,7 @@ function bindExtensionGrid() {
     if (removeBtn) {
       removed.add(removeBtn.dataset.remove);
       localActive.delete(removeBtn.dataset.remove);
+      expandedDetails.delete(removeBtn.dataset.remove);
       api?.toggleExtension?.(removeBtn.dataset.remove, false);
       renderExtensions();
       return;

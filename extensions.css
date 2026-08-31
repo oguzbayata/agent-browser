@@ -448,6 +448,58 @@ body.is-nav-collapsed .ext-nav {
   line-height: 1.4;
 }
 
+.ext-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.ext-detail {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.ext-detail-label {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ext-detail-body {
+  margin: 0;
+  color: #e6edf3;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ext-detail-status {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.ext-detail-status.is-live {
+  color: var(--accent);
+}
+
+.ext-detail-status.is-idle {
+  color: var(--muted);
+}
+
+.ext-detail-status.is-catalog {
+  color: #d6b25a;
+}
+
+.ext-detail-open {
+  margin-top: 10px;
+}
+
 .ext-id {
   margin-top: 6px;
   font-family: "Cascadia Code", Consolas, monospace;
