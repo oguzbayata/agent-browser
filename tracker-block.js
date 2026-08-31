@@ -408,7 +408,51 @@ function hostnameMatchesSuffix(hostname, suffix) {
   return hostname === suffix || hostname.endsWith(`.${suffix}`);
 }
 
-function shouldBlockUrl(rawUrl) {
+function isGooglePropertyUrl(rawUrl) {
+  try {
+    const host = stripWww(new URL(rawUrl).hostname);
+    return (
+      host === 'google.com' ||
+      host.endsWith('.google.com') ||
+      host === 'youtube.com' ||
+      host.endsWith('.youtube.com') ||
+      host === 'youtu.be' ||
+      host === 'youtube-nocookie.com' ||
+      host === 'gstatic.com' ||
+      host.endsWith('.gstatic.com') ||
+      host === 'googleapis.com' ||
+      host.endsWith('.googleapis.com') ||
+      host === 'googleusercontent.com' ||
+      host.endsWith('.googleusercontent.com') ||
+      host === 'ggpht.com' ||
+      host.endsWith('.ggpht.com') ||
+      /^google\.[a-z]{2,8}(?:\.[a-z]{2})?$/.test(host)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isGoogleSignInOrCaptcha(hostname, pathname) {
+  const host = stripWww(hostname);
+  const path = String(pathname || '').toLowerCase();
+  if (path.includes('/recaptcha') || path.includes('/rotatecaptcha') || path.startsWith('/sorry')) {
+    return true;
+  }
+  return host === 'accounts.google.com' || host === 'accounts.youtube.com';
+}
+
+function pageUrlFromContext(context) {
+  if (typeof context === 'string') {
+    return context;
+  }
+  if (context && typeof context === 'object') {
+    return String(context.pageUrl || '');
+  }
+  return '';
+}
+
+function shouldBlockUrl(rawUrl, context) {
   let parsed;
   try {
     parsed = new URL(rawUrl);
@@ -420,7 +464,14 @@ function shouldBlockUrl(rawUrl) {
     return false;
   }
 
+  if (isGooglePropertyUrl(pageUrlFromContext(context))) {
+    return false;
+  }
+
   const hostname = parsed.hostname.toLowerCase();
+  if (isGoogleSignInOrCaptcha(hostname, parsed.pathname)) {
+    return false;
+  }
   if (TRACKER_HOST_SUFFIXES.some((suffix) => hostnameMatchesSuffix(hostname, suffix))) {
     return true;
   }
@@ -440,5 +491,6 @@ module.exports = {
   TRACKER_HOST_SUFFIXES,
   TRACKER_PATH_RULES,
   hostnameMatchesSuffix,
+  isGooglePropertyUrl,
   shouldBlockUrl,
 };

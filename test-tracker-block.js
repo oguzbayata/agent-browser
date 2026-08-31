@@ -86,6 +86,10 @@ const ALLOW = [
   'https://www.xhamster.com/videos/example',
   'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   'https://www.google.com/search?q=test',
+  'https://accounts.google.com/v3/signin/identifier',
+  'https://www.google.com/recaptcha/api.js',
+  'https://www.gstatic.com/recaptcha/releases/x/recaptcha__en.js',
+  'https://www.google.com/sorry/index?continue=https://www.google.com/',
   'https://duckduckgo.com/?q=test',
   'https://github.com/oguzbayata/agent-browser',
   'https://www.amazon.com/dp/B000000000',
@@ -109,6 +113,22 @@ for (const url of ALLOW) {
   if (shouldBlockUrl(url)) {
     failed += 1;
     console.error(`expected allow: ${url}`);
+  }
+}
+
+const googlePage = 'https://www.google.com/search?q=test';
+const googleHarbor = [
+  'https://www.google.com/pagead/ads',
+  'https://www.google.com/aclk?sa=l',
+  'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js',
+  'https://googleads.g.doubleclick.net/mads/gma',
+  'https://www.googleadservices.com/pagead/conversion.js',
+  'https://adservice.google.com/adsid/google/ui',
+];
+for (const url of googleHarbor) {
+  if (shouldBlockUrl(url, { pageUrl: googlePage })) {
+    failed += 1;
+    console.error(`expected allow on Google page: ${url}`);
   }
 }
 

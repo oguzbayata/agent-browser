@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld(
     goForward: () => ipcRenderer.invoke('agent:go-forward'),
     reload: () => ipcRenderer.invoke('agent:reload'),
     stop: () => ipcRenderer.invoke('agent:stop'),
+    stopMicrophone: () => ipcRenderer.invoke('agent:mic-stop'),
     setSidebarOpen: (open) => ipcRenderer.invoke('agent:sidebar', Boolean(open)),
     getLocalIntel: () => ipcRenderer.invoke('agent:local-intel-get'),
     watchLocalIntel: (open) => ipcRenderer.invoke('agent:local-intel-watch', Boolean(open)),
@@ -285,7 +286,7 @@ contextBridge.exposeInMainWorld(
 
       const listener = (_event, payload) => {
         if (typeof payload === 'string') {
-          callback({ url: payload, canGoBack: false, canGoForward: false, isLoading: false, bookmarked: false, bookmarksBar: true });
+          callback({ url: payload, canGoBack: false, canGoForward: false, isLoading: false, bookmarked: false, bookmarksBar: true, microphone: false });
           return;
         }
         if (payload && typeof payload === 'object') {
@@ -296,6 +297,7 @@ contextBridge.exposeInMainWorld(
             isLoading: Boolean(payload.isLoading),
             bookmarked: Boolean(payload.bookmarked),
             bookmarksBar: payload.bookmarksBar !== false,
+            microphone: Boolean(payload.microphone),
           });
         }
       };

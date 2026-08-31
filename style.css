@@ -740,6 +740,33 @@ body.ghost-network #adres-cubugu-konteynir:focus-within {
   stroke: #fff;
 }
 
+.omni-mic {
+  color: #f3c4c4;
+}
+
+.omni-mic:not([hidden]) {
+  display: grid;
+}
+
+.omni-mic.is-live {
+  color: #ff6b6b;
+  animation: omni-mic-pulse 1.4s ease-in-out infinite;
+}
+
+.omni-mic.is-live svg {
+  fill: rgba(255, 107, 107, 0.18);
+}
+
+@keyframes omni-mic-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 #yerimleri-cubugu {
   display: flex;
   align-items: center;

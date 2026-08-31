@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
 USER_AGENT = os.environ.get(
     "AGENT_USER_AGENT",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "(KHTML, like Gecko) Chrome/138.0.7204.0 Safari/537.36",
 )
 TIMEOUT_SEC = 8
 MAX_RESULTS = 1000

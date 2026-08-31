@@ -3,11 +3,11 @@
 const extensionDetails = {
   shield: 'When on, the session cancels listed ad-network requests before they load and hides leftover overlay slots on the page. This is a RAM-only request filter, not a store add-on.',
   ghost: 'Turning this on forces the isolated session through the local SOCKS5 tunnel and denies camera, location, and screen-share prompts. Open jumps to the Ghost control.',
-  guvenlik: 'The permission handler rejects microphone, camera, and display-capture for every guest tab while this stays on. Sites see a hard deny, not a prompt.',
+  guvenlik: 'Denies camera-only capture and screen sharing. Sites can still ask to use the microphone; if you Allow, a live mic icon appears in the address bar for this session.',
   hunter: 'Enables the video context-menu downloader and yt-dlp/ffmpeg path for the current page. Open shows the Downloads overlay.',
   cookies: 'On each third-party request the session strips Cookie and Set-Cookie so trackers cannot keep a cross-site token in this RAM partition.',
   dnt: 'Adds a DNT: 1 request header to every http(s) call from this session. The site can still ignore it; the header is still sent.',
-  ua: 'Replaces the outgoing User-Agent with a common Chrome string so sites see a generic desktop client instead of this build’s default.',
+  ua: 'Presents this session as current Google Chrome: User-Agent and Client Hints match Electron’s Chromium build, and the Electron token is stripped so Google Search and most sites accept the browser.',
   models: 'This is the local model/agent chat for the session, not a toggleable add-on. Open the AI sidebar from here.',
   'page-translate': 'When on, right-click any guest page or chrome menu to translate visible text into Turkish, German, English, French, or Spanish. Open picks a language for the current tab. The original words stay in RAM only and are not written to disk.',
   'canvas-poisoner': 'Injects a canvas getImageData hook that flips a few pixels so canvas hashes change between loads. Reloading a tab reapplies the hook.',

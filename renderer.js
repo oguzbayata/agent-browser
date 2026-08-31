@@ -196,6 +196,17 @@ function schemeFromUrl(raw) {
   return 'idle';
 }
 
+function setOmniMicrophone(active) {
+  const mic = document.getElementById('omni-mic');
+  if (!mic) {
+    return;
+  }
+  const on = Boolean(active);
+  mic.hidden = !on;
+  mic.classList.toggle('is-live', on);
+  mic.setAttribute('aria-hidden', on ? 'false' : 'true');
+}
+
 function setOmniScheme(raw) {
   const mark = document.getElementById('omni-scheme');
   if (!mark) {
@@ -227,6 +238,7 @@ function bindChrome() {
   const forwardBtn = document.getElementById('forward-btn');
   const reloadBtn = document.getElementById('reload-btn');
   const starBtn = document.getElementById('bookmark-star');
+  const micBtn = document.getElementById('omni-mic');
 
   if (!form || !input || !backBtn || !forwardBtn || !reloadBtn) {
     return;
@@ -253,6 +265,10 @@ function bindChrome() {
   });
   bindOmniboxEditing(input);
 
+  micBtn?.addEventListener('click', (event) => {
+    event.preventDefault();
+    api?.stopMicrophone?.();
+  });
   backBtn.addEventListener('click', () => api?.goBack?.());
   forwardBtn.addEventListener('click', () => api?.goForward?.());
   reloadBtn.addEventListener('click', () => {
@@ -282,6 +298,7 @@ function bindChrome() {
     currentPageUrl = displayUrl;
     setBookmarksBarVisible(typeof state?.bookmarksBar === 'boolean' ? state.bookmarksBar : !displayUrl);
     setOmniScheme(document.activeElement === input ? input.value : displayUrl);
+    setOmniMicrophone(Boolean(state?.microphone));
     if (document.activeElement === input) {
       return;
     }

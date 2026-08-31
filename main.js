@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, WebContentsView, session, ipcMain, globalShortcut, Menu, nativeImage, dialog, clipboard, shell } = require('electron');
+const { app, BrowserWindow, WebContentsView, session, ipcMain, globalShortcut, Menu, nativeImage, dialog, clipboard, shell, systemPreferences } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -11,7 +11,9 @@ const net = require('node:net');
 const { startAgentBridgeServer, stopAgentBridgeServer, getListenInfo } = require('./agent-bridge');
 const { collectIntel, knownModelRoots, isLoopbackHttpUrl, resolveLocalChatTarget } = require('./local-intel');
 const pageTranslate = require('./page-translate');
-const { AD_HIDE_CSS, shouldBlockUrl } = require('./tracker-block');
+const { AD_HIDE_CSS, isGooglePropertyUrl, shouldBlockUrl } = require('./tracker-block');
+const chromeIdentity = require('./chrome-identity');
+const micAccess = require('./mic-access');
 const { findFfmpeg, findYtDlp, hunterPathEnv, isWindowsStoreStub } = require('./hunter-tools');
 const agentExtensionCatalog = require('./extensions_data');
 const catalogTools = require('./session-catalog-tools');
@@ -207,15 +209,17 @@ const EXT_EXPERT_CATALOG = Object.freeze(
   })),
 );
 const KNOWN_EXTENSION_IDS = new Set(EXT_EXPERT_CATALOG.map((item) => item.id));
-const COMMON_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const chromeFullVersion = chromeIdentity.chromeFullVersion;
+const chromeMajorVersion = chromeIdentity.chromeMajorVersion;
+const chromePlatformLabel = chromeIdentity.chromePlatformLabel;
+const COMMON_USER_AGENT = chromeIdentity.userAgent();
+app.userAgentFallback = COMMON_USER_AGENT;
 
 if (PARTITION.startsWith('persist:') || PARTITION.length === 0) {
   throw new Error('Agent Browser must use a non-persistent in-memory partition.');
 }
 
-app.commandLine.appendSwitch('test-third-party-cookie-phaseout');
-app.commandLine.appendSwitch('hide-scrollbars');
+app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
 
 const sharedSessionPrefs = Object.freeze({
   partition: PARTITION,
@@ -508,6 +512,8 @@ let securityStatsFlush = null;
 let agentBridgeToken = '';
 let sessionApiKeyValue = '';
 let sessionTranslateLang = 'tr';
+const sessionMicGrants = new Set();
+let osMicAsked = false;
 let nativeContextMenuOpen = false;
 const translatedWebContents = new WeakSet();
 let agentControlKey = '';
@@ -631,6 +637,26 @@ function tryOrigin(rawUrl) {
   }
 }
 
+function firstPartyPageUrl(details) {
+  const contents = details?.webContents;
+  const current = contents && !contents.isDestroyed() ? contents.getURL() || '' : '';
+  if (isGooglePropertyUrl(current)) {
+    return current;
+  }
+  const referrer = String(details?.referrer || '');
+  if (isGooglePropertyUrl(referrer)) {
+    return referrer;
+  }
+  if (details?.resourceType === 'mainFrame' && isGooglePropertyUrl(details?.url)) {
+    return details.url;
+  }
+  return current;
+}
+
+function shouldBypassGooglePrivacy(details) {
+  return isGooglePropertyUrl(details?.url) || isGooglePropertyUrl(firstPartyPageUrl(details));
+}
+
 function getFirstPartyOrigin(details) {
   const contents = details.webContents;
   if (contents && !contents.isDestroyed()) {
@@ -655,6 +681,31 @@ function isThirdPartyRequest(details) {
   }
 
   return requestOrigin !== firstPartyOrigin;
+}
+
+function applyChromeClientHints(headers) {
+  const major = chromeMajorVersion();
+  const full = chromeFullVersion();
+  const platform = chromePlatformLabel();
+  const arch = process.arch === 'arm64' ? '"arm"' : '"x86"';
+  setHeader(headers, 'Sec-CH-UA', `"Not)A;Brand";v="8", "Chromium";v="${major}", "Google Chrome";v="${major}"`);
+  setHeader(headers, 'Sec-CH-UA-Mobile', '?0');
+  setHeader(headers, 'Sec-CH-UA-Platform', `"${platform}"`);
+  setHeader(headers, 'Sec-CH-UA-Full-Version', `"${full}"`);
+  setHeader(
+    headers,
+    'Sec-CH-UA-Full-Version-List',
+    `"Not)A;Brand";v="10.0.0.4", "Chromium";v="${full}", "Google Chrome";v="${full}"`,
+  );
+  setHeader(headers, 'Sec-CH-UA-Arch', arch);
+  setHeader(headers, 'Sec-CH-UA-Bitness', '"64"');
+  setHeader(headers, 'Sec-CH-UA-Model', '""');
+  setHeader(headers, 'Sec-CH-UA-WoW64', '?0');
+  setHeader(headers, 'Sec-CH-UA-Form-Factors', '"Desktop"');
+}
+
+function chromeIdentityPageSource() {
+  return chromeIdentity.pageSource();
 }
 
 function setHeader(headers, name, value) {
@@ -720,14 +771,17 @@ function applyWebRtcPolicyToAll() {
   }
 }
 
-function mediaPermissionBlocked(permission) {
-  if (privacySettings.blockMedia && MEDIA_DENIED_PERMISSIONS.has(permission)) {
-    return true;
-  }
+function mediaPermissionBlocked(permission, details) {
   if (privacySettings.ghostNetwork && GHOST_DENIED_PERMISSIONS.has(permission)) {
     return true;
   }
-  return false;
+  if (!privacySettings.blockMedia || !MEDIA_DENIED_PERMISSIONS.has(permission)) {
+    return false;
+  }
+  if (permission === 'media' && micAccess.mediaIncludesAudio(details)) {
+    return false;
+  }
+  return true;
 }
 
 function applyDisplayMediaBlock(isolatedSession) {
@@ -744,36 +798,158 @@ function applyDisplayMediaBlock(isolatedSession) {
 }
 
 function applySessionPermissions(isolatedSession) {
-  isolatedSession.setPermissionRequestHandler((_contents, permission, callback) => {
+  isolatedSession.setPermissionRequestHandler((contents, permission, callback, details) => {
     if (permission === 'storage-access' || permission === 'top-level-storage-access') {
       callback(false);
       return;
     }
-    if (mediaPermissionBlocked(permission)) {
+    if (mediaPermissionBlocked(permission, details)) {
       callback(false);
       return;
     }
     if (privacySettings.geolocationShift && permission === 'geolocation') {
       callback(false);
+      return;
+    }
+    if (permission === 'media' && micAccess.mediaIncludesAudio(details)) {
+      decideMicrophonePermission(contents, details)
+        .then((allowed) => callback(allowed))
+        .catch(() => callback(false));
       return;
     }
     callback(true);
   });
 
-  isolatedSession.setPermissionCheckHandler((_contents, permission) => {
+  isolatedSession.setPermissionCheckHandler((contents, permission, requestingOrigin, details) => {
     if (permission === 'storage-access' || permission === 'top-level-storage-access') {
       return false;
     }
-    if (mediaPermissionBlocked(permission)) {
+    if (mediaPermissionBlocked(permission, details)) {
       return false;
     }
     if (privacySettings.geolocationShift && permission === 'geolocation') {
       return false;
     }
+    if (permission === 'media' && micAccess.mediaIncludesAudio(details)) {
+      const origin = micAccess.originOf(details?.securityOrigin || requestingOrigin || contents?.getURL?.() || '');
+      return origin ? sessionMicGrants.has(origin) : false;
+    }
     return true;
   });
 
   applyDisplayMediaBlock(isolatedSession);
+}
+
+function hostWindowForContents(contents) {
+  if (contents && typeof contents.getOwnerBrowserWindow === 'function') {
+    const win = contents.getOwnerBrowserWindow();
+    if (win && !win.isDestroyed()) {
+      return win;
+    }
+  }
+  for (const entry of views.values()) {
+    if (entry.view?.webContents === contents && entry.window && !entry.window.isDestroyed()) {
+      return entry.window;
+    }
+  }
+  return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+}
+
+function tabIdFromWebContents(contents) {
+  if (!contents) {
+    return '';
+  }
+  for (const [tabId, entry] of views.entries()) {
+    if (entry.view?.webContents === contents) {
+      return tabId;
+    }
+  }
+  return '';
+}
+
+async function ensureOsMicrophone() {
+  if (typeof systemPreferences?.askForMediaAccess !== 'function') {
+    return true;
+  }
+  if (osMicAsked) {
+    if (typeof systemPreferences.getMediaAccessStatus === 'function') {
+      const status = systemPreferences.getMediaAccessStatus('microphone');
+      return status === 'granted' || status === 'unknown' || status === 'not-determined';
+    }
+    return true;
+  }
+  osMicAsked = true;
+  try {
+    return Boolean(await systemPreferences.askForMediaAccess('microphone'));
+  } catch {
+    return true;
+  }
+}
+
+async function decideMicrophonePermission(contents, details) {
+  const origin =
+    micAccess.originOf(details?.securityOrigin || '') ||
+    micAccess.originOf(contents && !contents.isDestroyed() ? contents.getURL() : '');
+  if (!origin || origin === 'null') {
+    return false;
+  }
+  if (sessionMicGrants.has(origin)) {
+    return ensureOsMicrophone();
+  }
+  const osOk = await ensureOsMicrophone();
+  if (!osOk) {
+    return false;
+  }
+  const win = hostWindowForContents(contents);
+  const host = (() => {
+    try {
+      return new URL(origin).hostname || origin;
+    } catch {
+      return origin;
+    }
+  })();
+  const camera = micAccess.mediaIncludesVideo(details);
+  const result = await dialog.showMessageBox(win || undefined, {
+    type: 'question',
+    buttons: ['Block', 'Allow'],
+    defaultId: 1,
+    cancelId: 0,
+    noLink: true,
+    title: 'Microphone',
+    message: camera ? `${host} wants to use your microphone and camera` : `${host} wants to use your microphone`,
+    detail: 'Allow for this RAM session only. The address bar shows a mic icon while it is on.',
+  });
+  if (result.response !== 1) {
+    return false;
+  }
+  sessionMicGrants.add(origin);
+  return true;
+}
+
+function setTabMicrophone(tabId, active) {
+  const entry = views.get(tabId);
+  if (!entry) {
+    return;
+  }
+  const next = Boolean(active);
+  if (Boolean(entry.microphone) === next) {
+    return;
+  }
+  entry.microphone = next;
+  emitTabUpdated(tabId);
+  if (tabId === activeTabId) {
+    broadcastBrowserState();
+  }
+}
+
+function stopTabMicrophone(tabId) {
+  const webContents = getTabWebContents(tabId);
+  if (!webContents) {
+    return { ok: false };
+  }
+  webContents.executeJavaScript(micAccess.pageStopSource(), true).catch(() => {});
+  setTabMicrophone(tabId, false);
+  return { ok: true };
 }
 
 async function applyGhostNetwork() {
@@ -845,13 +1021,18 @@ function attachPrivacyNetworkGuards(isolatedSession) {
 
   isolatedSession.webRequest.onBeforeRequest(NETWORK_FILTER, (details, callback) => {
     const tabId = tabIdFromDetails(details);
-    if (privacySettings.blockTrackers && shouldBlockUrl(details.url)) {
+    if (
+      privacySettings.blockTrackers &&
+      shouldBlockUrl(details.url, { pageUrl: firstPartyPageUrl(details) })
+    ) {
       bumpSecurityStat(tabId, 'trackers');
       callback({ cancel: true });
       return;
     }
 
-    const catalogHit = catalogTools.beforeRequest(details, privacySettings);
+    const catalogHit = shouldBypassGooglePrivacy(details)
+      ? null
+      : catalogTools.beforeRequest(details, privacySettings);
     if (catalogHit?.cancel) {
       callback({ cancel: true });
       return;
@@ -875,20 +1056,25 @@ function attachPrivacyNetworkGuards(isolatedSession) {
     const requestHeaders = { ...(details.requestHeaders || {}) };
     if (privacySettings.spoofUserAgent) {
       setHeader(requestHeaders, 'User-Agent', COMMON_USER_AGENT);
+      applyChromeClientHints(requestHeaders);
     }
-    if (privacySettings.sendDnt) {
+    if (privacySettings.sendDnt && !shouldBypassGooglePrivacy(details)) {
       setHeader(requestHeaders, 'DNT', '1');
     }
-    if (privacySettings.referrerStrip) {
+    if (privacySettings.referrerStrip && !shouldBypassGooglePrivacy(details)) {
       deleteHeader(requestHeaders, 'Referer');
       deleteHeader(requestHeaders, 'Referrer');
     }
-    if (privacySettings.etagCacheClean) {
+    if (privacySettings.etagCacheClean && !shouldBypassGooglePrivacy(details)) {
       deleteHeader(requestHeaders, 'If-None-Match');
       deleteHeader(requestHeaders, 'If-Modified-Since');
     }
 
-    if (privacySettings.stripThirdPartyCookies && isThirdPartyRequest(details)) {
+    if (
+      privacySettings.stripThirdPartyCookies &&
+      isThirdPartyRequest(details) &&
+      !shouldBypassGooglePrivacy(details)
+    ) {
       if (headerPresent(requestHeaders, 'Cookie')) {
         bumpSecurityStat(tabIdFromDetails(details), 'cookies');
       }
@@ -903,13 +1089,14 @@ function attachPrivacyNetworkGuards(isolatedSession) {
     if (privacySettings.httpHeaderAnalyze && details.resourceType === 'mainFrame') {
       lastSecurityHeaders.set(tabIdFromDetails(details) || 'session', summarizeSecurityHeaders(headers));
     }
-    if (privacySettings.etagCacheClean && headers) {
+    if (privacySettings.etagCacheClean && headers && !shouldBypassGooglePrivacy(details)) {
       deleteHeader(headers, 'ETag');
       deleteHeader(headers, 'Last-Modified');
     }
     if (
       privacySettings.stripThirdPartyCookies &&
       isThirdPartyRequest(details) &&
+      !shouldBypassGooglePrivacy(details) &&
       details.responseHeaders
     ) {
       if (headerPresent(details.responseHeaders, 'Set-Cookie')) {
@@ -1117,6 +1304,7 @@ function serializeTab(tabId) {
     pinned: Boolean(entry.pinned),
     muted: Boolean(webContents.isAudioMuted()),
     audible: Boolean(webContents.isCurrentlyAudible()),
+    microphone: Boolean(entry.microphone),
   };
 }
 
@@ -1346,6 +1534,7 @@ function purgeSessionChromeState() {
   sessionLocalDirs.length = 0;
   selectedLocalModel = null;
   sessionApiKeyValue = '';
+  sessionMicGrants.clear();
   sessionMemoryBlocks.length = 0;
   lastIntelModels = [];
   lastIntelAgents = [];
@@ -4015,7 +4204,7 @@ function hidePageAds(webContents) {
 }
 
 function hideScrollbars(webContents) {
-  if (!webContents || webContents.isDestroyed()) {
+  if (!webContents || webContents.isDestroyed() || isGooglePropertyUrl(webContents.getURL())) {
     return;
   }
   webContents.insertCSS(HIDE_SCROLLBAR_CSS).catch(() => {});
@@ -4033,8 +4222,18 @@ function watchHiddenScrollbars(webContents) {
 
 function injectSessionGuards(webContents) {
   hideScrollbars(webContents);
+  const pageUrl = webContents.getURL();
+  if (isGooglePropertyUrl(pageUrl)) {
+    if (privacySettings.spoofUserAgent) {
+      injectGuestScript(webContents, chromeIdentityPageSource());
+    }
+    return;
+  }
   hidePageAds(webContents);
   injectVideoAdSkipper(webContents);
+  if (privacySettings.spoofUserAgent) {
+    injectGuestScript(webContents, chromeIdentityPageSource());
+  }
   if (privacySettings.canvasPoisoner) {
     injectGuestScript(webContents, CANVAS_POISONER_SOURCE);
   }
@@ -4884,6 +5083,7 @@ function attachTabListeners(tabId, webContents) {
   });
   webContents.on('did-navigate', () => {
     translatedWebContents.delete(webContents);
+    setTabMicrophone(tabId, false);
     emitTitle();
     emitTabUpdated(tabId);
     if (tabId === activeTabId) {
@@ -4954,8 +5154,12 @@ function createGuestTab(initialUrl, options = {}) {
     pinned: false,
     window: host,
     kind: downloads ? 'downloads' : extensions ? 'extensions' : settingsPage ? 'settings' : memory ? 'memory' : usefulLinks ? 'useful' : 'guest',
+    microphone: false,
   });
   tabSecurityStats.set(tabId, emptySecurityStats());
+  if (typeof view.webContents.setUserAgent === 'function') {
+    view.webContents.setUserAgent(COMMON_USER_AGENT);
+  }
   attachTabListeners(tabId, view.webContents);
   host.contentView.addChildView(view);
   view.setBounds(viewBounds());
@@ -5015,6 +5219,7 @@ function createGuestTab(initialUrl, options = {}) {
     pinned: false,
     muted: false,
     audible: false,
+    microphone: false,
   });
 
   return tabId;
@@ -5176,6 +5381,7 @@ function triggerExcommunicado() {
     removeAgentPortFiles();
     agentBridgeToken = '';
     sessionApiKeyValue = '';
+    sessionMicGrants.clear();
     agentControlKey = '';
     privacySettings.agentBridge = false;
     privacySettings.ghostNetwork = false;
@@ -6583,6 +6789,7 @@ function broadcastBrowserState() {
       isLoading: false,
       bookmarked: false,
       bookmarksBar: true,
+      microphone: false,
     });
     fitBrowserView();
     return;
@@ -6597,6 +6804,7 @@ function broadcastBrowserState() {
     isLoading: guest.isLoading(),
     bookmarked: isCurrentUrlBookmarked(),
     bookmarksBar: isStartPage(url),
+    microphone: Boolean(views.get(activeTabId)?.microphone),
   });
   if (siteOpen && siteViewAlive() && !siteMenuView.webContents.isDestroyed()) {
     siteMenuView.webContents.send('agent:site-info', snapshotSiteInfo());
@@ -7151,6 +7359,21 @@ ipcMain.handle('agent:site-info', async (event) => {
     return { ok: false };
   }
   return { ok: true, ...snapshotSiteInfo() };
+});
+
+ipcMain.on('agent:mic-capture', (event, payload) => {
+  const tabId = tabIdFromWebContents(event.sender);
+  if (!tabId) {
+    return;
+  }
+  setTabMicrophone(tabId, Boolean(payload && payload.active));
+});
+
+ipcMain.handle('agent:mic-stop', async (event) => {
+  if (!isChromeSender(event)) {
+    return { ok: false };
+  }
+  return stopTabMicrophone(activeTabId);
 });
 
 ipcMain.handle('agent:utility-panel', async (event, open) => {
@@ -8600,6 +8823,12 @@ async function applyBooleanSetting(key, value) {
   }
   applyExtensionSideEffect(key);
   if (key === 'ghostNetwork') {
+    if (value) {
+      for (const tabId of views.keys()) {
+        stopTabMicrophone(tabId);
+      }
+      sessionMicGrants.clear();
+    }
     try {
       await applyGhostNetwork();
     } catch {

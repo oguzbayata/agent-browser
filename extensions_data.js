@@ -3,7 +3,7 @@
 const agentExtensions = [
   { id: "shield", name: "Shield", description: "Cuts Google, Meta, Amazon, and other major ad networks, including overlay ads on adult sites. Lives only in this RAM session.", category: "core", setting: "blockTrackers", action: "shield", active: true },
   { id: "ghost", name: "Ghost Network", description: "Routes traffic through a SOCKS5 proxy and cuts camera, location, and screen sharing.", category: "core", setting: "ghostNetwork", action: "ghost", active: false },
-  { id: "guvenlik", name: "Security V1", description: "Automatically turns off the computer microphone and camera (video, photos, and other media).", category: "core", setting: "blockMedia", action: "settings", active: true },
+  { id: "guvenlik", name: "Security V1", description: "Blocks camera-only capture and screen sharing. Microphone can be allowed per site for this session.", category: "core", setting: "blockMedia", action: "settings", active: true },
   { id: "hunter", name: "Universal Media Hunter (Video Downloader)", description: "Download HTML5 and YouTube videos from the context menu.", category: "core", setting: "mediaHunter", action: "downloads", active: false },
   { id: "cookies", name: "Cookie cutter", description: "Drops third-party cookies; the session is not written to disk.", category: "core", setting: "stripThirdPartyCookies", action: "settings", active: true },
   { id: "dnt", name: "Do Not Track", description: "Adds a DNT header to outgoing requests.", category: "core", setting: "sendDnt", action: "settings", active: true },

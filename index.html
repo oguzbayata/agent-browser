@@ -75,6 +75,19 @@
                   inputmode="url"
                   placeholder="Address or search"
                 />
+                <button
+                  class="omni-icon omni-mic"
+                  id="omni-mic"
+                  type="button"
+                  hidden
+                  aria-label="Microphone is on"
+                  title="Microphone is on — click to stop"
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <rect x="6" y="2.2" width="4" height="7.2" rx="2" />
+                    <path d="M4.2 8.2a3.8 3.8 0 0 0 7.6 0M8 12v1.8" />
+                  </svg>
+                </button>
                 <button class="omni-icon" id="bookmark-star" type="button" aria-label="Bookmark" aria-pressed="false" title="Bookmark (session)">
                   <svg class="icon-star" viewBox="0 0 16 16" aria-hidden="true">
                     <path d="M8 1.8 9.7 6h4.4L11 8.8 12.6 13 8 10.4 3.4 13 5 8.8 1.9 6h4.4Z" />
@@ -232,7 +245,7 @@
           <label class="setting">
             <span>
               <strong>Common browser identity</strong>
-              <em>Present the User-Agent as ordinary Chrome</em>
+              <em>Present as current Google Chrome (UA + Client Hints)</em>
             </span>
             <input id="setting-spoofUserAgent" type="checkbox" data-setting="spoofUserAgent" checked />
           </label>

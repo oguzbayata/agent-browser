@@ -65,7 +65,7 @@ The product is a working desktop browser, not a headless SDK. You can search, re
 | Files saved through Downloads or Media Hunter | Your Downloads folder | **Yes** — a banner warns that Excommunicado may not delete them |
 | Obsidian vault path / localhost memory endpoints | Session config in RAM; vault files you already have on disk are untouched | Vault files on disk are yours |
 
-**Defaults (on):** tracker/ad blocking, drop third-party cookies, `DNT: 1`, common Chrome user-agent, Translate.
+**Defaults (on):** tracker/ad blocking, drop third-party cookies, `DNT: 1`, Chrome identity (User-Agent and Client Hints match this Chromium build, no Electron token), Translate.
 
 **Defaults (off):** Ghost Network, Media Hunter, multi-agent bridge, and the rest of the session tool catalog. They exist for this RAM session only; there are no persistent Chromium extensions.
 
@@ -138,7 +138,7 @@ Optional context-menu download for HTML5 and YouTube. The app looks up `yt-dlp` 
 
 ### Session tools
 
-The Extensions page is a **session tool catalog**, not Chrome Web Store. Tools include Shield, Ghost Network, Security V1 (mic/camera off), **Translate**, Cookie cutter, Do Not Track, identity mask, canvas noise, scrape helpers (Markdown DOM, tables, XHR/WebSocket hunter, infinite scroll), multi-tab orchestrator, headless/invisible mode, sandbox isolator, and Excommunicado Lock. Details expand under each card.
+The Extensions page is a **session tool catalog**, not Chrome Web Store. Tools include Shield, Ghost Network, Security V1 (camera-only and screen capture off; microphone can be allowed per site), **Translate**, Cookie cutter, Do Not Track, identity mask, canvas noise, scrape helpers (Markdown DOM, tables, XHR/WebSocket hunter, infinite scroll), multi-tab orchestrator, headless/invisible mode, sandbox isolator, and Excommunicado Lock. Details expand under each card.
 
 The **Extension expert** is a small in-app advisor: it can turn tools on or off from English or Turkish phrases. It will not fire Excommunicado unless you clearly ask for panic / protocol.
 
