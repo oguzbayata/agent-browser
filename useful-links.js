@@ -113,12 +113,15 @@ function bindPage() {
     if (!title) {
       return;
     }
+    const status = document.getElementById('useful-status');
+    if (status) {
+      status.textContent = `Searching GitHub for “${title}”…`;
+    }
     const request = api?.addUsefulSection?.(title);
     if (!request) {
-      const sections = seedSections();
-      sections.unshift({ id: `user-${Date.now()}`, title, source: 'user', links: [] });
-      renderCatalog({ sections, bound: 'Local preview only.' });
-      input.value = '';
+      if (status) {
+        status.textContent = 'Open this page inside Agent Browser to fetch live repos.';
+      }
       return;
     }
     request.then((result) => {
@@ -164,9 +167,6 @@ function bindPage() {
 
   api?.onUsefulLinks?.((snapshot) => {
     applySnapshot(snapshot);
-  });
-  api?.onLocalIntel?.(() => {
-    api?.refreshUsefulLinks?.()?.then(applySnapshot);
   });
   api?.getUsefulLinks?.()?.then(applySnapshot);
 }

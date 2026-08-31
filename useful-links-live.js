@@ -1,88 +1,53 @@
 'use strict';
 
-const MODEL_FAMILIES = [
-  { re: /llama|llama3|llama-?3/i, query: 'llama.cpp OR ollama llama', title: 'Llama stack' },
-  { re: /qwen/i, query: 'qwen llm', title: 'Qwen models' },
-  { re: /mistral|mixtral/i, query: 'mistral llm', title: 'Mistral' },
-  { re: /gemma/i, query: 'gemma llm google', title: 'Gemma' },
-  { re: /deepseek/i, query: 'deepseek llm', title: 'DeepSeek' },
-  { re: /phi-?[34]/i, query: 'microsoft phi llm', title: 'Phi' },
-  { re: /whisper/i, query: 'openai whisper', title: 'Speech' },
-  { re: /flux|stable.?diff|sdxl|sd3|comfy/i, query: 'comfyui flux stable-diffusion', title: 'Image models' },
-];
-
-const RUNTIME_QUERIES = {
-  ollama: { query: 'ollama', title: 'Ollama ecosystem' },
-  lmstudio: { query: 'lmstudio OR "lm studio"', title: 'LM Studio' },
-  jan: { query: 'jan ai llm', title: 'Jan' },
-  gpt4all: { query: 'gpt4all', title: 'GPT4All' },
-  anythingllm: { query: 'anythingllm', title: 'AnythingLLM' },
-  openwebui: { query: 'open-webui', title: 'Open WebUI' },
-  localai: { query: 'localai llm', title: 'LocalAI' },
-  koboldcpp: { query: 'koboldcpp', title: 'KoboldCpp' },
-  textgen: { query: 'text-generation-webui', title: 'Text Generation WebUI' },
-  llamacpp: { query: 'ggerganov llama.cpp', title: 'llama.cpp' },
-  vllm: { query: 'vllm', title: 'vLLM' },
-};
-
-function selectedModel(intel) {
-  const models = Array.isArray(intel?.models) ? intel.models : [];
-  if (intel?.selectedId) {
-    const match = models.find((item) => item && item.id === intel.selectedId);
-    if (match) {
-      return match;
-    }
-  }
-  return models.find((item) => item && item.live && item.ready) || models[0] || null;
+function isoDaysAgo(days) {
+  const ms = Number(days) > 0 ? Number(days) * 86400000 : 86400000;
+  return new Date(Date.now() - ms).toISOString().slice(0, 10);
 }
 
-function runningAgents(intel) {
-  return (Array.isArray(intel?.agents) ? intel.agents : []).filter((item) => item && item.status === 'running');
+function keywordQuery(raw) {
+  const token = String(raw || '')
+    .trim()
+    .slice(0, 80)
+    .replace(/[^\p{L}\p{N}._+\- ]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return token;
 }
 
-function intelSignature(intel) {
-  const model = selectedModel(intel);
-  const agents = runningAgents(intel)
-    .map((item) => item.id || item.name)
-    .sort()
-    .join(',');
-  return `${model?.id || ''}|${model?.name || ''}|${agents}`;
+function defaultLiveQueries() {
+  const week = isoDaysAgo(7);
+  const month = isoDaysAgo(30);
+  return [
+    { id: 'popular', title: 'Popular', query: 'stars:>5000', sort: 'stars', perPage: 8 },
+    { id: 'new', title: 'New', query: `created:>${week} stars:>5`, sort: 'updated', perPage: 8 },
+    { id: 'updated', title: 'Recently updated', query: `pushed:>${week} stars:>100`, sort: 'updated', perPage: 8 },
+    { id: 'rising', title: 'Rising', query: `created:>${month} stars:>80`, sort: 'stars', perPage: 8 },
+  ];
 }
 
-function inferQueries(intel) {
-  const queries = [];
-  const seen = new Set();
-  const push = (id, title, query) => {
-    const key = String(query || '').toLowerCase();
-    if (!key || seen.has(key) || queries.length >= 4) {
-      return;
-    }
-    seen.add(key);
-    queries.push({ id, title, query, perPage: 6 });
-  };
+function inferQueries() {
+  return defaultLiveQueries();
+}
 
-  const model = selectedModel(intel);
-  if (model?.name) {
-    const family = MODEL_FAMILIES.find((item) => item.re.test(model.name));
-    if (family) {
-      push(`family-${family.title}`, family.title, family.query);
-    } else {
-      const token = String(model.name).replace(/[^A-Za-z0-9._-]+/g, ' ').trim().split(/\s+/)[0];
-      if (token && token.length > 2) {
-        push('family-bound', `Bound model: ${model.name}`, `${token} llm`);
-      }
-    }
-  }
+function catalogSignature(userSections) {
+  const extra = (Array.isArray(userSections) ? userSections : [])
+    .map((item) => item?.query || item?.title || '')
+    .filter(Boolean)
+    .join('|');
+  return `live-generic|${extra}`;
+}
 
-  for (const agent of runningAgents(intel)) {
-    const runtime = RUNTIME_QUERIES[agent.id] || RUNTIME_QUERIES[String(agent.id || '').replace(/-app$/, '')];
-    if (runtime) {
-      push(`runtime-${agent.id}`, runtime.title, runtime.query);
-    }
-  }
+function intelSignature() {
+  return 'live-generic';
+}
 
-  push('fresh-agents', 'Fresh agent repos', 'local llm agent OR "browser agent"');
-  return queries;
+function selectedModel() {
+  return null;
+}
+
+function runningAgents() {
+  return [];
 }
 
 function normalizeLink(raw) {
@@ -118,10 +83,12 @@ function normalizeSection(raw, fallbackId) {
     return null;
   }
   const links = Array.isArray(raw.links) ? raw.links.map(normalizeLink).filter(Boolean).slice(0, 40) : [];
+  const query = keywordQuery(raw.query || title);
   return {
     id: String(raw.id || fallbackId || `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`).slice(0, 80),
     title,
     source: raw.source === 'live' || raw.source === 'user' ? raw.source : 'seed',
+    query,
     links,
   };
 }
@@ -139,29 +106,22 @@ function mergeCatalog(seed, liveSections, userSections) {
   };
   (Array.isArray(liveSections) ? liveSections : []).forEach(push);
   (Array.isArray(userSections) ? userSections : []).forEach(push);
-  (Array.isArray(seed) ? seed : []).forEach((section) => push({ ...section, source: 'seed' }));
+  if (!out.length) {
+    (Array.isArray(seed) ? seed : []).forEach((section) => push({ ...section, source: 'seed' }));
+  }
   return out;
 }
 
-function boundLine(intel) {
-  const model = selectedModel(intel);
-  const agents = runningAgents(intel).map((item) => item.name);
-  if (model && agents.length) {
-    return `Bound to ${model.name} via ${agents.join(', ')}`;
-  }
-  if (model) {
-    return `Bound to ${model.name}`;
-  }
-  if (agents.length) {
-    return `Bound to ${agents.join(', ')}`;
-  }
-  return 'No local model or agent is live. Showing the session seed plus any repos you add.';
+function boundLine() {
+  return 'Live GitHub catalog — popular, new, and recently updated. Type a keyword to add another live column.';
 }
 
 if (typeof module === 'object' && module.exports) {
   module.exports = {
-    MODEL_FAMILIES,
+    defaultLiveQueries,
     inferQueries,
+    keywordQuery,
+    catalogSignature,
     intelSignature,
     selectedModel,
     runningAgents,
@@ -169,5 +129,6 @@ if (typeof module === 'object' && module.exports) {
     normalizeSection,
     mergeCatalog,
     boundLine,
+    isoDaysAgo,
   };
 }

@@ -316,7 +316,6 @@ const sessionExtensionState = new Map();
 const sessionUsefulUserSections = [];
 const sessionUsefulExtraLinks = new Map();
 let usefulLinksLiveCache = { signature: '', fetchedAt: 0, sections: [], error: '' };
-let lastUsefulIntelSig = '';
 const agentLockedTabs = new Set();
 const XHR_CAPTURE_LIMIT = 80;
 const N8N_WEBHOOK_URL = 'http://127.0.0.1:5678/webhook/agent-browser';
@@ -1332,7 +1331,6 @@ function purgeSessionChromeState() {
   sessionUsefulUserSections.length = 0;
   sessionUsefulExtraLinks.clear();
   usefulLinksLiveCache = { signature: '', fetchedAt: 0, sections: [], error: '' };
-  lastUsefulIntelSig = '';
   tabSecurityStats.clear();
   blockedRequestCount = 0;
   if (securityStatsFlush) {
@@ -7468,11 +7466,6 @@ async function pushLocalIntel() {
       sendToKind('extensions', 'agent:local-intel', snapshot);
       sendToKind('settings', 'agent:local-intel', snapshot);
       sendToKind('useful', 'agent:local-intel', snapshot);
-      const sig = usefulLinksLive.intelSignature(snapshot);
-      if (sig && sig !== lastUsefulIntelSig && findUsefulLinksTabId()) {
-        lastUsefulIntelSig = sig;
-        refreshUsefulLinksCatalog({ force: true, intel: snapshot }).catch(() => {});
-      }
     } while (localIntelPending);
     return snapshot;
   } catch {
@@ -7764,10 +7757,11 @@ function snapshotUsefulLinks(intel, extra = {}) {
   };
 }
 
-async function searchGithubRepos(query, limit) {
+async function searchGithubRepos(query, limit, options = {}) {
   const url = new URL('https://api.github.com/search/repositories');
-  url.searchParams.set('q', String(query || 'local llm'));
-  url.searchParams.set('sort', 'updated');
+  url.searchParams.set('q', String(query || 'stars:>1000'));
+  const sort = options.sort === 'stars' || options.sort === 'created' ? options.sort : 'updated';
+  url.searchParams.set('sort', sort);
   url.searchParams.set('order', 'desc');
   url.searchParams.set('per_page', String(Math.min(8, Math.max(3, Number(limit) || 6))));
   const response = await fetch(url, {
@@ -7795,27 +7789,38 @@ async function searchGithubRepos(query, limit) {
 
 async function refreshUsefulLinksCatalog(options = {}) {
   const intel = options.intel || currentUsefulIntel();
-  const signature = usefulLinksLive.intelSignature(intel);
+  const signature = usefulLinksLive.catalogSignature(sessionUsefulUserSections);
   const fresh = Date.now() - (usefulLinksLiveCache.fetchedAt || 0) < 180000;
   if (!options.force && fresh && usefulLinksLiveCache.signature === signature) {
     const snapshot = snapshotUsefulLinks(intel);
     sendToKind('useful', 'agent:useful-links', snapshot);
     return snapshot;
   }
-  const queries = usefulLinksLive.inferQueries(intel);
+  const queries = usefulLinksLive.defaultLiveQueries();
   const live = [];
   let error = '';
   try {
     for (const item of queries) {
-      const links = await searchGithubRepos(item.query, item.perPage);
+      const links = await searchGithubRepos(item.query, item.perPage, { sort: item.sort });
       if (links.length) {
         live.push({
           id: item.id,
           title: item.title,
           source: 'live',
+          query: item.query,
           links,
         });
       }
+    }
+    for (const section of sessionUsefulUserSections) {
+      const query = usefulLinksLive.keywordQuery(section.query || section.title);
+      if (!query) {
+        continue;
+      }
+      const links = await searchGithubRepos(query, 8, { sort: 'stars' });
+      section.source = 'live';
+      section.query = query;
+      section.links = links;
     }
     usefulLinksLiveCache = { signature, fetchedAt: Date.now(), sections: live, error: '' };
   } catch (caught) {
@@ -7830,7 +7835,7 @@ async function refreshUsefulLinksCatalog(options = {}) {
   const snapshot = snapshotUsefulLinks(intel, {
     status: error
       ? `Live fetch failed (${error}). Seed and your added links stay.`
-      : `Updated from GitHub for this bound model/agent.`,
+      : 'Updated from GitHub just now.',
   });
   sendToKind('useful', 'agent:useful-links', snapshot);
   return snapshot;
@@ -7848,6 +7853,9 @@ ipcMain.handle('agent:useful-links-get', async (event) => {
   if (!isUsefulLinksSender(event)) {
     return { ok: false };
   }
+  if (!usefulLinksLiveCache.sections.length) {
+    return refreshUsefulLinksCatalog({ force: false });
+  }
   return snapshotUsefulLinks(currentUsefulIntel());
 });
 
@@ -7862,15 +7870,39 @@ ipcMain.handle('agent:useful-links-add-section', async (event, payload) => {
   if (!isUsefulLinksSender(event) || !payload || typeof payload !== 'object') {
     return { ok: false };
   }
+  const title = usefulLinksLive.keywordQuery(payload.title);
+  if (!title) {
+    return { ok: false, error: 'invalid-section', ...snapshotUsefulLinks(currentUsefulIntel()) };
+  }
+  let links = [];
+  let error = '';
+  try {
+    links = await searchGithubRepos(title, 8, { sort: 'stars' });
+  } catch (caught) {
+    error = caught instanceof Error ? caught.message : 'GitHub search failed.';
+  }
   const section = usefulLinksLive.normalizeSection(
-    { id: `user-${Date.now()}`, title: payload.title, source: 'user', links: [] },
+    {
+      id: `user-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || Date.now()}-${Date.now()}`,
+      title,
+      source: 'live',
+      query: title,
+      links,
+    },
     `user-${sessionUsefulUserSections.length + 1}`,
   );
   if (!section) {
     return { ok: false, error: 'invalid-section', ...snapshotUsefulLinks(currentUsefulIntel()) };
   }
   sessionUsefulUserSections.unshift(section);
-  const snapshot = snapshotUsefulLinks(currentUsefulIntel(), { status: 'Section added for this RAM session.' });
+  usefulLinksLiveCache.signature = '';
+  const snapshot = snapshotUsefulLinks(currentUsefulIntel(), {
+    status: error
+      ? `Live fetch failed (${error}). The column is empty until GitHub answers.`
+      : links.length
+        ? `Live column for “${title}” — ${links.length} repos from GitHub.`
+        : `GitHub returned no repos for “${title}”.`,
+  });
   sendToKind('useful', 'agent:useful-links', snapshot);
   return snapshot;
 });
