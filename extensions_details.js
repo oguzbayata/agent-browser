@@ -9,6 +9,7 @@ const extensionDetails = {
   dnt: 'Adds a DNT: 1 request header to every http(s) call from this session. The site can still ignore it; the header is still sent.',
   ua: 'Replaces the outgoing User-Agent with a common Chrome string so sites see a generic desktop client instead of this build’s default.',
   models: 'This is the local model/agent chat for the session, not a toggleable add-on. Open the AI sidebar from here.',
+  'page-translate': 'When on, right-click any guest page or chrome menu to translate visible text into Turkish, German, English, French, or Spanish. Open picks a language for the current tab. The original words stay in RAM only and are not written to disk.',
   'canvas-poisoner': 'Injects a canvas getImageData hook that flips a few pixels so canvas hashes change between loads. Reloading a tab reapplies the hook.',
   'siyuan-bridge': 'Routes recalled notes into chat from the Brain provider you picked (SiYuan or Obsidian). Open the Memory Bridge page to choose the vault or endpoint.',
   'human-jitter': 'Agent click/input paths wait a short random delay so automation does not fire on a perfect clock. Only affects CDP/agent actions, not your mouse.',

@@ -210,3 +210,30 @@ h1 {
 .row[data-state="interrupted"] .row-name-open {
   color: var(--danger);
 }
+
+body.downloads-pop {
+  padding: 0;
+  min-height: 0;
+  background: #292a2d;
+}
+
+body.downloads-pop .dropdown-menu {
+  padding-bottom: 10px;
+}
+
+body.downloads-pop .disk-warning {
+  margin: 0 12px 10px;
+  font-size: 12px;
+}
+
+body.downloads-pop .empty {
+  margin: 4px 16px 10px;
+}
+
+body.downloads-pop .list {
+  padding: 0 10px 4px;
+}
+
+body.downloads-pop .row {
+  padding: 10px 12px;
+}

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en" class="overflow-surface">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'none'; connect-src 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Downloads</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="downloads.css" />
+    <link rel="stylesheet" href="hide-scrollbars.css" />
+  </head>
+  <body class="overflow-surface downloads-pop">
+    <div id="agent-downloads-menu" class="dropdown-menu" role="dialog" aria-label="Downloads">
+      <div class="menu-heading">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.4v9.2M6.6 9.4 10 12.8l3.4-3.4M4 16.4h12"/></svg>
+        <span class="menu-profile-copy">
+          <strong>Downloads</strong>
+        </span>
+        <em class="menu-signed">session · ram</em>
+      </div>
+      <hr />
+      <p id="disk-warning" class="disk-warning" hidden role="status"></p>
+      <p id="downloads-empty" class="empty">No downloads yet.</p>
+      <div id="downloads-list" class="list" aria-live="polite"></div>
+    </div>
+    <script src="downloads.js"></script>
+  </body>
+</html>

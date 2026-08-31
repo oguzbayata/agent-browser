@@ -10,6 +10,7 @@ const http = require('node:http');
 const net = require('node:net');
 const { startAgentBridgeServer, stopAgentBridgeServer, getListenInfo } = require('./agent-bridge');
 const { collectIntel, knownModelRoots, isLoopbackHttpUrl, resolveLocalChatTarget } = require('./local-intel');
+const pageTranslate = require('./page-translate');
 const { AD_HIDE_CSS, shouldBlockUrl } = require('./tracker-block');
 const { findFfmpeg, findYtDlp, hunterPathEnv, isWindowsStoreStub } = require('./hunter-tools');
 const agentExtensionCatalog = require('./extensions_data');
@@ -80,6 +81,9 @@ const PYTHON_MISSING_MESSAGE = 'Local Intelligence Agent could not start: Python
 const PANIC_QUIT_MS = 1500;
 const PANIC_SHORTCUT = 'CommandOrControl+Shift+E';
 const PAGE_TEXT_LIMIT = 80000;
+const LOCAL_CHAT_TIMEOUT_MS = 45000;
+const CLOUD_CHAT_TIMEOUT_MS = 45000;
+const PAGE_TEXT_TIMEOUT_MS = 2500;
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 const SUMMARIZE_SYSTEM_PROMPT =
   'You are a cyber-intelligence summarizer. Analyze the text below and extract the most important points:';
@@ -475,6 +479,7 @@ const privacySettings = {
   excommunicadoLock: false,
   ...catalogTools.defaultSettings(),
 };
+privacySettings.pageTranslate = true;
 global.isDownloaderEnabled = false;
 let blockedRequestCount = 0;
 const tabSecurityStats = new Map();
@@ -503,6 +508,9 @@ function summarizeSecurityHeaders(headers) {
 let securityStatsFlush = null;
 let agentBridgeToken = '';
 let sessionApiKeyValue = '';
+let sessionTranslateLang = 'tr';
+let nativeContextMenuOpen = false;
+const translatedWebContents = new WeakSet();
 let agentControlKey = '';
 let agentCdpPort = 0;
 let agentApiPort = 0;
@@ -1511,6 +1519,166 @@ function emitDiskWarning() {
       webContents.send('agent:disk-warning', payload);
     }
   }
+}
+
+function translateMenuIcon() {
+  try {
+    const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'translate.svg'));
+    if (icon && !icon.isEmpty()) {
+      return icon.resize({ width: 16, height: 16 });
+    }
+  } catch {
+    // Menu still works without an icon.
+  }
+  try {
+    const fallback = nativeImage.createFromPath(path.join(__dirname, 'assets', 'agent-browser-logo.png'));
+    if (fallback && !fallback.isEmpty()) {
+      return fallback.resize({ width: 16, height: 16 });
+    }
+  } catch {
+    // Menu still works without an icon.
+  }
+  return undefined;
+}
+
+function popupAppMenu(template, webContents) {
+  if (!Array.isArray(template) || !template.length) {
+    return;
+  }
+  const win = (webContents && BrowserWindow.fromWebContents(webContents)) || mainWindow;
+  nativeContextMenuOpen = true;
+  const menu = Menu.buildFromTemplate(template);
+  menu.popup({
+    window: win && !win.isDestroyed() ? win : undefined,
+    callback: () => {
+      nativeContextMenuOpen = false;
+    },
+  });
+}
+
+function overlayBlurShouldHide() {
+  return !nativeContextMenuOpen;
+}
+
+function translateTargetFrom(webContents) {
+  if (webContents && !webContents.isDestroyed()) {
+    for (const entry of views.values()) {
+      if (entry?.view?.webContents === webContents) {
+        return webContents;
+      }
+    }
+  }
+  return getGuestWebContents();
+}
+
+async function runPageTranslate(webContents, langId) {
+  const lang = pageTranslate.normalizeLang(langId) || sessionTranslateLang;
+  const target = translateTargetFrom(webContents);
+  if (!target || target.isDestroyed()) {
+    throw new Error('No page to translate.');
+  }
+  sessionTranslateLang = lang;
+  emitChromeToast(`Translating to ${pageTranslate.langLabel(lang)}…`);
+  const snapshot = await target.executeJavaScript(pageTranslate.COLLECT_PAGE_SOURCE, true);
+  const texts = Array.isArray(snapshot?.texts) ? snapshot.texts : [];
+  if (!texts.length) {
+    throw new Error('No visible text to translate.');
+  }
+  const translated = await pageTranslate.translateStrings(texts, lang);
+  const applied = await target.executeJavaScript(pageTranslate.applyPageSource(translated), true);
+  if (!applied) {
+    throw new Error('Could not apply the translation to this page.');
+  }
+  translatedWebContents.add(target);
+  emitChromeToast(`Translated to ${pageTranslate.langLabel(lang)}.`);
+}
+
+async function restorePageTranslate(webContents) {
+  const target = translateTargetFrom(webContents);
+  if (!target || target.isDestroyed()) {
+    return;
+  }
+  await target.executeJavaScript(pageTranslate.RESTORE_PAGE_SOURCE, true).catch(() => false);
+  translatedWebContents.delete(target);
+  emitChromeToast('Showing original page.');
+}
+
+async function runSelectionTranslate(webContents, text, langId) {
+  const lang = pageTranslate.normalizeLang(langId) || sessionTranslateLang;
+  const source = typeof text === 'string' ? text.trim() : '';
+  if (!source) {
+    throw new Error('No selected text to translate.');
+  }
+  sessionTranslateLang = lang;
+  const translated = await pageTranslate.translatePlainText(source, lang);
+  const target = webContents && !webContents.isDestroyed() ? webContents : getGuestWebContents();
+  if (target && !target.isDestroyed()) {
+    const replaced = await target
+      .executeJavaScript(pageTranslate.replaceSelectionSource(translated), true)
+      .catch(() => false);
+    if (replaced) {
+      emitChromeToast(`Translated to ${pageTranslate.langLabel(lang)}.`);
+      return;
+    }
+  }
+  clipboard.writeText(translated);
+  emitChromeToast('Translation copied.');
+}
+
+function translateMenuTemplate(webContents, params = {}) {
+  if (!privacySettings.pageTranslate) {
+    return [];
+  }
+  const icon = translateMenuIcon();
+  const selection = typeof params.selectionText === 'string' ? params.selectionText.trim() : '';
+  const pageItems = pageTranslate.TRANSLATE_LANGS.map((item) => ({
+    label: item.label,
+    click: () => {
+      runPageTranslate(webContents, item.id).catch((error) => {
+        emitChromeToast(error instanceof Error ? error.message : 'Translate failed.');
+      });
+    },
+  }));
+  const selectionItems = selection
+    ? pageTranslate.TRANSLATE_LANGS.map((item) => ({
+        label: item.label,
+        click: () => {
+          runSelectionTranslate(webContents, selection, item.id).catch((error) => {
+            emitChromeToast(error instanceof Error ? error.message : 'Translate failed.');
+          });
+        },
+      }))
+    : [];
+  const submenu = [
+    ...pageItems,
+    ...(selectionItems.length
+      ? [{ type: 'separator' }, { label: 'Selection', enabled: false }, ...selectionItems]
+      : []),
+    { type: 'separator' },
+    {
+      label: 'Show original',
+      enabled: Boolean(webContents && translatedWebContents.has(translateTargetFrom(webContents))),
+      click: () => {
+        restorePageTranslate(webContents).catch(() => {});
+      },
+    },
+  ];
+  return [
+    {
+      label: 'Translate',
+      ...(icon ? { icon } : {}),
+      submenu,
+    },
+  ];
+}
+
+function popupTranslateChooser(webContents) {
+  const items = translateMenuTemplate(webContents || getGuestWebContents(), {});
+  if (!items.length) {
+    emitChromeToast('Turn on Translate in Extensions first.');
+    return;
+  }
+  popupAppMenu(items[0].submenu, webContents || getGuestWebContents());
 }
 
 function mediaHunterMenuIcon() {
@@ -2601,12 +2769,23 @@ function attachGuestContextMenu(webContents) {
       },
       { type: 'separator' },
       {
+        label: 'Print',
+        click: () => printWebContents(webContents, params),
+      },
+    );
+    const translateItems = translateMenuTemplate(webContents, params);
+    if (translateItems.length) {
+      template.push({ type: 'separator' }, ...translateItems);
+    }
+    template.push(
+      { type: 'separator' },
+      {
         label: 'Inspect',
         click: () => webContents.inspectElement(params.x, params.y),
       },
     );
 
-    Menu.buildFromTemplate(template).popup({ window: mainWindow || undefined });
+    popupAppMenu(template, webContents);
   });
 }
 
@@ -2635,24 +2814,31 @@ function attachChromeContextMenu(webContents) {
     }
 
     const editable = Boolean(params.isEditable);
-    const hasSelection = Boolean(params.selectionText);
-    if (!editable && !hasSelection) {
-      return;
-    }
-
+    const hasSelection = Boolean(params.selectionText && String(params.selectionText).trim());
     const flags = params.editFlags || {};
-    const template = editable
-      ? [
-          { label: 'Cut', role: 'cut', enabled: Boolean(flags.canCut) && hasSelection },
-          { label: 'Copy', role: 'copy', enabled: Boolean(flags.canCopy) && hasSelection },
-          { label: 'Paste', role: 'paste', enabled: true },
-          { type: 'separator' },
-          { label: 'Select all', role: 'selectAll', enabled: flags.canSelectAll !== false },
-        ]
-      : [{ label: 'Copy', role: 'copy', enabled: hasSelection }];
-
-    const win = BrowserWindow.fromWebContents(webContents);
-    Menu.buildFromTemplate(template).popup({ window: win || mainWindow || undefined });
+    const template = [];
+    if (editable) {
+      template.push(
+        { label: 'Cut', role: 'cut', enabled: Boolean(flags.canCut) && hasSelection },
+        { label: 'Copy', role: 'copy', enabled: Boolean(flags.canCopy) && hasSelection },
+        { label: 'Paste', role: 'paste', enabled: flags.canPaste !== false },
+        { type: 'separator' },
+        { label: 'Select all', role: 'selectAll', enabled: flags.canSelectAll !== false },
+      );
+    } else if (hasSelection) {
+      template.push({ label: 'Copy', role: 'copy', enabled: true });
+    } else {
+      template.push(
+        { label: 'Copy', role: 'copy', enabled: Boolean(flags.canCopy) },
+        { label: 'Paste', role: 'paste', enabled: Boolean(flags.canPaste) },
+        { label: 'Select all', role: 'selectAll', enabled: flags.canSelectAll !== false },
+      );
+    }
+    const translateItems = translateMenuTemplate(getGuestWebContents() || webContents, params);
+    if (translateItems.length) {
+      template.push({ type: 'separator' }, ...translateItems);
+    }
+    popupAppMenu(template, webContents);
   });
 }
 
@@ -4699,6 +4885,7 @@ function attachTabListeners(tabId, webContents) {
     );
   });
   webContents.on('did-navigate', () => {
+    translatedWebContents.delete(webContents);
     emitTitle();
     emitTabUpdated(tabId);
     if (tabId === activeTabId) {
@@ -5278,9 +5465,11 @@ function ensureOverflowMenuView() {
   overflowMenuView.setBackgroundColor('#292a2d');
   overflowMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   watchHiddenScrollbars(overflowMenuView.webContents);
+  attachChromeContextMenu(overflowMenuView.webContents);
   overflowMenuView.webContents.on('blur', () => {
     setTimeout(() => {
       if (
+        overlayBlurShouldHide() &&
         menuOpen &&
         overflowViewAlive() &&
         !overflowMenuView.webContents.isFocused()
@@ -5419,9 +5608,11 @@ function ensureShieldMenuView() {
   shieldMenuView.setBackgroundColor('#292a2d');
   shieldMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   watchHiddenScrollbars(shieldMenuView.webContents);
+  attachChromeContextMenu(shieldMenuView.webContents);
   shieldMenuView.webContents.on('blur', () => {
     setTimeout(() => {
       if (
+        overlayBlurShouldHide() &&
         shieldOpen &&
         shieldViewAlive() &&
         !shieldMenuView.webContents.isFocused()
@@ -5560,9 +5751,11 @@ function ensureSiteMenuView() {
   siteMenuView.setBackgroundColor('#292a2d');
   siteMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   watchHiddenScrollbars(siteMenuView.webContents);
+  attachChromeContextMenu(siteMenuView.webContents);
   siteMenuView.webContents.on('blur', () => {
     setTimeout(() => {
       if (
+        overlayBlurShouldHide() &&
         siteOpen &&
         siteViewAlive() &&
         !siteMenuView.webContents.isFocused()
@@ -5705,9 +5898,11 @@ function ensureToolsMenuView() {
   toolsMenuView.setBackgroundColor('#292a2d');
   toolsMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   watchHiddenScrollbars(toolsMenuView.webContents);
+  attachChromeContextMenu(toolsMenuView.webContents);
   toolsMenuView.webContents.on('blur', () => {
     setTimeout(() => {
       if (
+        overlayBlurShouldHide() &&
         toolsOpen &&
         toolsViewAlive() &&
         !toolsMenuView.webContents.isFocused()
@@ -5853,9 +6048,11 @@ function ensureShortcutsMenuView() {
   shortcutsMenuView.setBackgroundColor('#292a2d');
   shortcutsMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   watchHiddenScrollbars(shortcutsMenuView.webContents);
+  attachChromeContextMenu(shortcutsMenuView.webContents);
   shortcutsMenuView.webContents.on('blur', () => {
     setTimeout(() => {
       if (
+        overlayBlurShouldHide() &&
         shortcutsOpen &&
         shortcutsViewAlive() &&
         !shortcutsMenuView.webContents.isFocused()
@@ -5999,9 +6196,11 @@ function ensureProfileMenuView() {
   profileMenuView.setBackgroundColor('#292a2d');
   profileMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   watchHiddenScrollbars(profileMenuView.webContents);
+  attachChromeContextMenu(profileMenuView.webContents);
   profileMenuView.webContents.on('blur', () => {
     setTimeout(() => {
       if (
+        overlayBlurShouldHide() &&
         profileOpen &&
         profileViewAlive() &&
         !profileMenuView.webContents.isFocused()
@@ -6133,9 +6332,11 @@ function ensureDownloadsMenuView() {
   downloadsMenuView.setBackgroundColor('#292a2d');
   downloadsMenuView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   watchHiddenScrollbars(downloadsMenuView.webContents);
+  attachChromeContextMenu(downloadsMenuView.webContents);
   downloadsMenuView.webContents.on('blur', () => {
     setTimeout(() => {
       if (
+        overlayBlurShouldHide() &&
         downloadsOpen &&
         downloadsViewAlive() &&
         !downloadsMenuView.webContents.isFocused()
@@ -6940,6 +7141,10 @@ ipcMain.handle('agent:tools-action', async (event, action) => {
     sendToChrome('agent:tools-command', { action });
     return { ok: true };
   }
+  if (action === 'translate') {
+    popupTranslateChooser(getGuestWebContents());
+    return { ok: true };
+  }
   return { ok: false };
 });
 
@@ -7042,6 +7247,10 @@ ipcMain.handle('agent:menu-action', async (event, action) => {
     case 'lens':
       result = { ok: true, openAi: true, summarize: action === 'lens' };
       break;
+    case 'translate':
+      hideOverflowMenu();
+      popupTranslateChooser(getGuestWebContents());
+      return { ok: true };
     default:
       break;
   }
@@ -7302,17 +7511,55 @@ function rememberUserPath(raw, into) {
   return raw;
 }
 
+function isAbortLike(error) {
+  const name = error && typeof error === 'object' ? error.name : '';
+  return name === 'TimeoutError' || name === 'AbortError';
+}
+
+function chatReachError(model, fallback) {
+  const source = model?.source || model?.runtime || 'the local server';
+  const port = Number(model?.port) || 0;
+  const where = port ? `${source} on 127.0.0.1:${port}` : source;
+  return new Error(fallback || `Could not reach ${where}. Is the app running, and is a model loaded?`);
+}
+
+async function fetchChatResponse(url, init, timeoutMs, model, kind) {
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    if (isAbortLike(error)) {
+      throw new Error(
+        kind === 'cloud'
+          ? 'The cloud model timed out. Check the API key and network.'
+          : `The local model timed out. Is ${model?.source || 'Ollama or LM Studio'} running, and is a model loaded?`,
+      );
+    }
+    if (kind === 'cloud') {
+      throw new Error('Could not reach the cloud model. Check the API key and network.');
+    }
+    throw chatReachError(model);
+  }
+}
+
 async function requestOllamaChat(model, messages) {
-  const response = await fetch(model.chatUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: model.name,
-      messages,
-      stream: false,
-    }),
-    signal: AbortSignal.timeout(120000),
-  });
+  const response = await fetchChatResponse(
+    model.chatUrl,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model.name,
+        messages,
+        stream: false,
+      }),
+    },
+    LOCAL_CHAT_TIMEOUT_MS,
+    model,
+    'local',
+  );
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(body?.error || `Ollama HTTP ${response.status}`);
@@ -7325,20 +7572,25 @@ async function requestOllamaChat(model, messages) {
 }
 
 async function requestLocalOpenAiChat(model, messages) {
-  const response = await fetch(model.chatUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer local',
+  const response = await fetchChatResponse(
+    model.chatUrl,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer local',
+      },
+      body: JSON.stringify({
+        model: model.name,
+        temperature: 0.2,
+        messages,
+        stream: false,
+      }),
     },
-    body: JSON.stringify({
-      model: model.name,
-      temperature: 0.2,
-      messages,
-      stream: false,
-    }),
-    signal: AbortSignal.timeout(120000),
-  });
+    LOCAL_CHAT_TIMEOUT_MS,
+    model,
+    'local',
+  );
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const message =
@@ -7354,24 +7606,40 @@ async function requestLocalOpenAiChat(model, messages) {
   return content.trim();
 }
 
+function localChatTargetReady(target) {
+  return Boolean(
+    target &&
+      target.chatUrl &&
+      (target.kind === 'ollama' || target.kind === 'openai-compat'),
+  );
+}
+
 async function requestChat(apiKey, messages) {
   const keyed = await withAgentMemory(messages);
-  if (!lastIntelModels.length) {
-    await pushLocalIntel();
-  }
   const selected = selectedLocalModel && serializeLocalModel(selectedLocalModel);
-  const shouldUseLocal = Boolean(selected) || !apiKey;
-  const target = shouldUseLocal
-    ? resolveLocalChatTarget(selected, lastIntelModels, lastIntelAgents)
-    : null;
-  if (target?.kind === 'ollama' && target.chatUrl) {
-    return requestOllamaChat(target, keyed);
+  const target = resolveLocalChatTarget(selected, lastIntelModels, lastIntelAgents);
+  const canUseLocal = localChatTargetReady(target);
+
+  if (selected && !canUseLocal) {
+    if (selected.kind === 'file') {
+      throw new Error(
+        'Selected model is a weight file, not a running chat server. Start Ollama or LM Studio and pick a live model.',
+      );
+    }
+    throw new Error(
+      'The selected local model is not reachable. Start Ollama or LM Studio, or pick a live model in Settings → Agents.',
+    );
   }
-  if (target?.kind === 'openai-compat' && target.chatUrl) {
+
+  if (canUseLocal && (selected || !apiKey)) {
+    if (target.kind === 'ollama') {
+      return requestOllamaChat(target, keyed);
+    }
     return requestLocalOpenAiChat(target, keyed);
   }
+
   if (!apiKey) {
-    throw new Error('Select a local model or enter a session API key.');
+    throw new Error('Select a live local model or enter a session API key.');
   }
   return requestOpenAiChat(apiKey, keyed);
 }
@@ -7383,20 +7651,30 @@ async function extractVisiblePageText() {
   }
 
   const pageUrl = guest.getURL();
-  if (!pageUrl || isStartPage(pageUrl)) {
+  if (!pageUrl || isInternalGuestUrl(pageUrl)) {
     return '';
   }
 
-  const text = await guest.executeJavaScript(
-    `(function () {
-      try {
-        return document.body && document.body.innerText ? document.body.innerText : '';
-      } catch (error) {
-        return '';
-      }
-    })()`,
-    true,
-  );
+  let text = '';
+  try {
+    text = await Promise.race([
+      guest.executeJavaScript(
+        `(function () {
+          try {
+            return document.body && document.body.innerText ? document.body.innerText : '';
+          } catch (error) {
+            return '';
+          }
+        })()`,
+        true,
+      ),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('timeout')), PAGE_TEXT_TIMEOUT_MS);
+      }),
+    ]);
+  } catch {
+    return '';
+  }
 
   if (typeof text !== 'string') {
     return '';
@@ -7406,18 +7684,24 @@ async function extractVisiblePageText() {
 }
 
 async function requestOpenAiChat(apiKey, messages) {
-  const response = await fetch(OPENAI_CHAT_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+  const response = await fetchChatResponse(
+    OPENAI_CHAT_URL,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.2,
+        messages,
+      }),
     },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      temperature: 0.2,
-      messages,
-    }),
-  });
+    CLOUD_CHAT_TIMEOUT_MS,
+    null,
+    'cloud',
+  );
 
   const body = await response.json().catch(() => null);
   if (!response.ok) {
@@ -7639,28 +7923,47 @@ ipcMain.handle('agent:local-intel-watch', async (event, open) => {
   return { ok: true };
 });
 
+function broadcastLocalIntelSelection(selectedId) {
+  const snapshot = {
+    models: lastIntelModels,
+    agents: lastIntelAgents,
+    selectedId: selectedId || null,
+  };
+  sendToChrome('agent:local-intel', snapshot);
+  sendToKind('settings', 'agent:local-intel', snapshot);
+  sendToKind('extensions', 'agent:local-intel', snapshot);
+  sendToKind('useful', 'agent:local-intel', snapshot);
+  return snapshot;
+}
+
 ipcMain.handle('agent:local-intel-select', async (event, id) => {
   if (!isChromeSender(event)) {
     return { ok: false };
   }
   if (id === null || id === '' || id === 'cloud') {
     selectedLocalModel = null;
-    const snapshot = await pushLocalIntel();
-    return { ok: true, intel: snapshot };
+    return { ok: true, intel: broadcastLocalIntelSelection(null) };
   }
   if (typeof id !== 'string' || id.length > 480) {
     return { ok: false, error: 'invalid model' };
   }
-  const snapshot = await buildLocalIntelSnapshot();
-  const match = snapshot.models.find((item) => item.id === id);
+  let match = lastIntelModels.find((item) => item.id === id);
   if (!match) {
-    return { ok: false, error: 'model not found' };
+    const snapshot = await buildLocalIntelSnapshot();
+    match = snapshot.models.find((item) => item.id === id);
+    if (!match) {
+      return { ok: false, error: 'model not found' };
+    }
+    selectedLocalModel = match;
+    snapshot.selectedId = match.id;
+    sendToChrome('agent:local-intel', snapshot);
+    sendToKind('settings', 'agent:local-intel', snapshot);
+    sendToKind('extensions', 'agent:local-intel', snapshot);
+    sendToKind('useful', 'agent:local-intel', snapshot);
+    return { ok: true, intel: snapshot };
   }
   selectedLocalModel = match;
-  snapshot.selectedId = match.id;
-  sendToChrome('agent:local-intel', snapshot);
-  sendToKind('settings', 'agent:local-intel', snapshot);
-  return { ok: true, intel: snapshot };
+  return { ok: true, intel: broadcastLocalIntelSelection(match.id) };
 });
 
 ipcMain.handle('agent:local-intel-pick', async (event, kind) => {
@@ -8653,7 +8956,10 @@ ipcMain.handle('agent:ai-message', async (event, payload) => {
     return emitAiResponse({ ok: false, error: 'Invalid message.' });
   }
 
-  emitAiResponse({ ok: true, type: 'status', content: 'agent is replying' });
+  const bound = selectedLocalModel && serializeLocalModel(selectedLocalModel);
+  const preview = resolveLocalChatTarget(bound, lastIntelModels, lastIntelAgents);
+  const label = preview?.name || bound?.name || (apiKey ? 'cloud model' : 'local model');
+  emitAiResponse({ ok: true, type: 'status', content: `agent is replying · ${label}` });
 
   try {
     const content = await requestChat(apiKey, [
@@ -8727,13 +9033,64 @@ ipcMain.handle('agent:ai-summarize', async (event, payload) => {
   }
 });
 
-function printActiveGuest() {
-  const guest = getGuestWebContents();
-  if (!guest || guest.isDestroyed()) {
+function printWebContents(webContents, params) {
+  if (!webContents || webContents.isDestroyed() || typeof webContents.print !== 'function') {
     return { ok: false };
   }
-  guest.print({ silent: false });
+
+  const cleanupPrintMarks = () => {
+    webContents
+      .executeJavaScript(
+        `(() => {
+          document.getElementById('agent-print-style')?.remove();
+          document.querySelectorAll('[data-agent-print]').forEach((el) => el.removeAttribute('data-agent-print'));
+        })()`,
+        true,
+      )
+      .catch(() => {});
+  };
+
+  const runPrint = () => {
+    webContents.print({ silent: false, printBackground: true }, () => {
+      cleanupPrintMarks();
+    });
+  };
+
+  const selection = String(params?.selectionText || '').trim();
+  if (!selection) {
+    runPrint();
+    return { ok: true };
+  }
+
+  webContents
+    .executeJavaScript(
+      `(() => {
+        const sel = window.getSelection && window.getSelection();
+        let node = sel && sel.rangeCount ? sel.getRangeAt(0).commonAncestorContainer : null;
+        if (node && node.nodeType !== 1) {
+          node = node.parentElement;
+        }
+        if (!node) {
+          return false;
+        }
+        node.setAttribute('data-agent-print', '1');
+        document.getElementById('agent-print-style')?.remove();
+        const style = document.createElement('style');
+        style.id = 'agent-print-style';
+        style.textContent = '@media print { body * { visibility: hidden !important; } [data-agent-print="1"], [data-agent-print="1"] * { visibility: visible !important; } }';
+        document.documentElement.appendChild(style);
+        return true;
+      })()`,
+      true,
+    )
+    .then(runPrint)
+    .catch(runPrint);
+
   return { ok: true };
+}
+
+function printActiveGuest() {
+  return printWebContents(getGuestWebContents());
 }
 
 async function clearIsolatedBrowsingData() {

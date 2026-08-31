@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.1.0-3dffc8?style=flat-square">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.1.1-3dffc8?style=flat-square">
   <img alt="Electron" src="https://img.shields.io/badge/electron-37-47848f?style=flat-square&logo=electron&logoColor=white">
   <img alt="Session" src="https://img.shields.io/badge/session-in--memory-111111?style=flat-square">
   <img alt="UI" src="https://img.shields.io/badge/UI-English-555555?style=flat-square">
@@ -44,6 +44,15 @@ The product is a working desktop browser, not a headless SDK. You can search, re
 
 ---
 
+## What's new in 0.1.1
+
+- **Translate** is a session tool (on by default). Right-click a page, the chrome, or any dropdown menu and pick Turkish, German, English, French, or Spanish. Selection-only translate and **Show original** are included. Nothing is written to disk; the request goes to Google’s public translate endpoint.
+- Context menus work while you browse **and** while a chrome menu is open (overflow, Shield, site, tools, shortcuts, profile, downloads). Opening Translate no longer drops you on a stub RAM sheet.
+- Local-model chat no longer stays on “agent is replying” forever. Send waits for a reply or a visible error (about 45s). A selected `.gguf` file is not treated as a live chat server. Bind the model in **Settings → Agents**.
+- Print from the guest right-click menu. The toolbar **AI** control opens the local-models sidebar. Downloads uses a download-arrow overlay.
+
+---
+
 ## Privacy model
 
 | Surface | Where it lives | Survives quit? |
@@ -52,10 +61,11 @@ The product is a working desktop browser, not a headless SDK. You can search, re
 | Bookmarks, session history, omnibox state | Renderer RAM | No |
 | Cloud API key, agent bridge token | Process memory | No |
 | Shield / Ghost Network / tool toggles | Process memory | No |
+| Page text sent through Translate | Process memory; outbound request to Google Translate | No local copy |
 | Files saved through Downloads or Media Hunter | Your Downloads folder | **Yes** — a banner warns that Excommunicado may not delete them |
 | Obsidian vault path / localhost memory endpoints | Session config in RAM; vault files you already have on disk are untouched | Vault files on disk are yours |
 
-**Defaults (on):** tracker/ad blocking, drop third-party cookies, `DNT: 1`, common Chrome user-agent.
+**Defaults (on):** tracker/ad blocking, drop third-party cookies, `DNT: 1`, common Chrome user-agent, Translate.
 
 **Defaults (off):** Ghost Network, Media Hunter, multi-agent bridge, and the rest of the session tool catalog. They exist for this RAM session only; there are no persistent Chromium extensions.
 
@@ -74,11 +84,12 @@ This is not a claim of anonymity, legal immunity, or “untraceable” browsing.
 - Frameless window, mint-green shield mark with a black **A**
 - Tabs, back / forward / reload, address bar (URL or search)
 - Session bookmarks and RAM-only history
-- Find in page, print, downloads list
+- Find in page, print (including guest right-click), downloads overlay
 - Settings, Shield menu, site info, Ghost Network toggle
+- Toolbar **AI** button for the local-models sidebar
 - English UI throughout
 
-Address-bar search uses **DuckDuckGo** or **Startpage**.
+Address-bar search uses the engine you pick in Settings (DuckDuckGo by default; Startpage, Google, Bing, and others are in the picker).
 
 ### Shield
 
@@ -92,12 +103,14 @@ Publisher pages themselves (YouTube watch, Amazon product pages, Google Search, 
 
 ### Local models and AI sidebar
 
+Model, session API key, and Brain (Off / SiYuan / Obsidian) live in **Settings → Agents**. The sidebar is chat only.
+
 The sidebar scans known roots (Ollama, LM Studio, GGUF/GGML files on disk) and can bind:
 
-- A **local** runtime already listening on loopback, or a weight file routed through a running local server
+- A **live** loopback runtime (Ollama, LM Studio, Jan). A weight file on disk is not enough unless that runtime is running and loaded
 - **OpenAI** with a session API key (RAM only — never written to disk)
 
-You can ask about the current page or run **Summarize page**. Chat is not persisted.
+You can ask about the current page or run **Summarize page**. Chat is not persisted. If the runtime is down or a file-only model is selected, the sidebar shows an error instead of hanging.
 
 ### Memory Bridge
 
@@ -106,6 +119,14 @@ Optional loopback bridges for this session only:
 Mem0, Zep, LangGraph / LangChain Memory, SiYuan, LlamaIndex, Motorhead, MemGPT / Letta, and an **Obsidian** vault folder.
 
 Tokens stay in RAM. Endpoints are expected on `127.0.0.1`.
+
+### Translate
+
+Session tool `page-translate` (`page-translate.js`). When on, the context menu (and Settings / overflow **Translate…**) offers:
+
+Turkish · German · English · French · Spanish
+
+Visible text nodes are replaced in place. **Show original** restores the RAM copy for that tab. Navigation drops the translation. This is not a stored language pack.
 
 ### Universal Media Hunter
 
@@ -117,7 +138,7 @@ Optional context-menu download for HTML5 and YouTube. The app looks up `yt-dlp` 
 
 ### Session tools
 
-The Extensions page is a **session tool catalog**, not Chrome Web Store. Tools include Shield, Ghost Network, Security V1 (mic/camera off), Cookie cutter, Do Not Track, identity mask, canvas noise, scrape helpers (Markdown DOM, tables, XHR/WebSocket hunter, infinite scroll), multi-tab orchestrator, headless/invisible mode, sandbox isolator, and Excommunicado Lock.
+The Extensions page is a **session tool catalog**, not Chrome Web Store. Tools include Shield, Ghost Network, Security V1 (mic/camera off), **Translate**, Cookie cutter, Do Not Track, identity mask, canvas noise, scrape helpers (Markdown DOM, tables, XHR/WebSocket hunter, infinite scroll), multi-tab orchestrator, headless/invisible mode, sandbox isolator, and Excommunicado Lock. Details expand under each card.
 
 The **Extension expert** is a small in-app advisor: it can turn tools on or off from English or Turkish phrases. It will not fire Excommunicado unless you clearly ask for panic / protocol.
 
@@ -233,6 +254,7 @@ flowchart LR
     Main["main.js"]
     Shield["tracker-block.js"]
     Hunter["hunter-tools.js"]
+    Translate["page-translate.js"]
     Bridge["agent-bridge.js 127.0.0.1"]
     Scraper["engine/scraper.py"]
   end
@@ -240,6 +262,7 @@ flowchart LR
   Main --> View
   Main --> Shield
   Main --> Hunter
+  Main --> Translate
   Main --> Bridge
   Main --> Scraper
 ```
@@ -251,11 +274,12 @@ flowchart LR
 | `tracker-block.js` | Host suffixes, first-party ad paths, hide CSS |
 | `agent-bridge.js` | Loopback control plane |
 | `local-intel.js` | Discover local models and agents |
+| `page-translate.js` | In-page translate (TR/DE/EN/FR/ES) |
 | `hunter-tools.js` | Resolve yt-dlp / ffmpeg |
 | `engine/scraper.py` | Local search, JSON on stdout |
 | `extensions.js` | Session tool catalog + expert UI |
 
-Guest navigation is http(s) or local pages: `newtab.html`, `search.html`, `downloads.html`, `useful-links.html`, `extensions.html`, `memory-bridge.html`.
+Guest navigation is http(s) or local pages: `newtab.html`, `search.html`, `downloads.html`, `useful-links.html`, `extensions.html`, `settings.html`, `memory-bridge.html`.
 
 ---
 
@@ -284,8 +308,10 @@ Agent Browser/
 ├── agent-bridge.js
 ├── hunter-tools.js
 ├── local-intel.js
+├── page-translate.js
 ├── engine/scraper.py
 ├── assets/agent-browser-logo.svg
+├── assets/translate.svg
 └── package.json
 ```
 

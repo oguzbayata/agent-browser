@@ -58,6 +58,7 @@ const TOGGLE_IDS = Object.freeze({
   'dom-mutation-logger': 'domMutationLog',
   'iframe-content-extractor': 'iframeExtract',
   'semantic-html-simplifier': 'semanticHtml',
+  'page-translate': 'pageTranslate',
   'generic-llm-api-bridge': 'genericLlmBridge',
   'context-window-splitter': 'contextSplitter',
   'system-prompt-injector': 'systemPromptInject',

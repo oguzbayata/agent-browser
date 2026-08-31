@@ -9,6 +9,7 @@ const agentExtensions = [
   { id: "dnt", name: "Do Not Track", description: "Adds a DNT header to outgoing requests.", category: "core", setting: "sendDnt", action: "settings", active: true },
   { id: "ua", name: "Identity mask", description: "Sends a common Chrome user agent to reduce fingerprinting.", category: "core", setting: "spoofUserAgent", action: "settings", active: true },
   { id: "models", name: "Local models", description: "Session-bound language model and agent. Not a persistent extension.", category: "core", action: "models", noToggle: true, active: true },
+  { id: "page-translate", name: "Translate", description: "Right-click a page or menu to translate into Turkish, German, English, French, or Spanish. Nothing is stored.", category: "core", setting: "pageTranslate", action: "translate", active: true },
   { id: "canvas-poisoner", name: "Canvas & WebGL Poisoner", description: "Adds micro-noise to pixel drawings to break hardware fingerprinting.", category: "core", setting: "canvasPoisoner", action: "settings", active: false },
   { id: "siyuan-bridge", name: "Memory Bridge", description: "Choose Mem0, Zep, LangGraph, SiYuan, LlamaIndex, Motorhead, MemGPT, or Obsidian from Details.", category: "core", setting: "siyuanBridge", action: "memory-bridge", active: false },
   { id: "human-jitter", name: "Ghost Mouse (Human Jitter)", description: "Adds human-like randomness and scroll delays to autonomous clicks.", category: "core", setting: "humanJitter", action: "settings", active: false },

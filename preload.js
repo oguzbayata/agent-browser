@@ -125,8 +125,20 @@ contextBridge.exposeInMainWorld(
       }
       return ipcRenderer.invoke('agent:download-cancel', downloadId);
     },
-    setDownloadsOpen: (open) => ipcRenderer.invoke('agent:downloads-panel', Boolean(open)),
+    setDownloadsOpen: (open, anchor) =>
+      ipcRenderer.invoke('agent:downloads-panel', {
+        open: Boolean(open),
+        anchor: anchor && typeof anchor === 'object' ? {
+          left: Number(anchor.left),
+          top: Number(anchor.top),
+          right: Number(anchor.right),
+          bottom: Number(anchor.bottom),
+          width: Number(anchor.width),
+          height: Number(anchor.height),
+        } : null,
+      }),
     openDownloadsTab: () => ipcRenderer.invoke('agent:downloads-open'),
+    onDownloadsClosed: (callback) => subscribePayload('agent:downloads-closed', callback),
     openExtensionsTab: () => ipcRenderer.invoke('agent:extensions-open'),
     openSettingsTab: () => ipcRenderer.invoke('agent:settings-open'),
     setMenuOpen: (open, anchor) =>
@@ -253,16 +265,18 @@ contextBridge.exposeInMainWorld(
       });
     },
     sendAiMessage: (message, apiKey) => {
-      if (typeof message !== 'string' || typeof apiKey !== 'string') {
-        return Promise.resolve({ ok: false });
+      if (typeof message !== 'string') {
+        return Promise.resolve({ ok: false, error: 'Invalid message.' });
       }
-      return ipcRenderer.invoke('agent:ai-message', { message, apiKey });
+      return ipcRenderer.invoke('agent:ai-message', {
+        message,
+        apiKey: typeof apiKey === 'string' ? apiKey : '',
+      });
     },
     summarizeCurrentPage: (apiKey) => {
-      if (typeof apiKey !== 'string') {
-        return Promise.resolve({ ok: false });
-      }
-      return ipcRenderer.invoke('agent:ai-summarize', { apiKey });
+      return ipcRenderer.invoke('agent:ai-summarize', {
+        apiKey: typeof apiKey === 'string' ? apiKey : '',
+      });
     },
     onUrlChanged: (callback) => {
       if (typeof callback !== 'function') {

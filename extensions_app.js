@@ -22,7 +22,7 @@ const removed = new Set();
 const localActive = new Map();
 const expandedDetails = new Set();
 
-const OPEN_ACTIONS = new Set(['shield', 'ghost', 'downloads', 'models', 'memory-bridge']);
+const OPEN_ACTIONS = new Set(['shield', 'ghost', 'downloads', 'models', 'memory-bridge', 'translate']);
 
 function extensionDetailText(item) {
   const details = typeof extensionDetails === 'object' && extensionDetails ? extensionDetails : {};

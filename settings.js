@@ -314,7 +314,21 @@ function bindPage() {
   apiKey?.addEventListener('blur', saveApiKey);
 
   document.getElementById('ai-model-select')?.addEventListener('change', (event) => {
-    api?.selectLocalModel?.(event.target.value || null);
+    const id = event.target.value || null;
+    api?.selectLocalModel?.(id)?.then((result) => {
+      if (result?.ok && result.intel) {
+        lastIntel = result.intel;
+        renderLocalIntel(result.intel);
+        return;
+      }
+      const status = document.getElementById('ai-intel-status');
+      if (status) {
+        status.textContent = result?.error || 'could not bind that model';
+      }
+      if (lastIntel && event.target) {
+        event.target.value = lastIntel.selectedId || '';
+      }
+    });
   });
   document.getElementById('ai-model-pick')?.addEventListener('click', () => {
     api?.pickLocalModel?.('file');

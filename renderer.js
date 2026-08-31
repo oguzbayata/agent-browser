@@ -643,9 +643,37 @@ function setSettingsPanelOpen(open) {
 }
 
 let cachedSessionApiKey = '';
+let lastAiSettings = {};
+let lastAiIntel = { models: [], agents: [], selectedId: null };
 
 function sessionApiKey() {
   return cachedSessionApiKey;
+}
+
+function paintAiModeNote() {
+  const note = document.getElementById('ai-mode-note');
+  if (!note) {
+    return;
+  }
+  const selectedId = lastAiIntel.selectedId;
+  const selected = (lastAiIntel.models || []).find((item) => item.id === selectedId) || null;
+  const brainOn = lastAiSettings.brain === 'siyuan' || lastAiSettings.brain === 'obsidian';
+  const brainName =
+    lastAiSettings.memoryBridge?.providerName || (lastAiSettings.brain === 'obsidian' ? 'Obsidian' : 'SiYuan');
+  if (selected) {
+    const state = selected.live
+      ? 'live'
+      : selected.kind === 'file'
+        ? 'file — needs a running Ollama or LM Studio'
+        : 'saved';
+    note.textContent = brainOn
+      ? `${selected.name} · ${state} · ${brainName} memory`
+      : `${selected.name} · ${state}`;
+    return;
+  }
+  note.textContent = brainOn
+    ? `Agent mode · ${brainName} memory. Model and key stay in Settings → Agents.`
+    : 'Set the model, API key, and Brain in Settings → Agents.';
 }
 
 function localRuntimeReady(intel) {
@@ -667,10 +695,16 @@ function renderLocalIntel(intel) {
   const models = Array.isArray(intel?.models) ? intel.models : [];
   const selectedId = intel?.selectedId || null;
   const selected = models.find((item) => item.id === selectedId) || null;
+  lastAiIntel = {
+    models,
+    agents: Array.isArray(intel?.agents) ? intel.agents : [],
+    selectedId,
+  };
   const modelSelect = document.getElementById('ai-model-select');
   const status = document.getElementById('ai-intel-status');
   const selectedLabel = document.getElementById('ai-selected');
   const keyLabel = document.getElementById('ai-key-label');
+  paintAiModeNote();
 
   if (modelSelect) {
     modelSelect.replaceChildren();
@@ -776,6 +810,79 @@ function bindAiSidebar() {
 
   api?.onLocalIntel?.(applyIntel);
 
+  let aiSeq = 0;
+  let lastFinalKey = '';
+
+  function selectedModel() {
+    return intelState.models.find((item) => item.id === intelState.selectedId) || null;
+  }
+
+  function refuseUnready() {
+    const apiKey = sessionApiKey();
+    if (apiKey || localRuntimeReady(intelState)) {
+      return false;
+    }
+    const selected = selectedModel();
+    appendAiBubble(
+      'error',
+      selected?.kind === 'file'
+        ? 'That file is not a live chat model. Start Ollama or LM Studio and pick a live model.'
+        : 'Select a live local model or enter a session API key.',
+    );
+    return true;
+  }
+
+  function showAiPayload(payload, { allowStatus = true } = {}) {
+    if (!payload || typeof payload !== 'object') {
+      setAiBusy(false);
+      return true;
+    }
+    if (payload.ok !== false && payload.type === 'status') {
+      if (allowStatus) {
+        appendAiBubble('status', payload.content || 'processing');
+      }
+      return false;
+    }
+    const key = `${payload.ok}:${payload.type || ''}:${payload.content || ''}:${payload.error || ''}`;
+    if (key === lastFinalKey) {
+      setAiBusy(false);
+      return true;
+    }
+    lastFinalKey = key;
+    setAiBusy(false);
+    if (payload.ok === false) {
+      appendAiBubble('error', payload.error || 'AI request failed.');
+      return true;
+    }
+    appendAiBubble('assistant', payload.content || '');
+    return true;
+  }
+
+  async function runAiRequest(work) {
+    const seq = ++aiSeq;
+    lastFinalKey = '';
+    setAiBusy(true);
+    try {
+      const result = await work();
+      if (seq !== aiSeq) {
+        return;
+      }
+      showAiPayload(result, { allowStatus: false });
+    } catch (error) {
+      if (seq !== aiSeq) {
+        return;
+      }
+      showAiPayload({
+        ok: false,
+        error: error instanceof Error ? error.message : 'AI request failed.',
+      });
+    } finally {
+      if (seq === aiSeq) {
+        setAiBusy(false);
+      }
+    }
+  }
+
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     const message = prompt.value.trim();
@@ -783,8 +890,7 @@ function bindAiSidebar() {
     if (!message) {
       return;
     }
-    if (!apiKey && !localRuntimeReady(intelState)) {
-      appendAiBubble('error', 'Select a local model or enter a session API key.');
+    if (refuseUnready()) {
       return;
     }
 
@@ -794,14 +900,12 @@ function bindAiSidebar() {
       appendAiBubble('error', 'The AI bridge only runs inside an Electron session.');
       return;
     }
-    setAiBusy(true);
-    api.sendAiMessage(message, apiKey);
+    runAiRequest(() => api.sendAiMessage(message, apiKey));
   });
 
   summarizeBtn.addEventListener('click', () => {
     const apiKey = sessionApiKey();
-    if (!apiKey && !localRuntimeReady(intelState)) {
-      appendAiBubble('error', 'Select a local model or enter a session API key.');
+    if (refuseUnready()) {
       return;
     }
 
@@ -810,29 +914,11 @@ function bindAiSidebar() {
       appendAiBubble('error', 'The AI bridge only runs inside an Electron session.');
       return;
     }
-    setAiBusy(true);
-    api.summarizeCurrentPage(apiKey);
+    runAiRequest(() => api.summarizeCurrentPage(apiKey));
   });
 
   api?.onAiResponse?.((payload) => {
-    if (!payload || typeof payload !== 'object') {
-      setAiBusy(false);
-      return;
-    }
-
-    if (payload.ok !== false && payload.type === 'status') {
-      appendAiBubble('status', payload.content || 'processing');
-      return;
-    }
-
-    setAiBusy(false);
-
-    if (payload.ok === false) {
-      appendAiBubble('error', payload.error || 'AI request failed.');
-      return;
-    }
-
-    appendAiBubble('assistant', payload.content || '');
+    showAiPayload(payload);
   });
 }
 
@@ -1113,9 +1199,59 @@ function bindDownloads() {
     return;
   }
 
+  let downloadsVisible = false;
+  let ignoreToggleUntil = 0;
+
+  function downloadsAnchor() {
+    const box = toggle.getBoundingClientRect();
+    return {
+      left: box.left,
+      top: box.top,
+      right: box.right,
+      bottom: box.bottom,
+      width: box.width,
+      height: box.height,
+    };
+  }
+
+  function setDownloadsVisible(open) {
+    downloadsVisible = open;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      hideUtilityPops();
+      document.getElementById('settings-toggle')?.setAttribute('aria-expanded', 'false');
+      document.getElementById('shield-toggle')?.setAttribute('aria-expanded', 'false');
+      document.getElementById('site-toggle')?.setAttribute('aria-expanded', 'false');
+      document.body.classList.remove('menu-open');
+      api?.setMenuOpen?.(false);
+      api?.setShieldOpen?.(false);
+      api?.setSiteOpen?.(false);
+      api?.setToolsOpen?.(false);
+      api?.setShortcutsOpen?.(false);
+      api?.setProfileOpen?.(false);
+      ignoreToggleUntil = Date.now() + 280;
+    }
+    api?.setDownloadsOpen?.(open, open ? downloadsAnchor() : null);
+  }
+
   toggle.addEventListener('click', (event) => {
     event.stopPropagation();
-    api?.openDownloadsTab?.();
+    if (Date.now() < ignoreToggleUntil) {
+      return;
+    }
+    setDownloadsVisible(!downloadsVisible);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && downloadsVisible) {
+      setDownloadsVisible(false);
+    }
+  });
+
+  api?.onDownloadsClosed?.(() => {
+    downloadsVisible = false;
+    ignoreToggleUntil = Date.now() + 280;
+    toggle.setAttribute('aria-expanded', 'false');
   });
 
   api?.onDownloads?.((payload) => {
@@ -1703,7 +1839,13 @@ function bindAppMenu() {
       document.getElementById('bookmarks-all-toggle')?.click();
       return;
     }
-    if (action === 'history' || action === 'passwords' || action === 'tab-groups' || action === 'extensions' || action === 'translate' || action === 'cast' || action === 'more-tools' || action === 'help' || action === 'profile') {
+    if (action === 'translate') {
+      if (!fromMain) {
+        api?.menuAction?.('translate');
+      }
+      return;
+    }
+    if (action === 'history' || action === 'passwords' || action === 'tab-groups' || action === 'extensions' || action === 'cast' || action === 'more-tools' || action === 'help' || action === 'profile') {
       setRamSheet(action);
       return;
     }
@@ -1730,8 +1872,11 @@ function bindAppMenu() {
       }
       if (action === 'lens') {
         const key = sessionApiKey();
-        if (key) {
-          api?.summarizeCurrentPage?.(key);
+        if (key && api?.summarizeCurrentPage) {
+          setAiBusy(true);
+          api.summarizeCurrentPage(key).catch(() => {
+            setAiBusy(false);
+          });
         }
       }
       return;
@@ -1896,18 +2041,13 @@ function bindSettings() {
     if (typeof settings.sessionApiKey === 'string') {
       cachedSessionApiKey = settings.sessionApiKey;
     }
+    lastAiSettings = settings;
     const aiTitle = document.getElementById('ai-title');
-    const aiNote = document.getElementById('ai-mode-note');
     const brainOn = settings.brain === 'siyuan' || settings.brain === 'obsidian';
     if (aiTitle) {
       aiTitle.textContent = brainOn ? 'Agent' : 'Local models';
     }
-    if (aiNote) {
-      const name = settings.memoryBridge?.providerName || (settings.brain === 'obsidian' ? 'Obsidian' : 'SiYuan');
-      aiNote.textContent = brainOn
-        ? `Agent mode · ${name} memory. Model and key stay in Settings → Agents.`
-        : 'Set the model, API key, and Brain in Settings → Agents.';
-    }
+    paintAiModeNote();
     if (typeof settings.searchBase === 'string' && settings.searchBase) {
       searchEngineBase = settings.searchBase;
     }

@@ -98,8 +98,8 @@
                 <button class="chrome-icon chrome-icon-ghost" id="ghost-toggle" type="button" aria-label="Ghost Network" aria-pressed="false" title="Ghost Network">
                   <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2c-2.6 0-4.6 1.9-4.6 4.6v6.4l1.5-1 1.5 1 1.6-1 1.6 1 1.5-1 1.5 1V6.8C12.6 4.1 10.6 2.2 8 2.2Z"/><circle cx="6.2" cy="7.1" r="0.7" fill="currentColor" stroke="none"/><circle cx="9.8" cy="7.1" r="0.7" fill="currentColor" stroke="none"/></svg>
                 </button>
-                <button class="chrome-icon" id="downloads-toggle" type="button" aria-label="Downloads" title="Downloads">
-                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.4 4.2h9.2v9H3.4zM5 6.6h6M5 8.8h4.4"/><path d="M6.2 2.6h3.6v1.8H6.2z"/></svg>
+                <button class="chrome-icon" id="downloads-toggle" type="button" aria-label="Downloads" aria-expanded="false" aria-haspopup="true" title="Downloads">
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.4v8.4M5.2 8.4 8 11.2l2.8-2.8M3.2 13.6h9.6"/></svg>
                   <span class="downloads-badge" id="downloads-badge" hidden>0</span>
                 </button>
                 <div class="toolbar-wrap">
@@ -108,11 +108,8 @@
                   </button>
                 </div>
               </div>
-              <button class="chrome-icon" id="ai-toggle" type="button" aria-label="Local models" aria-expanded="false" aria-controls="ai-sidebar" title="Local models">
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <rect x="2.4" y="2.6" width="11.2" height="10.8" rx="1.2" />
-                  <path d="M9.6 2.6v10.8" />
-                </svg>
+              <button class="chrome-icon chrome-ai-label" id="ai-toggle" type="button" aria-label="AI" aria-expanded="false" aria-controls="ai-sidebar" title="AI">
+                AI
               </button>
               <div class="toolbar-wrap">
                 <button class="chrome-avatar" id="profile-toggle" type="button" aria-label="Profile" aria-expanded="false" aria-haspopup="true" title="Profile">
