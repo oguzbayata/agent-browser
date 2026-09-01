@@ -3,6 +3,9 @@ dist/
 out/
 .env
 .env.*
+*.pem
+*.key
+credentials.json
 *.log
 *.lnk
 Thumbs.db

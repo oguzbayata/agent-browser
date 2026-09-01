@@ -329,7 +329,9 @@ Agent Browser/
 
 ## License
 
-This repository does not currently ship a `LICENSE` file. Treat the source as the author’s unpublished terms until one is added. Dependencies keep their own licenses (Electron, `@distube/ytdl-core`, and the Python packages in `engine/requirements.txt`).
+The source is published so you can read and run it. **No license is granted yet** (all rights reserved) until a `LICENSE` file is added. Do not assume you may copy, modify, or redistribute this code. Dependencies keep their own licenses (Electron, `@distube/ytdl-core`, and the Python packages in `engine/requirements.txt`).
+
+Security reports: see [SECURITY.md](SECURITY.md).
 
 ---
 
