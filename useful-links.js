@@ -3,7 +3,8 @@
 const api = window.electronAPI;
 
 function seedSections() {
-  const seed = Array.isArray(typeof USEFUL_LINK_SEED !== 'undefined' ? USEFUL_LINK_SEED : null) ? USEFUL_LINK_SEED : [];
+  const raw = typeof globalThis !== 'undefined' ? globalThis.USEFUL_LINK_SEED : typeof USEFUL_LINK_SEED !== 'undefined' ? USEFUL_LINK_SEED : null;
+  const seed = Array.isArray(raw) ? raw : [];
   return seed.map((section) => ({
     id: section.id,
     title: section.title,
@@ -78,7 +79,11 @@ function applySnapshot(result) {
 }
 
 function bindPage() {
-  renderCatalog({ sections: seedSections(), bound: 'Cards open in this session; nothing is written to disk.' });
+  renderCatalog({
+    sections: seedSections(),
+    bound: 'Live GitHub catalog — popular, new, and recently updated. Type a keyword to add another live column.',
+    status: 'Loading live GitHub columns…',
+  });
 
   document.getElementById('useful-refresh')?.addEventListener('click', () => {
     const button = document.getElementById('useful-refresh');

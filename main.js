@@ -8021,40 +8021,44 @@ async function refreshUsefulLinksCatalog(options = {}) {
   }
   const queries = usefulLinksLive.defaultLiveQueries();
   const live = [];
-  let error = '';
-  try {
-    for (const item of queries) {
+  const failures = [];
+  const settled = await Promise.allSettled(
+    queries.map(async (item) => {
       const links = await searchGithubRepos(item.query, item.perPage, { sort: item.sort });
-      if (links.length) {
+      return { item, links };
+    }),
+  );
+  for (const result of settled) {
+    if (result.status === 'fulfilled') {
+      if (result.value.links.length) {
         live.push({
-          id: item.id,
-          title: item.title,
+          id: result.value.item.id,
+          title: result.value.item.title,
           source: 'live',
-          query: item.query,
-          links,
+          query: result.value.item.query,
+          links: result.value.links,
         });
       }
+      continue;
     }
-    for (const section of sessionUsefulUserSections) {
-      const query = usefulLinksLive.keywordQuery(section.query || section.title);
-      if (!query) {
-        continue;
-      }
+    failures.push(result.reason instanceof Error ? result.reason.message : 'GitHub search failed.');
+  }
+  for (const section of sessionUsefulUserSections) {
+    const query = usefulLinksLive.keywordQuery(section.query || section.title);
+    if (!query) {
+      continue;
+    }
+    try {
       const links = await searchGithubRepos(query, 8, { sort: 'stars' });
       section.source = 'live';
       section.query = query;
       section.links = links;
+    } catch (caught) {
+      failures.push(caught instanceof Error ? caught.message : 'GitHub search failed.');
     }
-    usefulLinksLiveCache = { signature, fetchedAt: Date.now(), sections: live, error: '' };
-  } catch (caught) {
-    error = caught instanceof Error ? caught.message : 'GitHub search failed.';
-    usefulLinksLiveCache = {
-      signature,
-      fetchedAt: usefulLinksLiveCache.fetchedAt || Date.now(),
-      sections: usefulLinksLiveCache.sections || [],
-      error,
-    };
   }
+  const error = live.length ? '' : failures[0] || '';
+  usefulLinksLiveCache = { signature, fetchedAt: Date.now(), sections: live, error };
   const snapshot = snapshotUsefulLinks(intel, {
     status: error
       ? `Live fetch failed (${error}). Seed and your added links stay.`
@@ -8076,10 +8080,17 @@ ipcMain.handle('agent:useful-links-get', async (event) => {
   if (!isUsefulLinksSender(event)) {
     return { ok: false };
   }
-  if (!usefulLinksLiveCache.sections.length) {
-    return refreshUsefulLinksCatalog({ force: false });
+  const snapshot = snapshotUsefulLinks(currentUsefulIntel(), {
+    status: usefulLinksLiveCache.fetchedAt
+      ? usefulLinksLiveCache.error
+        ? `Live fetch failed (${usefulLinksLiveCache.error}). Seed and your added links stay.`
+        : ''
+      : 'Loading live GitHub columns…',
+  });
+  if (!usefulLinksLiveCache.fetchedAt || !usefulLinksLiveCache.sections.length) {
+    refreshUsefulLinksCatalog({ force: false }).catch(() => {});
   }
-  return snapshotUsefulLinks(currentUsefulIntel());
+  return snapshot;
 });
 
 ipcMain.handle('agent:useful-links-refresh', async (event) => {
@@ -9241,15 +9252,30 @@ ipcMain.handle('agent:ai-message', async (event, payload) => {
   }
 });
 
-ipcMain.on('open-useful-links', (event) => {
-  if (panicInProgress) {
-    return;
+function canOpenUsefulLinks(event) {
+  if (panicInProgress || !event?.sender || event.sender.isDestroyed()) {
+    return false;
   }
-  const senderUrl = event.sender?.getURL?.() || '';
-  if (!isChromeSender(event) && !isNewTabFile(senderUrl) && !isStartPage(senderUrl) && !isExtensionsSender(event)) {
+  if (isChromeSender(event) || isExtensionsSender(event) || isUsefulLinksSender(event)) {
+    return true;
+  }
+  const senderUrl = event.sender.getURL() || '';
+  return isStartPage(senderUrl) || isNewTabFile(senderUrl) || isSearchFile(senderUrl) || /(?:^|[\/\\]|%2[Ff])newtab\.html(?:\?|#|$|%3[Ff]|%23)/i.test(senderUrl);
+}
+
+ipcMain.on('open-useful-links', (event) => {
+  if (!canOpenUsefulLinks(event)) {
     return;
   }
   openUsefulLinksTab();
+});
+
+ipcMain.handle('agent:useful-links-open-tab', async (event) => {
+  if (!canOpenUsefulLinks(event)) {
+    return { ok: false };
+  }
+  const tabId = openUsefulLinksTab();
+  return { ok: Boolean(tabId), tabId };
 });
 
 ipcMain.on('trigger-panic', (event) => {

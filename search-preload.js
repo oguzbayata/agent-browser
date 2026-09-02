@@ -7,10 +7,13 @@ const micAccess = require('./mic-access');
 function isInternalSearchSurface() {
   try {
     const href = String(location.href || '');
+    if (href === 'about:blank' || href === '') {
+      return true;
+    }
     if (!href.startsWith('file:')) {
       return false;
     }
-    return /(?:^|\/)(newtab|search)\.html(?:\?|#|$)/i.test(href);
+    return /(?:^|[\/\\]|%2[Ff])(newtab|search)\.html(?:\?|#|$|%3[Ff]|%23)/i.test(href);
   } catch {
     return false;
   }
@@ -46,9 +49,7 @@ if (isInternalSearchSurface()) {
         }
         return ipcRenderer.invoke('agent:favicon', url);
       },
-      openUsefulLinks: () => {
-        ipcRenderer.send('open-useful-links');
-      },
+      openUsefulLinks: () => ipcRenderer.invoke('agent:useful-links-open-tab'),
     }),
   );
 }

@@ -1,6 +1,6 @@
 'use strict';
 
-const USEFUL_LINK_SEED = [
+var USEFUL_LINK_SEED = [
   {
     id: 'agents',
     title: 'Local Agents & Automation',
@@ -63,6 +63,9 @@ const USEFUL_LINK_SEED = [
   },
 ];
 
+if (typeof globalThis === 'object') {
+  globalThis.USEFUL_LINK_SEED = USEFUL_LINK_SEED;
+}
 if (typeof module === 'object' && module.exports) {
   module.exports = USEFUL_LINK_SEED;
 }

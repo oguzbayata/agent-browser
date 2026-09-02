@@ -44,9 +44,7 @@ contextBridge.exposeInMainWorld(
       }
       return ipcRenderer.invoke('agent:local-search', query);
     },
-    openUsefulLinks: () => {
-      ipcRenderer.send('open-useful-links');
-    },
+    openUsefulLinks: () => ipcRenderer.invoke('agent:useful-links-open-tab'),
     goBack: () => ipcRenderer.invoke('agent:go-back'),
     goForward: () => ipcRenderer.invoke('agent:go-forward'),
     reload: () => ipcRenderer.invoke('agent:reload'),

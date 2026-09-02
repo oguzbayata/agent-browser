@@ -52,8 +52,6 @@ contextBridge.exposeInMainWorld(
       }
       return ipcRenderer.invoke('agent:tools-action', action);
     },
-    openUsefulLinks: () => {
-      ipcRenderer.send('open-useful-links');
-    },
+    openUsefulLinks: () => ipcRenderer.invoke('agent:useful-links-open-tab'),
   }),
 );

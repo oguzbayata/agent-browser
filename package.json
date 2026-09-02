@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node start.js",
     "electron": "electron .",
-    "test": "node test-tracker-block.js && node test-chrome-identity.js && node test-mic-access.js && node test-hunter-tools.js"
+    "test": "node test-tracker-block.js && node test-chrome-identity.js && node test-mic-access.js && node test-useful-links.js && node test-hunter-tools.js"
   },
   "devDependencies": {
     "electron": "^37.2.6"
